@@ -6,6 +6,12 @@
 
 支持多种差异算法同步与备份。
 
+## 友情链接
+
+- [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan)
+- [阿里云盘小白羊版(暂停维护)](https://github.com/liupan1890/aliyunpan)
+- [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan)
+
 ## 客户端高级配置
 
 > appsettings.Client.json
