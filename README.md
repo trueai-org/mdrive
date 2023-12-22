@@ -1,4 +1,126 @@
-# WebApplication1
+# MDriveSync
+
+多平台、模块化的云盘同步工具，支持百度网盘、阿里云盘等，集成 Duplicati、Kopia 等多种模块，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
+
+提供 Docker 版本、Duplicati 版本、Kopia 版本、Windows 服务版本、Windows 客户端版本、手机端、网页端等。
+
+支持多种差异算法同步与备份。
+
+## 客户端高级配置
+
+> appsettings.Client.json
+
+```json
+{
+  "Client": {
+    "AliyunDrives": [
+      {
+        "Name": "云盘1",
+        "TokenType": "Bearer",
+        "AccessToken": "eyJraWQiOiJ***",
+        "RefreshToken": "eyJ0eXAiOi****",
+        "ExpiresIn": 7200,
+        "Metadata": "",
+        "Jobs": [
+          {
+            "Id": "1",
+            "Name": "gpkopia",
+            "Description": "",
+            "State": 100,
+            "Schedules": [
+              "0 0/10 * * * ?"
+            ],
+            "Filters": [],
+            "Sources": [
+              "E:\\kopia"
+            ],
+            "Target": "backups/gp",
+            "Restore": "E:\\kopia_restore",
+            "RapidUpload": true,
+            "DefaultDrive": "backup",
+            "CheckAlgorithm": "sha256",
+            "CheckLevel": 1,
+            "FileWatcher": true,
+            "Order": 0,
+            "IsTemporary": false,
+            "UploadThread": 0,
+            "DownloadThread": 0,
+            "Metadata": ""
+          },
+          {
+            "Id": "2",
+            "Name": "mykopia",
+            "Description": "",
+            "State": 100,
+            "Schedules": [
+              "0 0/10 * * * ?"
+            ],
+            "Filters": [
+              "/Recovery/",
+              "/System Volume Information/",
+              "/Boot/",
+              "/$RECYCLE.BIN/",
+              "/@Recycle/",
+              "/@Recently-Snapshot/",
+              "**/node_modules/**",
+              "*.duplicatidownload"
+            ],
+            "Sources": [
+              "F:\\kopia"
+            ],
+            "Target": "backups/my",
+            "Restore": "F:\\kopia_restore",
+            "RapidUpload": true,
+            "DefaultDrive": "backup",
+            "CheckAlgorithm": "sha256",
+            "CheckLevel": 1,
+            "FileWatcher": true,
+            "Order": 0,
+            "IsTemporary": false,
+            "UploadThread": 0,
+            "DownloadThread": 0,
+            "Metadata": ""
+          },
+          {
+            "Id": "3",
+            "Name": "mytest",
+            "Description": "",
+            "State": 0,
+            "Schedules": [
+              "0 * * * * ?"
+            ],
+            "Filters": [
+              "/Recovery/",
+              "/System Volume Information/",
+              "/Boot/",
+              "/$RECYCLE.BIN/",
+              "/@Recycle/",
+              "/@Recently-Snapshot/",
+              "**/node_modules/**",
+              "*.duplicatidownload"
+            ],
+            "Sources": [
+              "E:\\test"
+            ],
+            "Target": "backups/test",
+            "Restore": "E:\\kopia_restore",
+            "RapidUpload": true,
+            "DefaultDrive": "backup",
+            "CheckAlgorithm": "sha256",
+            "CheckLevel": 1,
+            "FileWatcher": true,
+            "Order": 0,
+            "IsTemporary": false,
+            "UploadThread": 0,
+            "DownloadThread": 0,
+            "Metadata": ""
+          }
+        ]
+      }
+    ]
+  }
+}
+```
 
 
 ## 注意
