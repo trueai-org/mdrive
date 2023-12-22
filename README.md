@@ -1,16 +1,18 @@
 # MDriveSync
 
-多平台、模块化的云盘同步工具，支持百度网盘、阿里云盘等，集成 Duplicati、Kopia 等多种模块，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
+多平台、模块化、安全的云盘同步工具备份，支持百度网盘、阿里云盘等，集成 Duplicati、Kopia 等多种模块，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
 
-提供 Docker 版本、Duplicati 版本、Kopia 版本、Windows 服务版本、Windows 客户端版本、手机端、网页端等。
+提供 Docker 版、Duplicati 版、Kopia 版、Windows 服务版、Windows 版、手机版、网页版、Linux版、Mac 版等多平台版本。
 
-支持多种差异算法同步与备份。
+支持多种算法同步与备份。
+
+> 目前暂未发布正式版，敬请期待~~
 
 ## 友情链接
 
-- [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan)
-- [阿里云盘小白羊版(暂停维护)](https://github.com/liupan1890/aliyunpan)
-- [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan)
+- [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
+- [阿里云盘小白羊版(暂停维护)](https://github.com/liupan1890/aliyunpan) https://github.com/liupan1890/aliyunpan
+- [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
 
 ## 客户端高级配置
 
