@@ -1,0 +1,17 @@
+version: '3.4'
+
+services:
+  mdrivesync.server.api:
+    container_name: server-api
+    build:
+      context: .
+      dockerfile: src/MDriveSync.Server.API/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_HTTP_PORTS=8080
+    ports:
+      - "8080:8080"
+    restart: always
+    volumes:
+      - /home/server-api/logs:/app/logs
+      - /etc/localtime:/etc/localtime:ro

@@ -1,0 +1,213 @@
+﻿<Window
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+
+    xmlns:local="clr-namespace:MDriveSync.WPF" xmlns:svgc="http://sharpvectors.codeplex.com/svgc/"
+    x:Class="MDriveSync.WPF.MainWindow"
+        mc:Ignorable="d"
+        WindowStartupLocation="CenterScreen"
+
+        Title="阿里云盘 - Drive Sync - v1.0.2.beta - 2023/12/17 - 免费开源不限速（Duplicati 版、Kopia 版、Docker 版、Web 版等，限时优惠购阿里云盘会员返现金奖励）" Height="680" Width="960" Background="{x:Null}">
+
+    <Window.Resources>
+        <local:Tasks x:Key="MyTodoList" />
+
+        <local:TaskListDataTemplateSelector x:Key="MyDataTemplateSelector" />
+
+        <DataTemplate x:Key="ImportantTaskTemplate">
+            <DataTemplate.Resources>
+                <Style TargetType="TextBlock">
+                    <Setter Property="FontSize" Value="20" />
+                </Style>
+            </DataTemplate.Resources>
+            <Border Name="border" BorderBrush="Red" BorderThickness="1" Padding="5" Margin="5">
+                <DockPanel HorizontalAlignment="Center">
+                    <TextBlock Text="{Binding Path=Description}" />
+                    <TextBlock>!</TextBlock>
+                </DockPanel>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="MyTaskTemplate">
+            <Border Name="border" BorderBrush="Aqua" BorderThickness="1" Padding="5" Margin="5">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition />
+                        <RowDefinition />
+                        <RowDefinition />
+                    </Grid.RowDefinitions>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition />
+                        <ColumnDefinition />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Row="0" Grid.Column="0" Text="名称：" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Path=TaskName}" />
+                    <TextBlock Grid.Row="1" Grid.Column="0" Text="描述：" />
+                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Path=Description}" />
+                    <TextBlock Grid.Row="2" Grid.Column="0" Text="状态：" />
+                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Path=Priority}" />
+                </Grid>
+            </Border>
+
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Path=TaskType}">
+                    <DataTrigger.Value>
+                        <local:TaskType>Home</local:TaskType>
+                    </DataTrigger.Value>
+                    <Setter TargetName="border" Property="BorderBrush" Value="Yellow" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </Window.Resources>
+
+    <DockPanel>
+
+        <Menu DockPanel.Dock="Top" Height="50">
+            <Menu.Background>
+                <LinearGradientBrush>
+                    <LinearGradientBrush.GradientStops>
+                        <GradientStop Color="#2A7FFF" Offset="0" />
+                        <GradientStop Color="#0060F1" Offset="0.3" />
+                        <GradientStop Color="#1064E2" Offset="0.6" />
+                        <GradientStop Color="#00B4D8" Offset="1" />
+                    </LinearGradientBrush.GradientStops>
+                </LinearGradientBrush>
+            </Menu.Background>
+            <!-- 菜单项 -->
+            <Rectangle Width="10" />
+            <MenuItem Height="50">
+                <MenuItem.Header>
+                    <TextBlock FontSize="16" Foreground="White">首页</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
+            <Rectangle Width="20" />
+            <MenuItem Height="50">
+                <MenuItem.Header>
+                    <TextBlock FontSize="16" Foreground="White">作业</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
+            <Rectangle Width="20" />
+            <MenuItem Height="50">
+                <MenuItem.Header>
+                    <TextBlock FontSize="16" Foreground="White">统计</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
+            <Rectangle Width="20" />
+            <MenuItem Height="50">
+                <MenuItem.Header>
+                    <TextBlock FontSize="16" Foreground="White">设置</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
+            <Rectangle Width="20" />
+            <MenuItem Height="50">
+                <MenuItem.Header>
+                    <TextBlock FontSize="16" Foreground="White">关于</TextBlock>
+                </MenuItem.Header>
+            </MenuItem>
+        </Menu>
+
+        <ToolBar DockPanel.Dock="Bottom"   Height="36">
+            <ToolBar.Background>
+                <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,1">
+                    <LinearGradientBrush.GradientStops>
+                        <GradientStop Color="#FF1667EA" Offset="1" />
+                        <GradientStop Color="#FF699CED" Offset="0.61" />
+                        <GradientStop Color="#FF8DB8FF" Offset="0.294" />
+                        <GradientStop Color="#FFC6CAD0" Offset="0" />
+                    </LinearGradientBrush.GradientStops>
+                </LinearGradientBrush>
+            </ToolBar.Background>
+
+            <Button FontSize="12" Foreground="White">Button1</Button>
+            <Rectangle Width="20" />
+            <Button FontSize="12" Foreground="White">Button2</Button>
+            <Rectangle Width="20" />
+            <Button FontSize="12" Foreground="White">Button3</Button>
+            <Rectangle Width="20" />
+            <Button FontSize="12" Foreground="White">Button4</Button>
+            <Rectangle Width="20" />
+        </ToolBar>
+
+        <StackPanel  DockPanel.Dock="Left"  Background="Lavender">
+            <TextBlock  FontSize="18" Text="作业" Margin="10,10,0,0" />
+            <ListBox Height="360" Margin="10"
+                     ItemsSource="{Binding Source={StaticResource MyTodoList}}"
+                     ItemTemplateSelector="{StaticResource MyDataTemplateSelector}"
+                     HorizontalContentAlignment="Stretch"
+
+                     IsSynchronizedWithCurrentItem="True" />
+            <TextBlock  FontSize="18" Text="详情" Margin="10,0,0,0" />
+            <ContentControl Content="{Binding Source={StaticResource MyTodoList}}" ContentTemplate="{StaticResource MyTaskTemplate}" />
+
+            <StackPanel DockPanel.Dock="Bottom">
+                <Button HorizontalAlignment="Right"  Height="30px"  Width="100px"
+
+                        Click="OnImagesDirChangeClick" Margin="0,0,5,0">编辑</Button>
+            </StackPanel>
+        </StackPanel>
+
+        <DockPanel Background="Bisque">
+            <StackPanel DockPanel.Dock="Top" Height="432">
+                <Grid Height="36">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <svgc:SvgViewbox Margin="8,0,8,0" Width="20" Height="20" Grid.Column="0" Source="folder-regular.svg" />
+                    <svgc:SvgViewbox Width="20" Height="20" Grid.Column="1" Source="turn-up-solid.svg" Margin="0,0,8,0" />
+                    <TextBox  Height="28" Grid.Column="2" Text="/data/list" VerticalContentAlignment="Center" TextWrapping="Wrap" />
+                    <svgc:SvgViewbox  Width="20" Height="20" Grid.Column="3" Source="arrows-rotate-solid.svg" Margin="8,0,8,0" />
+                    <svgc:SvgViewbox  Width="20" Height="20" Grid.Column="4" Source="upload-solid.svg" Margin="0,0,8,0" />
+                </Grid>
+
+                <!--<TextBlock Height="32" FontSize="14">
+                    <TextBlock.Background>
+                        <SolidColorBrush Color="{DynamicResource {x:Static SystemColors.ControlLightLightColorKey}}" />
+                    </TextBlock.Background>
+                    /data/list
+                </TextBlock>-->
+
+                <ListView Margin="8" FontSize="14" x:Name="SelectionChanged" SelectionChanged="itemsControl_SelectionChanged" Height="375">
+                    <ListView.View>
+                        <GridView>
+                            <GridViewColumn Header="名称" DisplayMemberBinding="{Binding Path=Description}" />
+                            <GridViewColumn Header="大小" DisplayMemberBinding="{Binding Path=Price, StringFormat=c}" />
+                            <GridViewColumn Header="时间" />
+                            <GridViewColumn Header="操作" />
+                        </GridView>
+                    </ListView.View>
+                </ListView>
+            </StackPanel>
+            <DockPanel DockPanel.Dock="Bottom">
+                <TextBox DockPanel.Dock="Top" VerticalContentAlignment="Center" TextWrapping="Wrap" Margin="8,0,8,8" Background="LightGreen" Height="30">
+                    包含 1331 个文件，13 个文件夹，总大小 24 MB
+                </TextBox>
+                <TextBox DockPanel.Dock="Bottom"  Margin="8,0,8,8" x:Name="txtInfo"  AcceptsReturn="True" TextWrapping="Wrap" Height="auto" HorizontalAlignment="Stretch" VerticalScrollBarVisibility="Auto">
+                    这是日志。和说明
+                </TextBox>
+                <!--<DockPanel>-->
+            
+                    <!--<StackPanel VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+                    <TextBlock DockPanel.Dock="Top" Style="{StaticResource HeaderStyle}" FontSize="16">日志输出</TextBlock>
+
+                    <ScrollViewer  DockPanel.Dock="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="83">
+                        <TextBlock TextWrapping="Wrap" Width="auto" x:Name="txtLog" Style="{StaticResource MainContentStyle}" FontSize="14" >这是日志和介绍。</TextBlock>
+                    </ScrollViewer>
+                </StackPanel>-->
+                 
+                <!--</DockPanel>-->
+            </DockPanel>
+            <Button
+ Margin="8"
+                Click="OnImagesDirChangeClick" Content="添加" Height="28" Width="100"/>
+            <Button
+Margin="8"
+                Click="OnImagesDirChangeClick" Content="删除"  Height="28" Width="100"/>
+        </DockPanel>
+    </DockPanel>
+</Window>

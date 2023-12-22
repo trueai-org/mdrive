@@ -1,0 +1,56 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.8.34330.188
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Client.API", "src\MDriveSync.Client.API\MDriveSync.Client.API.csproj", "{DB5108C3-4FCE-4EA0-AFF5-D152B95ABF7A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Server.API", "src\MDriveSync.Server.API\MDriveSync.Server.API.csproj", "{DB493EFB-5438-4088-BA32-2A84E008DB01}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.WPF", "src\MDriveSync.WPF\MDriveSync.WPF.csproj", "{3379ABA8-7F55-40A8-ABBE-B8BE2E4A6D19}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{0FF6CD64-0E94-4AD4-80C2-369B7019359D}"
+	ProjectSection(SolutionItems) = preProject
+		build.server.api.sh = build.server.api.sh
+		docker-compose.yml = docker-compose.yml
+		README.md = README.md
+	EndProjectSection
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Core", "src\MDriveSync.Core\MDriveSync.Core.csproj", "{279736DD-7A47-4F6D-8795-A8ED3278DD33}"
+EndProject
+Project("{E53339B2-1760-4266-BCC7-CA923CBCF16C}") = "docker-compose", "docker-compose.dcproj", "{B61F9528-3EDB-4486-B979-C581F5A2AB36}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{DB5108C3-4FCE-4EA0-AFF5-D152B95ABF7A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB5108C3-4FCE-4EA0-AFF5-D152B95ABF7A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB5108C3-4FCE-4EA0-AFF5-D152B95ABF7A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB5108C3-4FCE-4EA0-AFF5-D152B95ABF7A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DB493EFB-5438-4088-BA32-2A84E008DB01}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DB493EFB-5438-4088-BA32-2A84E008DB01}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DB493EFB-5438-4088-BA32-2A84E008DB01}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DB493EFB-5438-4088-BA32-2A84E008DB01}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3379ABA8-7F55-40A8-ABBE-B8BE2E4A6D19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3379ABA8-7F55-40A8-ABBE-B8BE2E4A6D19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3379ABA8-7F55-40A8-ABBE-B8BE2E4A6D19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3379ABA8-7F55-40A8-ABBE-B8BE2E4A6D19}.Release|Any CPU.Build.0 = Release|Any CPU
+		{279736DD-7A47-4F6D-8795-A8ED3278DD33}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{279736DD-7A47-4F6D-8795-A8ED3278DD33}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{279736DD-7A47-4F6D-8795-A8ED3278DD33}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{279736DD-7A47-4F6D-8795-A8ED3278DD33}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B61F9528-3EDB-4486-B979-C581F5A2AB36}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B61F9528-3EDB-4486-B979-C581F5A2AB36}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B61F9528-3EDB-4486-B979-C581F5A2AB36}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B61F9528-3EDB-4486-B979-C581F5A2AB36}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {A3F34F36-7CED-4A53-A203-D8F89661D42C}
+	EndGlobalSection
+EndGlobal
