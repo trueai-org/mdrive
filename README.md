@@ -8,7 +8,17 @@
 
 > 目前暂未发布正式版，敬请期待~~
 
-## 友情链接
+
+A multi-platform, modular, secure cloud drive synchronization and backup tool that supports Baidu Cloud Disk, Alibaba Cloud Disk, and others. Integrates various modules such as Duplicati and Kopia, with features like encryption and restoration. Offers different types of synchronization and backup, including unidirectional, mirror, and bidirectional. The tool is completely free and open source.
+
+Available in multiple platform versions including Docker, Duplicati, Kopia, Windows Service, Windows, Mobile, Web, Linux, and Mac.
+
+Supports a variety of algorithms for synchronization and backup.
+
+> The official version has not yet been released. Stay tuned!
+
+
+## 友情链接 | blogroll
 
 - [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
 - [阿里云盘小白羊版(暂停维护)](https://github.com/liupan1890/aliyunpan) https://github.com/liupan1890/aliyunpan
