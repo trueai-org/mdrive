@@ -38,11 +38,41 @@ namespace MDriveSync.Core
             return Task.CompletedTask;
         }
 
+
+
+        //private void DoWork(object state)
+        //{
+        //    // 加锁，以防万一重复执行
+        //    lock (_lock)
+        //    {
+        //        // 重新设定定时器，防止在当前工作完成前触发下一次执行
+        //        _timer?.Change(Timeout.Infinite, 0);
+
+        //        try
+        //        {
+        //            _logger.LogInformation("刷新图片、视频大小服务开始工作.");
+        //            using (var scope = _serviceScopeFactory.CreateScope())
+        //            {
+        //                var mediaService = scope.ServiceProvider.GetRequiredService<IMediaService>();
+        //                await mediaService.RefreshMetaJob();
+        //            }
+        //            // 执行刷新图片、视频大小服务
+        //            var task = Task.Run(async () => await _mediaService.RefreshMetaJob());
+        //            task.Wait();
+        //        }
+        //        finally
+        //        {
+        //            // 任务完成后重新启动定时器
+        //            _timer?.Change(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        //        }
+        //    }
+        //}
+
         private async void DoWork(object state)
         {
             if (_semaphoreSlim.CurrentCount == 0)
             {
-                //_logger.LogInformation("执行中...");
+                _logger.LogInformation("执行中...");
                 return;
             }
 

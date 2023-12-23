@@ -44,6 +44,11 @@ namespace MDriveSync.Core
     /// ===============
     ///
     /// 空文件、空文件夹也同步
+    /// 
+    /// ======
+    /// 待定
+    /// 
+    /// 注意，针对快捷方式，可能会出现问题
     /// </summary>
     public class Job : IDisposable
     {
