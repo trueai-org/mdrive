@@ -11,14 +11,24 @@ namespace MDriveSync.Client.API
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // 添加自定义配置文件
-            builder.Configuration.AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true);
+            var env = builder.Environment;
+
+            // 添加配置文件
+            var configuration = builder.Configuration
+                .AddJsonFile($"appsettings.json", optional: true, reloadOnChange: true)
+                // 优先加载默认的
+                .AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true)
+                // 在这里环境变量中的覆盖默认的
+                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
+
+            //// 添加自定义配置文件
+            //builder.Configuration.AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true);
 
             // 配置 Serilog
             var logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(builder.Configuration);
 
-            if (builder.Environment.IsDevelopment())
+            if (env.IsDevelopment())
             {
                 logger.MinimumLevel.Debug()
                       .Enrich.FromLogContext()
