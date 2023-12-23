@@ -28,7 +28,7 @@ Supports a variety of algorithms for synchronization and backup.
 
 客户端高级配置 `appsettings.Client.json`
 
-- `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:read&relogin=true)令牌，或登录官网获取授权令牌。
+- `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:write&relogin=true)令牌，或登录官网获取授权令牌。
 - `Jobs` 可以配置多个作业，计划中的作业时间可以可以配置多个时间点。
   - `Schedules` 定时计划，必填
   - `Sources` 备份源目录列表，必填
