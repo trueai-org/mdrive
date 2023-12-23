@@ -1437,36 +1437,35 @@ namespace MDriveSync.Core
 
                 request.AddBody(body);
                 var response = await _apiClient.ExecuteAsync(request);
-
-                if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                if (response.StatusCode != HttpStatusCode.OK)
                 {
-                    //using var doc = JsonDocument.Parse(response.Content!);
-                    //var root = doc.RootElement;
-                    //return root.GetProperty("file_id").GetString()!;
+                    throw response.ErrorException ?? new Exception(response.Content ?? "创建文件夹失败");
+                }
+         
+                //using var doc = JsonDocument.Parse(response.Content!);
+                //var root = doc.RootElement;
+                //return root.GetProperty("file_id").GetString()!;
 
-                    var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(response.Content);
-                    data.Name = data.FileName;
+                var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(response.Content);
+                data.Name = data.FileName;
 
-                    if (parentId == "root")
-                    {
-                        // 当前目录在根路径
-                        // /{当前路径}/
-                        _driveFolders.TryAdd($"{data.Name}".TrimPath(), data);
-                    }
-                    else
-                    {
-                        // 计算父级路径
-                        var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == parentId).First()!;
-                        var path = $"{parent.Key}/{data.Name}".TrimPath();
+                if (parentId == "root")
+                {
+                    // 当前目录在根路径
+                    // /{当前路径}/
+                    _driveFolders.TryAdd($"{data.Name}".TrimPath(), data);
+                }
+                else
+                {
+                    // 计算父级路径
+                    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == parentId).First()!;
+                    var path = $"{parent.Key}/{data.Name}".TrimPath();
 
-                        // /{父级路径}/{当前路径}/
-                        _driveFolders.TryAdd(path, data);
-                    }
-
-                    return data.FileId;
+                    // /{父级路径}/{当前路径}/
+                    _driveFolders.TryAdd(path, data);
                 }
 
-                throw response.ErrorException;
+                return data.FileId;
             }
             catch (Exception ex)
             {
@@ -1852,38 +1851,36 @@ namespace MDriveSync.Core
                 {
                     throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
                 }
-
-                if (response.StatusCode == HttpStatusCode.OK)
+                if(response.Data == null)
                 {
-                    if (response.Data != null)
+                    throw new Exception("云盘目录查询失败");
+                }
+
+                var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
+                if (okPath == null)
+                {
+                    // 未找到目录
+                    searchParentFileId = await CreateFolder(subPath, searchParentFileId);
+                }
+                else
+                {
+                    if (searchParentFileId == "root")
                     {
-                        var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
-                        if (okPath == null)
-                        {
-                            // 未找到目录
-                            searchParentFileId = await CreateFolder(subPath, searchParentFileId);
-                        }
-                        else
-                        {
-                            if (searchParentFileId == "root")
-                            {
-                                // 当前目录在根路径
-                                // /{当前路径}/
-                                _driveFolders.TryAdd($"{okPath.Name}".TrimPath(), okPath);
-                            }
-                            else
-                            {
-                                // 计算父级路径
-                                var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == searchParentFileId).First()!;
-                                var path = $"{parent.Key}/{okPath.Name}".TrimPath();
-
-                                // /{父级路径}/{当前路径}/
-                                _driveFolders.TryAdd(path, okPath);
-                            }
-
-                            searchParentFileId = okPath.FileId;
-                        }
+                        // 当前目录在根路径
+                        // /{当前路径}/
+                        _driveFolders.TryAdd($"{okPath.Name}".TrimPath(), okPath);
                     }
+                    else
+                    {
+                        // 计算父级路径
+                        var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == searchParentFileId).First()!;
+                        var path = $"{parent.Key}/{okPath.Name}".TrimPath();
+
+                        // /{父级路径}/{当前路径}/
+                        _driveFolders.TryAdd(path, okPath);
+                    }
+
+                    searchParentFileId = okPath.FileId;
                 }
             }
         }
