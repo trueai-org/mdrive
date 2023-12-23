@@ -30,6 +30,9 @@ Supports a variety of algorithms for synchronization and backup.
 
 - `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:read&relogin=true)令牌，或登录官网获取授权令牌。
 - `Jobs` 可以配置多个作业，计划中的作业时间可以可以配置多个时间点。
+  - `Schedules` 定时计划，必填
+  - `Sources` 备份源目录列表，必填
+  - `Target` 云盘存储目录，必填
 
 ```json
 {
@@ -39,7 +42,7 @@ Supports a variety of algorithms for synchronization and backup.
         "Name": "云盘1", // 云盘名称
         "TokenType": "Bearer", // 令牌类型，这里是Bearer类型
         "AccessToken": "your_access_token", // 访问令牌，用于API访问
-        "RefreshToken": "your_refresh_token", // 刷新令牌，用于获取新的访问令牌
+        "RefreshToken": "your_refresh_token", // 【必填】刷新令牌，用于获取新的访问令牌
         "ExpiresIn": 7200, // 令牌过期时间，单位为秒
         "Metadata": "", // 阿里云盘元信息，如用户信息、云盘信息、VIP信息等
         "Jobs": [ // 作业列表
@@ -48,16 +51,16 @@ Supports a variety of algorithms for synchronization and backup.
             "Name": "gpkopia", // 任务/作业名称
             "Description": "", // 作业描述
             "State": 100, // 作业状态，例如 100 表示暂停，0 表示未开始
-            "Schedules": [ // 定时计划，使用cron表达式定义
+            "Schedules": [ // 【必填】定时计划，使用cron表达式定义
               "0 0/10 * * * ?"
             ],
             "Filters": [ // 文件过滤列表
               "**/logs/*"
             ], 
-            "Sources": [ // 源目录列表
+            "Sources": [ // 【必填】源目录列表
               "E:\\kopia"
             ],
-            "Target": "backups/gp", // 目标存储目录
+            "Target": "backups/gp", // 【必填】目标存储目录
             "Restore": "E:\\kopia_restore", // 还原目录
             "RapidUpload": true, // 是否启用秒传功能
             "DefaultDrive": "backup", // 默认备份的云盘类型，备份盘或资源盘
