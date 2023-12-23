@@ -1848,7 +1848,12 @@ namespace MDriveSync.Core
                 };
                 request.AddBody(body);
                 var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
-                if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
+                }
+
+                if (response.StatusCode == HttpStatusCode.OK)
                 {
                     if (response.Data != null)
                     {
