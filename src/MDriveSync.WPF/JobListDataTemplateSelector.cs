@@ -6,20 +6,20 @@ using System.Windows.Controls;
 
 namespace MDriveSync.WPF
 {
-    public class TaskListDataTemplateSelector : DataTemplateSelector
+    public class JobListDataTemplateSelector : DataTemplateSelector
     {
-        public override DataTemplate
-            SelectTemplate(object item, DependencyObject container)
+        public override DataTemplate SelectTemplate(object item, DependencyObject container)
         {
             if (item != null && item is Task)
             {
-                var taskitem = (Task) item;
+                var taskitem = (Task)item;
                 var window = Application.Current.MainWindow;
                 if (taskitem.Priority == 1)
-                    return
-                        window.FindResource("ImportantTaskTemplate") as DataTemplate;
-                return
-                    window.FindResource("MyTaskTemplate") as DataTemplate;
+                {
+                    return window.FindResource("DriveAccountTemplate") as DataTemplate;
+                }
+
+                return window.FindResource("DriveJobTemplate") as DataTemplate;
             }
 
             return null;

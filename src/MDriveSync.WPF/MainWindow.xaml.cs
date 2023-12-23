@@ -22,6 +22,17 @@ namespace MDriveSync.WPF
             App.MessageReceived += App_MessageReceived;
 
             SelectionChanged.ItemsSource = new ItemsForSale();
+
+            var taskList = new List<Task>();
+
+            taskList.Add(new Task("阿里云盘", "阿里云盘", 1, TaskType.Work));
+            taskList.Add(new Task("Groceries11", "Pick up Groceries and Detergent", 2, TaskType.Home));
+            taskList.Add(new Task("Laundry22", "Do my Laundry", 2, TaskType.Home));
+            taskList.Add(new Task("Clean", "Clean my office", 3, TaskType.Work));
+            taskList.Add(new Task("Dinner", "Get ready for family reunion", 2, TaskType.Home));
+            taskList.Add(new Task("Proposals", "Review new budget proposals", 2, TaskType.Work));
+
+            jobListBox.ItemsSource = taskList;
         }
 
         public List<string> LogMessages = new List<string>();

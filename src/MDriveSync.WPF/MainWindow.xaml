@@ -14,23 +14,24 @@
     <Window.Resources>
         <local:Tasks x:Key="MyTodoList" />
 
-        <local:TaskListDataTemplateSelector x:Key="MyDataTemplateSelector" />
+        <local:JobListDataTemplateSelector x:Key="JobDataTemplateSelector" />
 
-        <DataTemplate x:Key="ImportantTaskTemplate">
+        <!--云盘账号模板-->
+        <DataTemplate x:Key="DriveAccountTemplate">
             <DataTemplate.Resources>
                 <Style TargetType="TextBlock">
                     <Setter Property="FontSize" Value="20" />
                 </Style>
             </DataTemplate.Resources>
-            <Border Name="border" BorderBrush="Red" BorderThickness="1" Padding="5" Margin="5">
+            <Border Name="border" BorderBrush="Gray" BorderThickness="1" Padding="5" Margin="5">
                 <DockPanel HorizontalAlignment="Center">
                     <TextBlock Text="{Binding Path=Description}" />
-                    <TextBlock>!</TextBlock>
                 </DockPanel>
             </Border>
         </DataTemplate>
-
-        <DataTemplate x:Key="MyTaskTemplate">
+        
+        <!--云盘作业模板-->
+        <DataTemplate x:Key="DriveJobTemplate">
             <Border Name="border" BorderBrush="Aqua" BorderThickness="1" Padding="5" Margin="5">
                 <Grid>
                     <Grid.RowDefinitions>
@@ -41,13 +42,15 @@
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition />
                         <ColumnDefinition />
+                        <ColumnDefinition />
+                        <ColumnDefinition />
                     </Grid.ColumnDefinitions>
                     <TextBlock Grid.Row="0" Grid.Column="0" Text="名称：" />
-                    <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding Path=TaskName}" />
+                    <TextBlock Grid.Row="0" Grid.Column="1" Grid.ColumnSpan="3" Text="{Binding Path=TaskName}" />
                     <TextBlock Grid.Row="1" Grid.Column="0" Text="描述：" />
-                    <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding Path=Description}" />
+                    <TextBlock Grid.Row="1" Grid.Column="1"  Grid.ColumnSpan="3"  Text="{Binding Path=Description}" />
                     <TextBlock Grid.Row="2" Grid.Column="0" Text="状态：" />
-                    <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding Path=Priority}" />
+                    <TextBlock Grid.Row="2" Grid.Column="1"  Grid.ColumnSpan="3"  Text="{Binding Path=Priority}" />
                 </Grid>
             </Border>
 
@@ -130,21 +133,17 @@
             <Rectangle Width="20" />
         </ToolBar>
 
-        <StackPanel  DockPanel.Dock="Left"  Background="Lavender">
+        <StackPanel  DockPanel.Dock="Left"  Background="Lavender" Width="360">
             <TextBlock  FontSize="18" Text="作业" Margin="10,10,0,0" />
-            <ListBox Height="360" Margin="10"
-                     ItemsSource="{Binding Source={StaticResource MyTodoList}}"
-                     ItemTemplateSelector="{StaticResource MyDataTemplateSelector}"
+            <ListBox Name="jobListBox" Height="360" Margin="10"
+                     ItemTemplateSelector="{StaticResource JobDataTemplateSelector}"
                      HorizontalContentAlignment="Stretch"
-
                      IsSynchronizedWithCurrentItem="True" />
             <TextBlock  FontSize="18" Text="详情" Margin="10,0,0,0" />
-            <ContentControl Content="{Binding Source={StaticResource MyTodoList}}" ContentTemplate="{StaticResource MyTaskTemplate}" />
+            <ContentControl Content="{Binding Source={StaticResource MyTodoList}}" ContentTemplate="{StaticResource DriveJobTemplate}" />
 
             <StackPanel DockPanel.Dock="Bottom">
-                <Button HorizontalAlignment="Right"  Height="30px"  Width="100px"
-
-                        Click="OnImagesDirChangeClick" Margin="0,0,5,0">编辑</Button>
+                <Button HorizontalAlignment="Right"  Height="30px"  Width="100px" Click="OnImagesDirChangeClick" Margin="0,0,5,0">编辑</Button>
             </StackPanel>
         </StackPanel>
 
@@ -191,23 +190,23 @@
                     这是日志。和说明
                 </TextBox>
                 <!--<DockPanel>-->
-            
-                    <!--<StackPanel VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
+
+                <!--<StackPanel VerticalAlignment="Stretch" HorizontalAlignment="Stretch">
                     <TextBlock DockPanel.Dock="Top" Style="{StaticResource HeaderStyle}" FontSize="16">日志输出</TextBlock>
 
                     <ScrollViewer  DockPanel.Dock="Top" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Height="83">
                         <TextBlock TextWrapping="Wrap" Width="auto" x:Name="txtLog" Style="{StaticResource MainContentStyle}" FontSize="14" >这是日志和介绍。</TextBlock>
                     </ScrollViewer>
                 </StackPanel>-->
-                 
+
                 <!--</DockPanel>-->
             </DockPanel>
             <Button
  Margin="8"
-                Click="OnImagesDirChangeClick" Content="添加" Height="28" Width="100"/>
+                Click="OnImagesDirChangeClick" Content="添加" Height="28" Width="100" />
             <Button
 Margin="8"
-                Click="OnImagesDirChangeClick" Content="删除"  Height="28" Width="100"/>
+                Click="OnImagesDirChangeClick" Content="删除"  Height="28" Width="100" />
         </DockPanel>
     </DockPanel>
 </Window>
