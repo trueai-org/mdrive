@@ -66,6 +66,9 @@ namespace MDriveSync.Server.API.Controllers
                 request.AddBody(body);
 
                 var response = client.Execute<JsonDocument>(request);
+
+                _logger.LogDebug(response.Content);
+
                 if (response.StatusCode == HttpStatusCode.OK
                     && response.Data != null
                     && response.Data.RootElement.TryGetProperty("refresh_token", out var accessTokenElement))
