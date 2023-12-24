@@ -32,7 +32,7 @@ namespace MDriveSync.Core
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            stoppingToken.Register(() => _logger.LogDebug($"服务已停止"));
+            stoppingToken.Register(() => _logger.LogDebug($"例行检查服务已停止"));
 
             _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
             return Task.CompletedTask;
@@ -72,7 +72,6 @@ namespace MDriveSync.Core
         {
             if (_semaphoreSlim.CurrentCount == 0)
             {
-                _logger.LogInformation("执行中...");
                 return;
             }
 
@@ -80,7 +79,7 @@ namespace MDriveSync.Core
 
             try
             {
-                _logger.LogInformation("开始作业");
+                _logger.LogInformation("开始例行检查");
 
                 foreach (var ad in _clientOptions.CurrentValue.AliyunDrives)
                 {
@@ -101,11 +100,11 @@ namespace MDriveSync.Core
 
                 GC.Collect();
 
-                _logger.LogInformation("执行完成");
+                _logger.LogInformation("例行检查完成");
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "执行任务时发生错误");
+                _logger.LogError(ex, "执行例行检查时发生异常");
             }
             finally
             {
@@ -115,7 +114,7 @@ namespace MDriveSync.Core
 
         public override async Task StopAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation("服务已停止");
+            _logger.LogInformation("例行检查服务已停止");
 
             _timer?.Change(Timeout.Infinite, 0);
             await _semaphoreSlim.WaitAsync();

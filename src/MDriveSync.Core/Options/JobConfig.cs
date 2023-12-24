@@ -26,6 +26,11 @@
         public JobState State { get; set; } = JobState.Idle;
 
         /// <summary>
+        /// 作业级别
+        /// </summary>
+        public JobMode Mode { get; set; } = JobMode.Mirror;
+
+        /// <summary>
         /// 作业计划
         /// 定时计划
         /// 执行间隔

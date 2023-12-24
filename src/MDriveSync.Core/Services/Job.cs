@@ -44,28 +44,46 @@ namespace MDriveSync.Core
     /// ===============
     ///
     /// 空文件、空文件夹也同步
-    /// 
+    ///
     /// ======
     /// 待定
-    /// 
+    ///
     /// 注意，针对快捷方式，可能会出现问题
     /// </summary>
     public class Job : IDisposable
     {
-        private ILogger _log;
+        private readonly ILogger _log;
 
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
 
-        // 设置列表每次请求之间的间隔为 250ms
+        private readonly IMemoryCache _cache;
+
+        private const string TOEKN_KEY = "TOKEN";
+
+        /// <summary>
+        /// 设置列表每次请求之间的间隔为 250ms
+        /// </summary>
         private const int _listRequestInterval = 250;
 
+        /// <summary>
+        /// 接口请求
+        /// </summary>
         private readonly RestClient _apiClient;
+
+        /// <summary>
+        /// 文件上传请求
+        /// </summary>
         private readonly HttpClient _uploadHttpClient;
 
         /// <summary>
         /// 所有本地文件列表
         /// </summary>
         public ConcurrentDictionary<string, LocalFileInfo> _localFiles = new();
+
+        /// <summary>
+        /// 本地所有文件路径，true: 路径, false: 文件
+        /// </summary>
+        public ConcurrentDictionary<string, bool> _localPaths = new();
 
         /// <summary>
         /// 所有本地文件夹
@@ -112,12 +130,6 @@ namespace MDriveSync.Core
         // 远程备份保存的目录
         private string _driveSavePath;
 
-        private readonly IMemoryCache _cache;
-
-        private const string TOEKN_KEY = "TOKEN";
-
-        public JobState State { get; private set; }
-
         /// <summary>
         /// 本地文件缓存
         /// 持久化存储定时器，将内存中的信息保留到本地
@@ -138,7 +150,9 @@ namespace MDriveSync.Core
         /// <summary>
         /// 本地文件监听
         /// </summary>
-        private List<FileSystemWatcher> _localWatchers = new List<FileSystemWatcher>();
+        private List<FileSystemWatcher> _localWatchers = [];
+
+        public JobState State { get; private set; }
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
@@ -208,8 +222,7 @@ namespace MDriveSync.Core
                                 // 创建备份计划
                                 var scheduler = new QuartzCronScheduler(cron, async () =>
                                 {
-                                    _log.LogInformation("执行任务：" + DateTime.Now);
-                                    await StartBackup();
+                                    await StartSync();
                                 });
                                 scheduler.Start();
                                 _schedulers[cron] = scheduler;
@@ -236,6 +249,33 @@ namespace MDriveSync.Core
                     break;
 
                 case JobState.Verifying:
+                    {
+                        // 校验中
+
+                        // TODO
+                        // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
+                        switch (_jobConfig.Mode)
+                        {
+                            case JobMode.Mirror:
+                                {
+                                    // 计算需要删除的远程文件/文件夹
+                                    // TODO
+                                }
+                                break;
+
+                            case JobMode.Redundancy:
+                                break;
+
+                            case JobMode.TwoWaySync:
+                                break;
+
+                            default:
+                                break;
+                        }
+
+                        // 校验通过 -> 空闲
+                        ChangeState(JobState.Idle);
+                    }
                     break;
 
                 case JobState.Queued:
@@ -274,7 +314,7 @@ namespace MDriveSync.Core
         {
             ChangeState(JobState.Initializing);
 
-            _log.LogInformation("初始化检查中");
+            _log.LogInformation("作业初始化");
 
             var sw = new Stopwatch();
             sw.Start();
@@ -299,10 +339,10 @@ namespace MDriveSync.Core
             _localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
 
             // 获取云盘信息
-            InitAliyunDriveInfo();
+            AliyunDriveInitInfo();
 
             sw.Stop();
-            _log.LogInformation($"初始化检查完成，用时：{sw.ElapsedMilliseconds}ms");
+            _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
 
             // 初始化完成处于启动中
             ChangeState(JobState.Starting);
@@ -319,6 +359,7 @@ namespace MDriveSync.Core
             ChangeState(JobState.Starting);
 
             _log.LogInformation("作业启动中");
+
             var sw = new Stopwatch();
             sw.Start();
 
@@ -326,39 +367,43 @@ namespace MDriveSync.Core
             _localPersistentTimer = new Timer(PersistentDoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(5));
 
             // 监听函数
-            // TODO 如果文件发生变化，则重新计算 hash 请清空 sha1
+            // 如果文件发生变化，则重新计算相关逻辑
+            if (_jobConfig.FileWatcher)
+            {
+                foreach (var localBackupPath in _jobConfig.Sources)
+                {
+                    var watcher = new FileSystemWatcher(localBackupPath);
+                    watcher.NotifyFilter = NotifyFilters.FileName |
+                            NotifyFilters.DirectoryName |
+                            NotifyFilters.LastWrite |
+                            NotifyFilters.Size;
 
-            //foreach (var path in _pathsToWatch)
-            //{
-            //    var watcher = new FileSystemWatcher(path);
-            //    watcher.NotifyFilter = NotifyFilters.FileName |
-            //            NotifyFilters.DirectoryName |
-            //            NotifyFilters.LastWrite |
-            //            NotifyFilters.Size;
+                    // 监控所有文件
+                    watcher.Filter = "*.*";
 
-            //    watcher.Filter = "*.*"; // 监控所有文件
-            //    watcher.IncludeSubdirectories = true; // 包括子目录
+                    // 包括子目录
+                    watcher.IncludeSubdirectories = true;
 
-            //    watcher.Created += OnChanged;
-            //    watcher.Deleted += OnChanged;
-            //    watcher.Renamed += OnRenamed;
-            //    watcher.Changed += OnChanged;
-            //    watcher.Error += OnError;
+                    watcher.Created += (o, e) =>
+                    {
+                        OnCreated(o, e, localBackupPath);
+                    };
 
-            //    watcher.EnableRaisingEvents = true;
-            //    _watchers.Add(watcher);
-            //}
+                    watcher.Deleted += (o, e) =>
+                    {
+                        OnDeleted(o, e, localBackupPath);
+                    };
+                    watcher.Renamed += (o, e) =>
+                    {
+                        OnRenamed(o, e, localBackupPath);
+                    };
+                    watcher.Changed += OnChanged;
+                    watcher.Error += OnError;
 
-            //// 执行任务
-            //ChangeState(JobState.Scanning);
-            //await ScanAsync();
-
-            //ChangeState(JobState.BackingUp);
-            //await BackupAsync();
-
-            //// ... 其他操作 ...
-
-            //ChangeState(JobState.Completed);
+                    watcher.EnableRaisingEvents = true;
+                    _localWatchers.Add(watcher);
+                }
+            }
 
             // 启动完成，处于空闲
             ChangeState(JobState.Idle);
@@ -368,21 +413,6 @@ namespace MDriveSync.Core
 
             // 再次执行检查
             await Maintenance();
-        }
-
-        private void OnChanged(object source, FileSystemEventArgs e)
-        {
-            //_logger.LogInformation($"文件更改: {e.FullPath}, 类型: {e.ChangeType}");
-        }
-
-        private void OnRenamed(object source, RenamedEventArgs e)
-        {
-            //_logger.LogInformation($"文件重命名: {e.OldFullPath} 更改为 {e.FullPath}");
-        }
-
-        private void OnError(object source, ErrorEventArgs e)
-        {
-            //_logger.LogError($"文件系统监听发生错误: {e.GetException()}");
         }
 
         /// <summary>
@@ -410,6 +440,7 @@ namespace MDriveSync.Core
                 Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
                 WriteIndented = true
             });
+
             // 写入文件
             File.WriteAllText(_localFileCacheName, updatedJsonString, Encoding.UTF8);
         }
@@ -435,6 +466,7 @@ namespace MDriveSync.Core
         private void ChangeState(JobState newState)
         {
             State = newState;
+
             // 触发状态改变事件 (如果有)
         }
 
@@ -444,49 +476,12 @@ namespace MDriveSync.Core
             return Task.CompletedTask;
         }
 
-        private Task BackupAsync()
-        {
-            // 备份逻辑
-            return Task.CompletedTask;
-        }
-
         // 其他任务相关的异步方法...
-
-        private void Running()
-        {
-            //LogMessage msg = null;
-            //while (true)
-            //{
-            //    // 等待信号通知
-            //    _mre.WaitOne();
-
-            //    try
-            //    {
-            //        // 判断是否有内容需要如磁盘 从列队中获取内容，并删除列队中的内容
-            //        while (_cq.Count > 0 && _cq.TryDequeue(out msg))
-            //        {
-            //            if (msg == null)
-            //                break;
-            //            if (msg.IsSplit)
-            //                LogSingleton.Instance.WriteLogSplit(msg.FileName, msg.Message);
-            //            else
-            //                LogSingleton.Instance.WriteLog(msg.FileName, msg.Message);
-            //        }
-            //    }
-            //    catch (Exception ex)
-            //    {
-            //        LogSingleton.Instance.WriteLog("error_", "log queue error: " + ex.Message + (msg == null ? "" : "\r\nmsg:" + msg.Message));
-            //    }
-
-            //    // 重新设置信号
-            //    _mre.Reset();
-            //}
-        }
 
         /// <summary>
         /// 获取当前有效的访问令牌
         /// </summary>
-        public string AccessToken
+        private string AccessToken
         {
             get
             {
@@ -512,7 +507,7 @@ namespace MDriveSync.Core
         /// 初始化令牌
         /// </summary>
         /// <returns></returns>
-        public string InitToken()
+        private string InitToken()
         {
             // 重新获取令牌
             var data = ProviderApiHelper.RefreshToken(_driveConfig.RefreshToken);
@@ -528,63 +523,6 @@ namespace MDriveSync.Core
             }
 
             throw new Exception("初始化访问令牌失败");
-        }
-
-        /// <summary>
-        /// 获取用户 drive 信息
-        /// </summary>
-        /// <returns></returns>
-        public void InitAliyunDriveInfo()
-        {
-            var request = new RestRequest("/adrive/v1.0/user/getDriveInfo", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = _apiClient.Execute<AliyunDriveInfo>(request);
-            if (response.StatusCode == System.Net.HttpStatusCode.OK)
-            {
-                var data = response.Data!;
-
-                _driveId = data.DefaultDriveId;
-
-                if (_jobConfig.DefaultDrive == "backup" && string.IsNullOrWhiteSpace(data.BackupDriveId))
-                {
-                    _driveId = data.BackupDriveId;
-                }
-                else if (_jobConfig.DefaultDrive == "resource" && !string.IsNullOrWhiteSpace(data.ResourceDriveId))
-                {
-                    _driveId = data.ResourceDriveId;
-                }
-            }
-        }
-
-        /// <summary>
-        /// 获取用户空间信息
-        /// </summary>
-        /// <returns></returns>
-        public async Task InitAliyunDriveSpaceInfo()
-        {
-            var request = new RestRequest("/adrive/v1.0/user/getSpaceInfo", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = await _apiClient.ExecuteAsync<AliyunDriveSpaceInfo>(request);
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-            }
-        }
-
-        /// <summary>
-        /// 获取用户 VIP 信息
-        /// </summary>
-        /// <returns></returns>
-        public async Task InitAliyunDriveVipInfo()
-        {
-            var request = new RestRequest("/v1.0/user/getVipInfo", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = await _apiClient.ExecuteAsync<AliyunDriveVipInfo>(request);
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-            }
         }
 
         /// <summary>
@@ -608,11 +546,11 @@ namespace MDriveSync.Core
         /// <param name="localRootPath"></param>
         /// <param name="fileInfo"></param>
         /// <returns></returns>
-        private string GetFileKey(string localRootPath, FileInfo fileInfo)
+        private string GetFileKey(string localRootPath, string fileFullPath)
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
             var rootPathName = localRootInfo.Name;
-            var subPath = fileInfo.FullName.ToUrlPath(localRootInfo.FullName);
+            var subPath = fileFullPath.ToUrlPath(localRootInfo.FullName);
             return $"{rootPathName}/{subPath}".TrimPath();
         }
 
@@ -630,8 +568,12 @@ namespace MDriveSync.Core
             return $"{rootPathName}/{subPath}".TrimPath();
         }
 
-        // 定义一个方法来检查一个给定的路径是否应该被过滤
-        public bool ShouldFilter(string path)
+        /// <summary>
+        /// 检查一个给定的路径是否应该被过滤
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        private bool ShouldFilter(string path)
         {
             if (string.IsNullOrWhiteSpace(path))
             {
@@ -661,7 +603,11 @@ namespace MDriveSync.Core
             return false;
         }
 
-        // 将Kopia规则转换为正则表达式
+        /// <summary>
+        /// 将Kopia规则转换为正则表达式
+        /// </summary>
+        /// <param name="kopiaPattern"></param>
+        /// <returns></returns>
         private string ConvertToRegexPattern(string kopiaPattern)
         {
             var pattern = Regex.Escape(kopiaPattern)
@@ -683,10 +629,89 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 开始比较本地文件与云盘文件
+        /// 开始同步
         /// </summary>
         /// <returns></returns>
-        public async Task Search()
+        public async Task StartSync()
+        {
+            // 备份中 | 校验中 跳过
+            if (State == JobState.BackingUp || State == JobState.Verifying)
+            {
+                return;
+            }
+
+            // 如果不是处于空闲状态，则终止
+            if (State != JobState.Idle)
+            {
+                return;
+            }
+
+            _log.LogInformation($"同步作业开始：{DateTime.Now:G}");
+
+            // 备份中
+            ChangeState(JobState.BackingUp);
+
+            try
+            {
+                var sw = new Stopwatch();
+                sw.Start();
+
+                await InitBackupPath();
+
+                sw.Stop();
+                _log.LogInformation($"云盘存储根目录初始化完成，用时：{sw.ElapsedMilliseconds}ms");
+                sw.Restart();
+                _log.LogInformation("开始加载云盘存储文件列表");
+
+                // 验证并获取备份根目录
+                // 加载备份文件夹下的所有文件夹、文件列表
+                var saveParentFileId = "root";
+                if (!string.IsNullOrWhiteSpace(_driveSavePath))
+                {
+                    if (_driveFolders.TryGetValue(_driveSavePath, out AliyunDriveFileItem item) && item != null)
+                    {
+                        saveParentFileId = item.FileId;
+                    }
+                    else
+                    {
+                        throw new Exception("云盘存储根目录不存在，请重新启动");
+                    }
+                }
+
+                // 加载所有文件列表
+                await AliyunDriveSearchFiles(_driveId);
+
+                // 加载备份文件夹下的所有文件夹
+                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
+
+                sw.Stop();
+                _log.LogInformation($"加载云盘存储文件列表完成，用时：{sw.ElapsedMilliseconds}ms");
+                sw.Restart();
+                _log.LogInformation("开始执行同步");
+
+                await SyncFiles();
+
+                sw.Stop();
+                _log.LogInformation($"同步作业完成，用时：{sw.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                _log.LogError(ex, "同步作业完成执行异常");
+            }
+
+            // 开始校验
+            ChangeState(JobState.Verifying);
+
+            _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
+
+            await Maintenance();
+        }
+
+        /// <summary>
+        /// 同步本地文件到云盘
+        /// </summary>
+        /// <returns></returns>
+        private async Task SyncFiles()
         {
             var now = DateTime.Now;
 
@@ -736,68 +761,24 @@ namespace MDriveSync.Core
                 {
                     try
                     {
-                        var dirInfo = new DirectoryInfo(dir);
-                        if (!dirInfo.Exists)
+                        var ld = GetLocalDirectory(dir, backupRootPath);
+                        if (ld == null)
                         {
                             return;
                         }
-
-                        // 所有本地文件夹
-                        var loDir = new LocalFileInfo()
-                        {
-                            FullPath = dirInfo.FullName,
-                            Key = GetDirectoryKey(backupRootPath, dirInfo),
-                            CreationTime = dirInfo.CreationTime,
-                            LastWriteTime = dirInfo.LastWriteTime,
-                            Name = dirInfo.Name,
-                        };
-
-                        // 过滤文件夹
-                        var cpath = loDir.Key.ToUrlPath(backupRootInfo.Name).TrimPath();
-                        if (!string.IsNullOrWhiteSpace(cpath))
-                        {
-                            if (ShouldFilter($"/{cpath}/"))
-                            {
-                                return;
-                            }
-                        }
-
-                        _localFolders.AddOrUpdate(loDir.Key, loDir, (k, v) => loDir);
+                        _localFolders.AddOrUpdate(ld.Key, ld, (k, v) => ld);
 
                         var files = Directory.EnumerateFiles(dir);
-                        foreach (var file in files)
+                        foreach (var fileFullPath in files)
                         {
-                            var fileInfo = new FileInfo(file);
-                            if (!fileInfo.Exists)
+                            var lf = GetLocalFile(fileFullPath, backupRootPath);
+                            if (lf == null)
                             {
                                 continue;
                             }
 
-                            // 所有本地文件
-                            var lf = new LocalFileInfo()
-                            {
-                                IsFile = true,
-                                FullPath = fileInfo.FullName,
-                                Key = GetFileKey(backupRootPath, fileInfo),
-                                KeyPath = GetFileKeyPath(backupRootPath, fileInfo),
-                                CreationTime = fileInfo.CreationTime,
-                                LastWriteTime = fileInfo.LastWriteTime,
-                                Length = fileInfo.Length,
-                                Name = fileInfo.Name,
-                            };
-
-                            // 过滤文件
-                            var cfile = lf.Key.ToUrlPath(backupRootInfo.Name).TrimPath();
-                            if (!string.IsNullOrWhiteSpace(cfile))
-                            {
-                                if (ShouldFilter($"/{cfile}"))
-                                {
-                                    continue;
-                                }
-                            }
-
                             // 计算 hash
-                            lf.Hash = HashHelper.ComputeFileHash(file, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
+                            lf.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
 
                             // 如果没有获取到，从本地缓存中对比获取 sha1
                             if (oldLocalFiles.TryGetValue(lf.Key, out var cacheFile) && cacheFile != null)
@@ -833,11 +814,12 @@ namespace MDriveSync.Core
                     }
                     catch (UnauthorizedAccessException ex)
                     {
-                        _log.LogInformation("Access Denied: " + ex.Message);
+                        _log.LogWarning(ex, $"加载本地目录文件没有权限 {dir}");
                     }
                     catch (Exception ex)
                     {
-                        _log.LogInformation(ex.Message);
+                        _log.LogError(ex, $"加载本地目录文件异常 {dir}");
+                        throw;
                     }
                 }
             }
@@ -846,7 +828,7 @@ namespace MDriveSync.Core
             _isLoadLocalFiles = true;
             PersistentDoWork(null);
 
-            _log.LogInformation($"开始备份 {_localFiles.Count}, 扫描文件用时: {(DateTime.Now - now).TotalMilliseconds}ms");
+            _log.LogInformation($"同步开始，总文件数：{_localFiles.Count}, 扫描文件用时: {(DateTime.Now - now).TotalMilliseconds}ms");
 
             var process = 0;
             var total = _localFiles.Count;
@@ -854,18 +836,156 @@ namespace MDriveSync.Core
             // 并行上传
             await Parallel.ForEachAsync(_localFiles, options, async (item, cancellationToken) =>
             {
-                // 上传文件到阿里云盘
-                await UploadFileToAliyunDisk(item.Value);
-
-                Interlocked.Increment(ref process);
-
-                _log.LogInformation($"上传中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
+                try
+                {
+                    await AliyunDriveUploadFile(item.Value);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, $"文件上传处理异常 {item.Value.FullPath}");
+                }
+                finally
+                {
+                    Interlocked.Increment(ref process);
+                    _log.LogInformation($"同步中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
+                }
             });
 
-            _log.LogInformation($"备份完成 {_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
+            _log.LogInformation($"同步完成，总文件数：{_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
         }
 
-        public async Task Restore()
+        /// <summary>
+        /// 初始化备份目录
+        /// </summary>
+        /// <returns></returns>
+        private async Task InitBackupPath()
+        {
+            // 首先加载根目录结构
+            // 并计算需要保存的目录
+            // 计算/创建备份文件夹
+            // 如果备份文件夹不存在
+            var saveRootSubPaths = _driveSavePath.Split('/').Select(c => c.Trim().Trim('/')).Where(c => !string.IsNullOrWhiteSpace(c)).ToArray();
+            var searchParentFileId = "root";
+            foreach (var subPath in saveRootSubPaths)
+            {
+                var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
+                request.AddHeader("Content-Type", "application/json");
+                request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+                object body = new
+                {
+                    drive_id = _driveId,
+                    query = $"parent_file_id='{searchParentFileId}' and type = 'folder' and name = '{subPath}'"
+                };
+                request.AddBody(body);
+                var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
+                }
+                if (response.Data == null)
+                {
+                    throw new Exception("云盘目录查询失败");
+                }
+
+                var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
+                if (okPath == null)
+                {
+                    // 未找到目录
+                    searchParentFileId = await AliyunDriveCreateFolder(subPath, searchParentFileId);
+                }
+                else
+                {
+                    if (searchParentFileId == "root")
+                    {
+                        // 当前目录在根路径
+                        // /{当前路径}/
+                        _driveFolders.TryAdd($"{okPath.Name}".TrimPath(), okPath);
+                    }
+                    else
+                    {
+                        // 计算父级路径
+                        var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == searchParentFileId).First()!;
+                        var path = $"{parent.Key}/{okPath.Name}".TrimPath();
+
+                        // /{父级路径}/{当前路径}/
+                        _driveFolders.TryAdd(path, okPath);
+                    }
+
+                    searchParentFileId = okPath.FileId;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 开始还原
+        /// </summary>
+        /// <returns></returns>
+        public async Task StartRestore()
+        {
+            try
+            {
+                // 验证还原目录
+                if (Directory.Exists(_localRestorePath))
+                {
+                    Directory.CreateDirectory(_localRestorePath);
+                }
+
+                var sw = new Stopwatch();
+                sw.Restart();
+                _log.LogInformation("计算云盘存储根目录...");
+                await InitBackupPath();
+                sw.Stop();
+                _log.LogInformation($"计算云盘存储根目录完成. 用时 {sw.ElapsedMilliseconds}ms");
+                sw.Restart();
+
+                // 加载备份文件夹下的所有文件夹、文件列表
+                var saveParentFileId = "root";
+                if (!string.IsNullOrWhiteSpace(_driveSavePath))
+                {
+                    if (_driveFolders.TryGetValue(_driveSavePath, out AliyunDriveFileItem item) && item != null)
+                    {
+                        saveParentFileId = item.FileId;
+                    }
+                    else
+                    {
+                        throw new Exception("云盘存储根目录不存在，请重新启动");
+                    }
+                }
+
+                //// 加载备份文件夹下的所有文件夹
+                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100, type: "folder");
+
+                _log.LogInformation("加载云盘存储文件列表...");
+
+                // 所有文件列表
+                await AliyunDriveSearchFiles(_driveId);
+
+                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
+
+                sw.Stop();
+                _log.LogInformation($"加载云盘存储文件列表完成. 用时 {sw.ElapsedMilliseconds}ms");
+                sw.Restart();
+
+                // 开始还原
+                _log.LogInformation("开始拉取远程文件到本地...");
+
+                await RestoreFiles(); // 替换为你的起始路径
+
+                sw.Stop();
+                _log.LogInformation($"end. {_driveFiles.Count}, {sw.ElapsedMilliseconds}ms");
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 还原云盘文件到本地
+        /// </summary>
+        /// <returns></returns>
+        private async Task RestoreFiles()
         {
             var now = DateTime.Now;
 
@@ -930,7 +1050,7 @@ namespace MDriveSync.Core
                         {
                             IsFile = true,
                             FullPath = fileInfo.FullName,
-                            Key = GetFileKey(_localRestorePath, fileInfo),
+                            Key = GetFileKey(_localRestorePath, fileInfo.FullName),
                             KeyPath = GetFileKeyPath(_localRestorePath, fileInfo),
                             CreationTime = fileInfo.CreationTime,
                             LastWriteTime = fileInfo.LastWriteTime,
@@ -1022,7 +1142,7 @@ namespace MDriveSync.Core
                     var response = await _apiClient.ExecuteAsync<AliyunDriveFileItem>(request);
                     if (response.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(response.Data.Url))
                     {
-                        await DownloadFileAsync(response.Data.Url, item.Value.Name, item.Value.ContentHash, savePath);
+                        await AliyunDriveDownload(response.Data.Url, item.Value.Name, item.Value.ContentHash, savePath);
                     }
                     else
                     {
@@ -1063,504 +1183,118 @@ namespace MDriveSync.Core
             }
         }
 
-        private async Task DownloadFileAsync(string url, string fileName, string fileSha1, string savePath)
+        public void Dispose()
         {
-            var tempFilePath = Path.Combine(_localRestorePath, ".duplicaticache", $"{fileName}.{Guid.NewGuid():N}.duplicatidownload");
-            var finalFilePath = Path.Combine(savePath, fileName);
-
-            using (var httpClient = new HttpClient())
+            foreach (var watcher in _localWatchers)
             {
-                try
-                {
-                    // 设置 45 分钟超时
-                    httpClient.Timeout = TimeSpan.FromMinutes(45);
-
-                    var tmpPath = Path.GetDirectoryName(tempFilePath);
-                    var path = Path.GetDirectoryName(finalFilePath);
-
-                    lock (_lock)
-                    {
-                        if (!Directory.Exists(tmpPath))
-                        {
-                            Directory.CreateDirectory(tmpPath);
-                        }
-                        if (!Directory.Exists(path))
-                        {
-                            Directory.CreateDirectory(path);
-                        }
-                    }
-
-                    using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
-                    {
-                        response.EnsureSuccessStatusCode();
-
-                        // 读取响应流
-                        using (var stream = await response.Content.ReadAsStreamAsync())
-                        {
-                            // 创建一个新文件，并将响应流中的内容写入文件
-                            using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
-                            {
-                                await stream.CopyToAsync(fileStream);
-                            }
-                        }
-                    }
-
-                    // 校验 hash 值
-                    var sha1 = HashHelper.ComputeFileHash(tempFilePath, "sha1");
-                    if (!string.IsNullOrWhiteSpace(fileSha1) && sha1 != fileSha1)
-                    {
-                        throw new Exception("文件内容不一致");
-                    }
-
-                    // 重命名临时文件为最终文件
-                    // 强制覆盖本地
-                    File.Move(tempFilePath, finalFilePath, true);
-                    _log.LogInformation($"文件下载完成: {fileName}");
-                }
-                catch (Exception ex)
-                {
-                    _log.LogInformation($"下载文件时出错: {ex.Message}");
-
-                    // 如果存在临时文件，删除它
-                    if (File.Exists(tempFilePath))
-                    {
-                        File.Delete(tempFilePath);
-                    }
-                }
-            }
-        }
-
-        private async Task UploadFileToAliyunDisk(LocalFileInfo localFileInfo, bool needPreHash = true)
-        {
-            try
-            {
-                var filePath = localFileInfo.FullPath;
-                var fileInfo = new FileInfo(filePath);
-                if (!fileInfo.Exists)
-                {
-                    throw new ArgumentException("文件不存在");
-                }
-
-                // 文件名
-                var name = AliyunDriveHelper.EncodeFileName(Path.GetFileName(filePath));
-
-                // 存储目录 ID
-                var saveParentFileId = "root";
-
-                // 计算保存存储目录
-                var saveParentPath = $"{_driveSavePath}/{localFileInfo.KeyPath}".TrimPath();
-
-                // 计算文件存储路径
-                var saveFilePath = $"{saveParentPath}/{name}".TrimPath();
-
-                // 判断云盘是否存在路径，不存在则创建
-                if (!string.IsNullOrWhiteSpace(saveParentPath))
-                {
-                    if (!_driveFolders.ContainsKey(saveParentPath))
-                    {
-                        var savePaths = saveParentPath.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-                        var savePathsParentFileId = "root";
-                        foreach (var subPath in savePaths)
-                        {
-                            savePathsParentFileId = await CreateFolder(subPath, savePathsParentFileId);
-                        }
-                    }
-
-                    if (!_driveFolders.ContainsKey(saveParentPath))
-                    {
-                        throw new Exception("文件夹创建失败");
-                    }
-
-                    saveParentFileId = _driveFolders[saveParentPath].FileId;
-                }
-
-                // 本地文件没有 sha1 时，计算本地文件的 sha1
-                if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
-                {
-                    localFileInfo.Sha1 = HashHelper.ComputeFileHash(filePath, "sha1");
-                }
-
-                // 如果文件已上传则跳过
-                // 需要对比文件差异 sha1
-                if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null && driveItem.ContentHash == localFileInfo.Sha1)
-                {
-                    //_log.LogInformation($"本地与远程文件一致，不需要上传 {driveItem.Name}");
-                    return;
-                }
-
-                var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-                var fileSize = fileInfo.Length;
-
-                object body = new
-                {
-                    drive_id = _driveId,
-                    parent_file_id = saveParentFileId,
-                    name = name,
-                    type = "file",
-                    check_name_mode = "ignore", // 覆盖文件模式
-                    size = fileSize
-                };
-
-                // 是否进行秒传处理
-                var isRapidUpload = false;
-                if (_jobConfig.RapidUpload)
-                {
-                    // 开启秒传
-                    // 如果文件 > 10kb 则进行秒传计算，否则不进行
-                    if (fileSize > 1024 * 10)
-                    {
-                        isRapidUpload = true;
-                    }
-                }
-
-                // 如果需要计算秒传
-                if (isRapidUpload)
-                {
-                    if (fileSize > 1024 * 1024 && needPreHash)
-                    {
-                        // 如果文件超过 1mb 则进行预处理，判断是否可以进行妙传
-                        var preHash = AliyunDriveHelper.GenerateStartSHA1(filePath);
-                        body = new
-                        {
-                            drive_id = _driveId,
-                            parent_file_id = saveParentFileId,
-                            name = name,
-                            type = "file",
-                            check_name_mode = "ignore",
-                            size = fileInfo.Length,
-                            pre_hash = preHash
-                        };
-                    }
-                    else
-                    {
-                        // > 10kb 且 < 1mb 的文件直接计算 sha1
-                        var proofCode = AliyunDriveHelper.GenerateProofCode(filePath, fileSize, AccessToken);
-                        var contentHash = AliyunDriveHelper.GenerateSHA1(filePath);
-
-                        body = new
-                        {
-                            drive_id = _driveId,
-                            parent_file_id = saveParentFileId,
-                            name = name,
-                            type = "file",
-                            check_name_mode = "ignore",
-                            size = fileInfo.Length,
-                            content_hash = contentHash,
-                            content_hash_name = "sha1",
-                            proof_version = "v1",
-                            proof_code = proofCode
-                        };
-                    }
-                }
-                request.AddBody(body);
-                var response = await _apiClient.ExecuteAsync(request);
-
-                // 如果需要秒传，并且需要预处理时
-                // System.Net.HttpStatusCode.Conflict 注意可能不是 409
-                if (isRapidUpload && needPreHash
-                    && (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
-                    && response.Content.Contains("PreHashMatched"))
-                {
-                    using (var doc = JsonDocument.Parse(response.Content))
-                    {
-                        // 尝试获取code属性的值
-                        if (doc.RootElement.TryGetProperty("code", out JsonElement codeElement))
-                        {
-                            var code = codeElement.GetString();
-                            if (code == "PreHashMatched")
-                            {
-                                // 匹配成功，进行完整的秒传，不需要预处理
-                                await UploadFileToAliyunDisk(localFileInfo, false);
-                                return;
-                            }
-                        }
-                    }
-                }
-
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    using var doc = JsonDocument.Parse(response.Content!);
-                    var root = doc.RootElement;
-
-                    var drive_id = root.GetProperty("drive_id").GetString();
-                    var file_id = root.GetProperty("file_id").GetString();
-                    var upload_id = root.GetProperty("upload_id").GetString();
-
-                    var rapid_upload = root.GetProperty("rapid_upload").GetBoolean();
-                    if (rapid_upload)
-                    {
-                        _log.LogInformation($"秒传 {name}");
-                        return;
-                    }
-
-                    var upload_url = root.GetProperty("part_info_list").EnumerateArray().FirstOrDefault().GetProperty("upload_url").GetString();
-
-                    //using (HttpClient httpClient = new HttpClient())
-                    //{
-                    // 读取文件作为字节流
-                    byte[] fileData = await File.ReadAllBytesAsync(filePath);
-
-                    // 创建HttpContent
-                    var content = new ByteArrayContent(fileData);
-
-                    // 发送PUT请求
-                    HttpResponseMessage uploadRes = null; //  = await httpClient.PutAsync(upload_url, content);
-
-                    // 定义重试策略 3 次
-                    var retryPolicy = Policy
-                        .Handle<HttpRequestException>()
-                        .WaitAndRetryAsync(3, retryAttempt =>
-                        {
-                            // 5s 25s 125s 后重试
-                            return TimeSpan.FromSeconds(Math.Pow(5, retryAttempt));
-                        });
-
-                    // 执行带有重试策略的请求
-                    await retryPolicy.ExecuteAsync(async () =>
-                    {
-                        uploadRes = await _uploadHttpClient.PutAsync(upload_url, content);
-
-                        if (!uploadRes.IsSuccessStatusCode)
-                        {
-                            throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
-                        }
-
-                        _log.LogInformation("上传成功");
-                    });
-
-                    // 检查请求是否成功
-                    if (uploadRes.IsSuccessStatusCode)
-                    {
-                        var request3 = new RestRequest("/adrive/v1.0/openFile/complete", Method.Post);
-                        request3.AddHeader("Content-Type", "application/json");
-                        request3.AddHeader("Authorization", $"Bearer {AccessToken}");
-                        var body3 = new
-                        {
-                            drive_id = _driveId,
-                            file_id = file_id,
-                            upload_id = upload_id,
-                        };
-                        request3.AddBody(body3);
-                        var response3 = await _apiClient.ExecuteAsync(request3);
-
-                        // TODO
-                        if (response3.StatusCode != HttpStatusCode.OK)
-                            throw new Exception(response3.Content);
-
-                        _log.LogInformation("上传标记完成 " + localFileInfo.Key);
-
-                        // 将文件添加到上传列表
-                        var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(response3.Content);
-                        if (data.ParentFileId == "root")
-                        {
-                            // 当前目录在根路径
-                            // /{当前路径}/
-                            _driveFiles.TryAdd($"{data.Name}".TrimPath(), data);
-                        }
-                        else
-                        {
-                            // 计算父级路径
-                            var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == data.ParentFileId).First()!;
-                            var path = $"{parent.Key}/{data.Name}".TrimPath();
-
-                            // /{父级路径}/{当前路径}/
-                            _driveFiles.TryAdd(path, data);
-                        }
-                    }
-                    else
-                    {
-                        _log.LogInformation($"Failed to upload the file. Status Code: {response.StatusCode}");
-                    }
-                    //}
-                }
-                else
-                {
-                    throw response.ErrorException;
-                }
-            }
-            catch (Exception ex)
-            {
-                throw ex;
+                watcher.Dispose();
             }
         }
 
         /// <summary>
-        /// 创建文件夹（同名不覆盖）
+        /// 尝试获取本地文件，如果本地文件不存在或不符合则返回 NULL
         /// </summary>
-        /// <param name="filePath"></param>
-        /// <param name="parentId"></param>
+        /// <param name="fileFullPath"></param>
+        /// <param name="localBackupFullPath"></param>
         /// <returns></returns>
-        public async Task<string> CreateFolder(string filePath, string parentId)
+        private LocalFileInfo GetLocalFile(string fileFullPath, string localBackupFullPath)
         {
-            var name = AliyunDriveHelper.EncodeFileName(filePath);
-
-            try
+            var backupDirInfo = new DirectoryInfo(localBackupFullPath);
+            if (!backupDirInfo.Exists)
             {
-                // 判断是否需要创建文件夹
-                if (parentId == "root")
-                {
-                    // 如果是根目录
-                    var path = $"{name}".TrimPath();
-                    if (_driveFolders.ContainsKey(path))
-                    {
-                        return _driveFolders[path].FileId;
-                    }
-                }
-                else
-                {
-                    // 如果是子目录
-                    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == parentId).First()!;
-                    var path = $"{parent.Key}/{name}".TrimPath();
-                    if (_driveFolders.ContainsKey(path))
-                    {
-                        return _driveFolders[path].FileId;
-                    }
-                }
-
-                // v1 https://openapi.alipan.com/adrive/v1.0/openFile/create
-                // v2 https://api.aliyundrive.com/adrive/v2/file/createWithFolders
-                var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-                var body = new
-                {
-                    drive_id = _driveId,
-                    parent_file_id = parentId,
-                    name = name,
-                    type = "folder",
-                    check_name_mode = "refuse", // 同名不创建
-                };
-
-                request.AddBody(body);
-                var response = await _apiClient.ExecuteAsync(request);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw response.ErrorException ?? new Exception(response.Content ?? "创建文件夹失败");
-                }
-         
-                //using var doc = JsonDocument.Parse(response.Content!);
-                //var root = doc.RootElement;
-                //return root.GetProperty("file_id").GetString()!;
-
-                var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(response.Content);
-                data.Name = data.FileName;
-
-                if (parentId == "root")
-                {
-                    // 当前目录在根路径
-                    // /{当前路径}/
-                    _driveFolders.TryAdd($"{data.Name}".TrimPath(), data);
-                }
-                else
-                {
-                    // 计算父级路径
-                    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == parentId).First()!;
-                    var path = $"{parent.Key}/{data.Name}".TrimPath();
-
-                    // /{父级路径}/{当前路径}/
-                    _driveFolders.TryAdd(path, data);
-                }
-
-                return data.FileId;
+                return null;
             }
-            catch (Exception ex)
+
+            var fileInfo = new FileInfo(fileFullPath);
+            if (!fileInfo.Exists)
             {
-                throw ex;
+                return null;
             }
+
+            // 所有本地文件
+            var lf = new LocalFileInfo()
+            {
+                IsFile = true,
+                FullPath = fileInfo.FullName,
+                Key = GetFileKey(localBackupFullPath, fileInfo.FullName),
+                KeyPath = GetFileKeyPath(localBackupFullPath, fileInfo),
+                CreationTime = fileInfo.CreationTime,
+                LastWriteTime = fileInfo.LastWriteTime,
+                Length = fileInfo.Length,
+                Name = fileInfo.Name,
+            };
+
+            // 过滤文件
+            var cfile = lf.Key.ToUrlPath(backupDirInfo.Name).TrimPath();
+            if (!string.IsNullOrWhiteSpace(cfile))
+            {
+                if (ShouldFilter($"/{cfile}"))
+                {
+                    return null;
+                }
+            }
+
+            // 文件添加到本地路径
+            _localPaths.TryAdd(lf.FullPath, false);
+
+            return lf;
         }
 
         /// <summary>
-        /// 获取文件列表（限流 4 QPS）
+        /// 尝试获取本地文件夹，如果本地文件夹不存在或不符合则返回 NULL
+        /// </summary>
+        /// <param name="dirFullPath"></param>
+        /// <param name="localBackupFullPath"></param>
+        /// <returns></returns>
+        private LocalFileInfo GetLocalDirectory(string dirFullPath, string localBackupFullPath)
+        {
+            var dirInfo = new DirectoryInfo(dirFullPath);
+            if (!dirInfo.Exists)
+            {
+                return null;
+            }
+
+            var backupDirInfo = new DirectoryInfo(localBackupFullPath);
+            if (!backupDirInfo.Exists)
+            {
+                return null;
+            }
+
+            // 所有本地文件夹
+            var ld = new LocalFileInfo()
+            {
+                FullPath = dirInfo.FullName,
+                Key = GetDirectoryKey(localBackupFullPath, dirInfo),
+                CreationTime = dirInfo.CreationTime,
+                LastWriteTime = dirInfo.LastWriteTime,
+                Name = dirInfo.Name,
+            };
+
+            // 过滤文件夹
+            var cpath = ld.Key.ToUrlPath(backupDirInfo.Name).TrimPath();
+            if (!string.IsNullOrWhiteSpace(cpath))
+            {
+                if (ShouldFilter($"/{cpath}/"))
+                {
+                    return null;
+                }
+            }
+
+            // 文件夹
+            _localPaths.TryAdd(ld.FullPath, true);
+
+            return ld;
+        }
+
+        #region 阿里云盘 SDK
+
+        /// <summary>
+        /// 阿里云盘 - 搜索文件
         /// </summary>
         /// <param name="driveId"></param>
-        /// <param name="parentFileId"></param>
         /// <param name="limit"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="orderDirection"></param>
-        /// <param name="category"></param>
-        /// <param name="type"></param>
-        /// <param name="saveRootPath">备份保存的目录，如果匹配到则立即返回</param>
         /// <returns></returns>
-        public async Task FetchAllFilesAsync(
-            string driveId,
-            string parentFileId,
-            int limit = 100,
-            string orderBy = null,
-            string orderDirection = null,
-            string category = null,
-            string type = "all")
-        {
-            try
-            {
-                var allItems = new List<AliyunDriveFileItem>();
-                string marker = null;
-                do
-                {
-                    var sw = new Stopwatch();
-                    sw.Start();
-
-                    var response = await FetchFileListAsync(driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type);
-                    var responseData = JsonSerializer.Deserialize<AliyunFileList>(response.Content);
-                    if (responseData.Items.Count > 0)
-                    {
-                        allItems.AddRange(responseData.Items.ToList());
-                    }
-                    marker = responseData.NextMarker;
-
-                    sw.Stop();
-
-                    // 等待 250ms 以遵守限流策略
-                    if (sw.ElapsedMilliseconds < _listRequestInterval)
-                        await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
-                } while (!string.IsNullOrEmpty(marker));
-
-                foreach (var item in allItems)
-                {
-                    // 如果是文件夹，则递归获取子文件列表
-                    if (item.Type == "folder")
-                    {
-                        // 如果是根目录
-                        if (item.ParentFileId == "root")
-                        {
-                            _driveFolders.TryAdd($"{item.Name}".TrimPath(), item);
-                        }
-                        else
-                        {
-                            var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
-                            _driveFolders.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
-                        }
-
-                        await FetchAllFilesAsync(driveId, item.FileId, limit, orderBy, orderDirection, category, type);
-                    }
-                    else
-                    {
-                        // 如果是根目录的文件
-                        if (item.ParentFileId == "root")
-                        {
-                            _driveFiles.TryAdd($"{item.Name}".TrimPath(), item);
-                        }
-                        else
-                        {
-                            // 构建文件路径作为字典的键
-                            var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
-                            _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
-                        }
-                    }
-
-                    _log.LogInformation($"云盘文件加载中，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹，{item.Name}");
-                }
-            }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
-        }
-
-        public async Task SearchAllFilesAsync(string driveId, int limit = 100)
+        private async Task AliyunDriveSearchFiles(string driveId, int limit = 100)
         {
             try
             {
@@ -1630,14 +1364,16 @@ namespace MDriveSync.Core
                                 throw new Exception("路径异常");
                             }
 
-                            // 路径必须符合根路径，否则跳过
-                            if (keyPath == _driveSavePath || keyPath.StartsWith($"{_driveSavePath}/"))
-                            //if (keyPath.StartsWith(_driveSavePath) || _driveSavePath.StartsWith(keyPath))
+                            // 路径必须符合，否则跳过
+                            // 如果备份目录以当前目录开头，说明是备份目录的父级
+                            if ($"{_driveSavePath}/".StartsWith(keyPath)
+                                // 如果相等
+                                || keyPath == _driveSavePath
+                                // 如果当前目录是以备份目录开头，说明是备份目录的子目录
+                                || keyPath.StartsWith($"{_driveSavePath}/"))
                             {
                                 _driveFolders.TryAdd(keyPath, item);
                                 LoadPath(item.FileId);
-
-                                //_log.LogInformation($"云盘文件加载中，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹，{item.Name}");
                             }
                         }
                     }
@@ -1646,32 +1382,13 @@ namespace MDriveSync.Core
                 // 再加载列表
                 foreach (var item in allItems.Where(c => c.IsFile))
                 {
-                    // 如果是文件夹，则递归获取子文件列表
-                    if (item.Type == "folder")
-                    {
-                        //// 如果是根目录
-                        //if (item.ParentFileId == "root")
-                        //{
-                        //    _driveFolders.TryAdd($"{item.Name}".TrimPath(), item);
-                        //}
-                        //else
-                        //{
-                        //    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
-                        //    _driveFolders.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
-                        //}
-                    }
-                    else
+                    if (item.IsFile)
                     {
                         // 文件必须在备份路径中
                         var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).FirstOrDefault();
                         if (!string.IsNullOrWhiteSpace(parent.Key))
                         {
                             _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
-
-                            //_log.LogInformation($"云盘文件加载中，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹，{item.Name}");
-                        }
-                        else
-                        {
                         }
 
                         //// 如果是根目录的文件
@@ -1686,17 +1403,546 @@ namespace MDriveSync.Core
                         //    _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
                         //}
                     }
+                    else
+                    {
+                        // 如果是文件夹，则递归获取子文件列表
+                        //// 如果是根目录
+                        //if (item.ParentFileId == "root")
+                        //{
+                        //    _driveFolders.TryAdd($"{item.Name}".TrimPath(), item);
+                        //}
+                        //else
+                        //{
+                        //    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
+                        //    _driveFolders.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                        //}
+                    }
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                throw ex;
+                throw;
             }
 
             _log.LogInformation($"云盘文件加载完成，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹。");
         }
 
-        private async Task<RestResponse> FetchFileListAsync(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type)
+        /// <summary>
+        /// 阿里云盘 - 下载文件
+        /// </summary>
+        /// <param name="url"></param>
+        /// <param name="fileName"></param>
+        /// <param name="fileSha1"></param>
+        /// <param name="savePath"></param>
+        /// <returns></returns>
+        private async Task AliyunDriveDownload(string url, string fileName, string fileSha1, string savePath)
+        {
+            var tempFilePath = Path.Combine(_localRestorePath, ".duplicaticache", $"{fileName}.{Guid.NewGuid():N}.duplicatidownload");
+            var finalFilePath = Path.Combine(savePath, fileName);
+
+            using (var httpClient = new HttpClient())
+            {
+                try
+                {
+                    // 设置 45 分钟超时
+                    httpClient.Timeout = TimeSpan.FromMinutes(45);
+
+                    var tmpPath = Path.GetDirectoryName(tempFilePath);
+                    var path = Path.GetDirectoryName(finalFilePath);
+
+                    lock (_lock)
+                    {
+                        if (!Directory.Exists(tmpPath))
+                        {
+                            Directory.CreateDirectory(tmpPath);
+                        }
+                        if (!Directory.Exists(path))
+                        {
+                            Directory.CreateDirectory(path);
+                        }
+                    }
+
+                    using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead))
+                    {
+                        response.EnsureSuccessStatusCode();
+
+                        // 读取响应流
+                        using (var stream = await response.Content.ReadAsStreamAsync())
+                        {
+                            // 创建一个新文件，并将响应流中的内容写入文件
+                            using (var fileStream = new FileStream(tempFilePath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true))
+                            {
+                                await stream.CopyToAsync(fileStream);
+                            }
+                        }
+                    }
+
+                    // 校验 hash 值
+                    var sha1 = HashHelper.ComputeFileHash(tempFilePath, "sha1");
+                    if (!string.IsNullOrWhiteSpace(fileSha1) && sha1 != fileSha1)
+                    {
+                        throw new Exception("文件内容不一致");
+                    }
+
+                    // 重命名临时文件为最终文件
+                    // 强制覆盖本地
+                    File.Move(tempFilePath, finalFilePath, true);
+                    _log.LogInformation($"文件下载完成: {fileName}");
+                }
+                catch (Exception ex)
+                {
+                    _log.LogInformation($"下载文件时出错: {ex.Message}");
+
+                    // 如果存在临时文件，删除它
+                    if (File.Exists(tempFilePath))
+                    {
+                        File.Delete(tempFilePath);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 创建文件夹（同名不覆盖）
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <param name="parentId"></param>
+        /// <returns></returns>
+        private async Task<string> AliyunDriveCreateFolder(string filePath, string parentId)
+        {
+            var name = AliyunDriveHelper.EncodeFileName(filePath);
+
+            try
+            {
+                // 判断是否需要创建文件夹
+                if (parentId == "root")
+                {
+                    // 如果是根目录
+                    var path = $"{name}".TrimPath();
+                    if (_driveFolders.ContainsKey(path))
+                    {
+                        return _driveFolders[path].FileId;
+                    }
+                }
+                else
+                {
+                    // 如果是子目录
+                    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == parentId).First()!;
+                    var path = $"{parent.Key}/{name}".TrimPath();
+                    if (_driveFolders.ContainsKey(path))
+                    {
+                        return _driveFolders[path].FileId;
+                    }
+                }
+
+                // v1 https://openapi.alipan.com/adrive/v1.0/openFile/create
+                // v2 https://api.aliyundrive.com/adrive/v2/file/createWithFolders
+                var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
+                request.AddHeader("Content-Type", "application/json");
+                request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+                var body = new
+                {
+                    drive_id = _driveId,
+                    parent_file_id = parentId,
+                    name = name,
+                    type = "folder",
+                    check_name_mode = "refuse", // 同名不创建
+                };
+
+                request.AddBody(body);
+                var response = await _apiClient.ExecuteAsync(request);
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw response.ErrorException ?? new Exception(response.Content ?? "创建文件夹失败");
+                }
+
+                //using var doc = JsonDocument.Parse(response.Content!);
+                //var root = doc.RootElement;
+                //return root.GetProperty("file_id").GetString()!;
+
+                var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(response.Content);
+                data.Name = data.FileName;
+
+                if (parentId == "root")
+                {
+                    // 当前目录在根路径
+                    // /{当前路径}/
+                    _driveFolders.TryAdd($"{data.Name}".TrimPath(), data);
+                }
+                else
+                {
+                    // 计算父级路径
+                    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == parentId).First()!;
+                    var path = $"{parent.Key}/{data.Name}".TrimPath();
+
+                    // /{父级路径}/{当前路径}/
+                    _driveFolders.TryAdd(path, data);
+                }
+
+                return data.FileId;
+            }
+            catch (Exception)
+            {
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 上传文件
+        /// </summary>
+        /// <param name="localFileInfo"></param>
+        /// <param name="needPreHash"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        /// <exception cref="HttpRequestException"></exception>
+        private async Task AliyunDriveUploadFile(LocalFileInfo localFileInfo, bool needPreHash = true)
+        {
+            var fileFullPath = localFileInfo.FullPath;
+
+            var fileInfo = new FileInfo(fileFullPath);
+            if (!fileInfo.Exists)
+            {
+                // 本地文件不存在
+                _localFiles.TryRemove(localFileInfo.Key, out _);
+                return;
+            }
+
+            // 文件名
+            var name = AliyunDriveHelper.EncodeFileName(Path.GetFileName(fileInfo.Name));
+
+            // 存储目录 ID
+            var saveParentFileId = "root";
+
+            // 计算保存存储目录
+            var saveParentPath = $"{_driveSavePath}/{localFileInfo.KeyPath}".TrimPath();
+
+            // 计算文件存储路径
+            var saveFilePath = $"{saveParentPath}/{name}".TrimPath();
+
+            // 判断云盘是否存在路径，不存在则创建
+            if (!string.IsNullOrWhiteSpace(saveParentPath))
+            {
+                if (!_driveFolders.ContainsKey(saveParentPath))
+                {
+                    var savePaths = saveParentPath.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                    var savePathsParentFileId = "root";
+                    foreach (var subPath in savePaths)
+                    {
+                        savePathsParentFileId = await AliyunDriveCreateFolder(subPath, savePathsParentFileId);
+                    }
+                }
+
+                if (!_driveFolders.ContainsKey(saveParentPath))
+                {
+                    throw new Exception("文件夹创建失败");
+                }
+
+                saveParentFileId = _driveFolders[saveParentPath].FileId;
+            }
+
+            if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
+            {
+                // 计算 hash
+                localFileInfo.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
+            }
+
+            // 本地文件没有 sha1 时，计算本地文件的 sha1
+            if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
+            {
+                localFileInfo.Sha1 = HashHelper.ComputeFileHash(fileFullPath, "sha1");
+            }
+
+            // 如果文件已上传则跳过
+            // 对比文件差异 sha1
+            if (_driveFiles.TryGetValue(saveFilePath, out var driveItem)
+                && driveItem != null
+                && driveItem.ContentHash == localFileInfo.Sha1)
+            {
+                return;
+            }
+
+            _log.LogInformation($"正在上传文件 {localFileInfo.Key}");
+
+            var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+            var fileSize = fileInfo.Length;
+
+            object body = new
+            {
+                drive_id = _driveId,
+                parent_file_id = saveParentFileId,
+                name = name,
+                type = "file",
+                check_name_mode = "ignore", // 覆盖文件模式
+                size = fileSize
+            };
+
+            // 是否进行秒传处理
+            var isRapidUpload = false;
+            if (_jobConfig.RapidUpload)
+            {
+                // 开启秒传
+                // 如果文件 > 10kb 则进行秒传计算，否则不进行
+                if (fileSize > 1024 * 10)
+                {
+                    isRapidUpload = true;
+                }
+            }
+
+            // 如果需要计算秒传
+            if (isRapidUpload)
+            {
+                if (fileSize > 1024 * 1024 && needPreHash)
+                {
+                    // 如果文件超过 1mb 则进行预处理，判断是否可以进行妙传
+                    var preHash = AliyunDriveHelper.GenerateStartSHA1(fileFullPath);
+                    body = new
+                    {
+                        drive_id = _driveId,
+                        parent_file_id = saveParentFileId,
+                        name = name,
+                        type = "file",
+                        check_name_mode = "ignore",
+                        size = fileInfo.Length,
+                        pre_hash = preHash
+                    };
+                }
+                else
+                {
+                    // > 10kb 且 < 1mb 的文件直接计算 sha1
+                    var proofCode = AliyunDriveHelper.GenerateProofCode(fileFullPath, fileSize, AccessToken);
+                    var contentHash = AliyunDriveHelper.GenerateSHA1(fileFullPath);
+
+                    body = new
+                    {
+                        drive_id = _driveId,
+                        parent_file_id = saveParentFileId,
+                        name = name,
+                        type = "file",
+                        check_name_mode = "ignore",
+                        size = fileInfo.Length,
+                        content_hash = contentHash,
+                        content_hash_name = "sha1",
+                        proof_version = "v1",
+                        proof_code = proofCode
+                    };
+                }
+            }
+            request.AddBody(body);
+            var response = await _apiClient.ExecuteAsync(request);
+
+            // 如果需要秒传，并且需要预处理时
+            // System.Net.HttpStatusCode.Conflict 注意可能不是 409
+            if (isRapidUpload && needPreHash
+                && (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
+                && response.Content.Contains("PreHashMatched"))
+            {
+                using (var mcDoc = JsonDocument.Parse(response.Content))
+                {
+                    // 尝试获取code属性的值
+                    if (mcDoc.RootElement.TryGetProperty("code", out JsonElement codeElement))
+                    {
+                        var code = codeElement.GetString();
+                        if (code == "PreHashMatched")
+                        {
+                            // 匹配成功，进行完整的秒传，不需要预处理
+                            await AliyunDriveUploadFile(localFileInfo, false);
+                            return;
+                        }
+                    }
+                }
+            }
+
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                _log.LogError(response.ErrorException, $"文件上传失败 {localFileInfo.Key}");
+                throw response.ErrorException ?? new Exception($"文件上传失败 {localFileInfo.Key}");
+            }
+
+            using var doc = JsonDocument.Parse(response.Content!);
+            var root = doc.RootElement;
+
+            var drive_id = root.GetProperty("drive_id").GetString();
+            var file_id = root.GetProperty("file_id").GetString();
+            var upload_id = root.GetProperty("upload_id").GetString();
+
+            var rapid_upload = root.GetProperty("rapid_upload").GetBoolean();
+            if (rapid_upload)
+            {
+                _log.LogInformation($"文件秒传成功 {localFileInfo.Key}");
+                return;
+            }
+
+            var upload_url = root.GetProperty("part_info_list").EnumerateArray().FirstOrDefault().GetProperty("upload_url").GetString();
+
+            // 读取文件作为字节流
+            byte[] fileData = await File.ReadAllBytesAsync(fileFullPath);
+
+            // 创建HttpContent
+            var content = new ByteArrayContent(fileData);
+
+            // 发送PUT请求
+            HttpResponseMessage uploadRes = null;
+
+            // 定义重试策略 3 次
+            var retryPolicy = Policy
+                .Handle<HttpRequestException>()
+                .WaitAndRetryAsync(3, retryAttempt =>
+                {
+                    // 5s 25s 125s 后重试
+                    return TimeSpan.FromSeconds(Math.Pow(5, retryAttempt));
+                });
+
+            // 执行带有重试策略的请求
+            await retryPolicy.ExecuteAsync(async () =>
+            {
+                uploadRes = await _uploadHttpClient.PutAsync(upload_url, content);
+
+                if (!uploadRes.IsSuccessStatusCode)
+                {
+                    throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
+                }
+            });
+
+            // 检查请求是否成功
+            if (!uploadRes.IsSuccessStatusCode)
+            {
+                throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
+            }
+
+            var reqCom = new RestRequest("/adrive/v1.0/openFile/complete", Method.Post);
+            reqCom.AddHeader("Content-Type", "application/json");
+            reqCom.AddHeader("Authorization", $"Bearer {AccessToken}");
+            var bodyCom = new
+            {
+                drive_id = _driveId,
+                file_id = file_id,
+                upload_id = upload_id,
+            };
+            reqCom.AddBody(bodyCom);
+            var resCom = await _apiClient.ExecuteAsync(reqCom);
+            if (resCom.StatusCode != HttpStatusCode.OK)
+            {
+                throw resCom.ErrorException ?? throw new Exception(resCom.Content ?? "上传标记完成失败");
+            }
+
+            // 将文件添加到上传列表
+            var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(resCom.Content);
+            if (data.ParentFileId == "root")
+            {
+                // 当前目录在根路径
+                // /{当前路径}/
+                _driveFiles.TryAdd($"{data.Name}".TrimPath(), data);
+            }
+            else
+            {
+                // 计算父级路径
+                var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == data.ParentFileId).First()!;
+                var path = $"{parent.Key}/{data.Name}".TrimPath();
+
+                // /{父级路径}/{当前路径}/
+                _driveFiles.TryAdd(path, data);
+            }
+
+            _log.LogInformation($"文件上传成功 {localFileInfo.Key}");
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件列表（限流 4 QPS）
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="parentFileId"></param>
+        /// <param name="limit"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="orderDirection"></param>
+        /// <param name="category"></param>
+        /// <param name="type"></param>
+        /// <param name="saveRootPath">备份保存的目录，如果匹配到则立即返回</param>
+        /// <returns></returns>
+        private async Task AliyunDriveFetchAllFiles(string driveId, string parentFileId, int limit = 100, string orderBy = null, string orderDirection = null, string category = null, string type = "all")
+        {
+            try
+            {
+                var allItems = new List<AliyunDriveFileItem>();
+                string marker = null;
+                do
+                {
+                    var sw = new Stopwatch();
+                    sw.Start();
+
+                    var response = await AliyunDriveFetchFileList(driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type);
+                    var responseData = JsonSerializer.Deserialize<AliyunFileList>(response.Content);
+                    if (responseData.Items.Count > 0)
+                    {
+                        allItems.AddRange(responseData.Items.ToList());
+                    }
+                    marker = responseData.NextMarker;
+
+                    sw.Stop();
+
+                    // 等待 250ms 以遵守限流策略
+                    if (sw.ElapsedMilliseconds < _listRequestInterval)
+                        await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
+                } while (!string.IsNullOrEmpty(marker));
+
+                foreach (var item in allItems)
+                {
+                    // 如果是文件夹，则递归获取子文件列表
+                    if (item.Type == "folder")
+                    {
+                        // 如果是根目录
+                        if (item.ParentFileId == "root")
+                        {
+                            _driveFolders.TryAdd($"{item.Name}".TrimPath(), item);
+                        }
+                        else
+                        {
+                            var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
+                            _driveFolders.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                        }
+
+                        await AliyunDriveFetchAllFiles(driveId, item.FileId, limit, orderBy, orderDirection, category, type);
+                    }
+                    else
+                    {
+                        // 如果是根目录的文件
+                        if (item.ParentFileId == "root")
+                        {
+                            _driveFiles.TryAdd($"{item.Name}".TrimPath(), item);
+                        }
+                        else
+                        {
+                            // 构建文件路径作为字典的键
+                            var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
+                            _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                        }
+                    }
+
+                    _log.LogInformation($"云盘文件加载中，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹，{item.Name}");
+                }
+            }
+            catch (Exception ex)
+            {
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件列表
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="parentFileId"></param>
+        /// <param name="limit"></param>
+        /// <param name="marker"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="orderDirection"></param>
+        /// <param name="category"></param>
+        /// <param name="type"></param>
+        /// <returns></returns>
+        private async Task<RestResponse> AliyunDriveFetchFileList(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type)
         {
             var request = new RestRequest("/adrive/v1.0/openFile/list", Method.Post);
             request.AddHeader("Content-Type", "application/json");
@@ -1714,10 +1960,16 @@ namespace MDriveSync.Core
             };
             request.AddJsonBody(body);
 
-            return await ExecuteWithRetryAsync(request);
+            return await AliyunDriveExecuteWithRetry(request);
         }
 
-        private async Task<RestResponse> ExecuteWithRetryAsync(RestRequest request)
+        /// <summary>
+        /// 阿里云盘 - 执行重试请求
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        private async Task<RestResponse> AliyunDriveExecuteWithRetry(RestRequest request)
         {
             const int maxRetries = 5;
             int retries = 0;
@@ -1748,215 +2000,181 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 开始备份
+        /// 阿里云盘 - 获取用户 drive 信息
         /// </summary>
         /// <returns></returns>
-        public async Task StartBackup()
+        private void AliyunDriveInitInfo()
         {
-            if (State == JobState.BackingUp)
+            var request = new RestRequest("/adrive/v1.0/user/getDriveInfo", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            var response = _apiClient.Execute<AliyunDriveInfo>(request);
+            if (response.StatusCode == System.Net.HttpStatusCode.OK)
             {
-                _log.LogInformation("正在执行中，跳过");
-                return;
-            }
+                var data = response.Data!;
 
-            // 备份中
-            ChangeState(JobState.BackingUp);
+                _driveId = data.DefaultDriveId;
 
-            try
-            {
-                var sw = new Stopwatch();
-                sw.Restart();
-                _log.LogInformation("计算云盘存储根目录...");
-
-                await InitBackupPath();
-
-                sw.Stop();
-                _log.LogInformation($"计算云盘存储根目录完成. 用时 {sw.ElapsedMilliseconds}ms");
-                sw.Restart();
-
-                // 验证并获取备份根目录
-                // 加载备份文件夹下的所有文件夹、文件列表
-                var saveParentFileId = "root";
-                if (!string.IsNullOrWhiteSpace(_driveSavePath))
+                if (_jobConfig.DefaultDrive == "backup" && string.IsNullOrWhiteSpace(data.BackupDriveId))
                 {
-                    if (_driveFolders.TryGetValue(_driveSavePath, out AliyunDriveFileItem item) && item != null)
-                    {
-                        saveParentFileId = item.FileId;
-                    }
-                    else
-                    {
-                        throw new Exception("云盘存储根目录不存在，请重新启动");
-                    }
+                    _driveId = data.BackupDriveId;
                 }
-
-                //// 加载备份文件夹下的所有文件夹
-                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100, type: "folder");
-
-                _log.LogInformation("加载云盘存储文件列表...");
-
-                // 所有文件列表
-                await SearchAllFilesAsync(_driveId);
-
-                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
-
-                sw.Stop();
-                _log.LogInformation($"加载云盘存储文件列表完成. 用时 {sw.ElapsedMilliseconds}ms");
-                sw.Restart();
-
-                // 开始备份
-                _log.LogInformation("开始备份本地文件...");
-
-                await Search();
-
-                sw.Stop();
-                _log.LogInformation($"end. {_driveFiles.Count}, {sw.ElapsedMilliseconds}ms");
+                else if (_jobConfig.DefaultDrive == "resource" && !string.IsNullOrWhiteSpace(data.ResourceDriveId))
+                {
+                    _driveId = data.ResourceDriveId;
+                }
             }
-            catch (Exception ex)
-            {
-                _log.LogInformation("执行异常" + ex.Message);
-            }
-
-            // 开始校验
-            ChangeState(JobState.Verifying);
-
-            await Maintenance();
         }
 
         /// <summary>
-        /// 初始化备份目录
+        /// 阿里云盘 - 获取用户空间信息
         /// </summary>
         /// <returns></returns>
-        public async Task InitBackupPath()
+        private async Task AliyunDriveInitSpaceInfo()
         {
-            // 首先加载根目录结构
-            // 并计算需要保存的目录
-            // 计算/创建备份文件夹
-            // 如果备份文件夹不存在
-            var saveRootSubPaths = _driveSavePath.Split('/').Select(c => c.Trim().Trim('/')).Where(c => !string.IsNullOrWhiteSpace(c)).ToArray();
-            var searchParentFileId = "root";
-            foreach (var subPath in saveRootSubPaths)
+            var request = new RestRequest("/adrive/v1.0/user/getSpaceInfo", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            var response = await _apiClient.ExecuteAsync<AliyunDriveSpaceInfo>(request);
+            if (response.StatusCode == HttpStatusCode.OK)
             {
-                var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            }
+        }
 
-                object body = new
-                {
-                    drive_id = _driveId,
-                    query = $"parent_file_id='{searchParentFileId}' and type = 'folder' and name = '{subPath}'"
-                };
-                request.AddBody(body);
-                var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
-                }
-                if(response.Data == null)
-                {
-                    throw new Exception("云盘目录查询失败");
-                }
+        /// <summary>
+        /// 阿里云盘 - 获取用户 VIP 信息
+        /// </summary>
+        /// <returns></returns>
+        private async Task AliyunDriveInitVipInfo()
+        {
+            var request = new RestRequest("/v1.0/user/getVipInfo", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            var response = await _apiClient.ExecuteAsync<AliyunDriveVipInfo>(request);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+            }
+        }
 
-                var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
-                if (okPath == null)
+        #endregion 阿里云盘 SDK
+
+        #region 文件监听处理
+
+        /// <summary>
+        /// 文件/文件夹删除事件
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="e"></param>
+        /// <param name="localBackupFullPath"></param>
+        private void OnDeleted(object source, FileSystemEventArgs e, string localBackupFullPath)
+        {
+            if (_localPaths.TryGetValue(e.FullPath, out var isPath))
+            {
+                if (isPath)
                 {
-                    // 未找到目录
-                    searchParentFileId = await CreateFolder(subPath, searchParentFileId);
+                    // 是删除路径
+                    _log.LogInformation($"文件夹删除: {e.FullPath}, 类型: {e.ChangeType}");
                 }
                 else
                 {
-                    if (searchParentFileId == "root")
-                    {
-                        // 当前目录在根路径
-                        // /{当前路径}/
-                        _driveFolders.TryAdd($"{okPath.Name}".TrimPath(), okPath);
-                    }
-                    else
-                    {
-                        // 计算父级路径
-                        var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == searchParentFileId).First()!;
-                        var path = $"{parent.Key}/{okPath.Name}".TrimPath();
+                    // 是删除文件
+                    _log.LogInformation($"文件删除: {e.FullPath}, 类型: {e.ChangeType}");
 
-                        // /{父级路径}/{当前路径}/
-                        _driveFolders.TryAdd(path, okPath);
-                    }
-
-                    searchParentFileId = okPath.FileId;
+                    var oldFileKey = GetFileKey(localBackupFullPath, e.FullPath);
+                    _localFiles.TryRemove(oldFileKey, out _);
+                    _localPaths.TryRemove(e.FullPath, out _);
                 }
+            }
+            else
+            {
+                // 未知
+                _log.LogInformation($"文件夹/文件删除: {e.FullPath}, 类型: {e.ChangeType}");
             }
         }
 
         /// <summary>
-        /// 开始还原
+        /// 文件/文件夹创建事件
         /// </summary>
-        /// <returns></returns>
-        public async Task StartRestore()
+        /// <param name="source"></param>
+        /// <param name="e"></param>
+        /// <param name="localBackupFullPath"></param>
+        private void OnCreated(object source, FileSystemEventArgs e, string localBackupFullPath)
         {
-            try
+            if (File.Exists(e.FullPath))
             {
-                // 验证还原目录
-                if (Directory.Exists(_localRestorePath))
+                _log.LogInformation($"文件创建: {e.FullPath}, 类型: {e.ChangeType}");
+
+                var lf = GetLocalFile(e.FullPath, localBackupFullPath);
+                if (lf != null)
                 {
-                    Directory.CreateDirectory(_localRestorePath);
+                    _localFiles.TryAdd(lf.Key, lf);
                 }
-
-                var sw = new Stopwatch();
-                sw.Restart();
-                _log.LogInformation("计算云盘存储根目录...");
-                await InitBackupPath();
-                sw.Stop();
-                _log.LogInformation($"计算云盘存储根目录完成. 用时 {sw.ElapsedMilliseconds}ms");
-                sw.Restart();
-
-                // 加载备份文件夹下的所有文件夹、文件列表
-                var saveParentFileId = "root";
-                if (!string.IsNullOrWhiteSpace(_driveSavePath))
-                {
-                    if (_driveFolders.TryGetValue(_driveSavePath, out AliyunDriveFileItem item) && item != null)
-                    {
-                        saveParentFileId = item.FileId;
-                    }
-                    else
-                    {
-                        throw new Exception("云盘存储根目录不存在，请重新启动");
-                    }
-                }
-
-                //// 加载备份文件夹下的所有文件夹
-                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100, type: "folder");
-
-                _log.LogInformation("加载云盘存储文件列表...");
-
-                // 所有文件列表
-                await SearchAllFilesAsync(_driveId);
-
-                //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
-
-                sw.Stop();
-                _log.LogInformation($"加载云盘存储文件列表完成. 用时 {sw.ElapsedMilliseconds}ms");
-                sw.Restart();
-
-                // 开始还原
-                _log.LogInformation("开始拉取远程文件到本地...");
-
-                await Restore(); // 替换为你的起始路径
-
-                sw.Stop();
-                _log.LogInformation($"end. {_driveFiles.Count}, {sw.ElapsedMilliseconds}ms");
             }
-            catch (Exception ex)
+            else if (Directory.Exists(e.FullPath))
             {
-                throw;
+                // 不处理
+                _log.LogInformation($"文件夹创建: {e.FullPath}, 类型: {e.ChangeType}");
+            }
+            else
+            {
+                // 文件或文件夹，不处理
+                _log.LogInformation($"文件/文件夹创建: {e.FullPath}, 类型: {e.ChangeType}");
             }
         }
 
-        public void Dispose()
+        /// <summary>
+        /// 文件/文件夹变更事件
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="e"></param>
+        private void OnChanged(object source, FileSystemEventArgs e)
         {
-            // TODO
+            _log.LogInformation($"文件/文件夹更改: {e.FullPath}, 类型: {e.ChangeType}");
+        }
 
-            foreach (var watcher in _localWatchers)
+        /// <summary>
+        /// 文件/文件夹重命名事件
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="e"></param>
+        /// <param name="localBackupFullPath"></param>
+        private void OnRenamed(object source, RenamedEventArgs e, string localBackupFullPath)
+        {
+            if (File.Exists(e.FullPath))
             {
-                watcher.Dispose();
+                _log.LogInformation($"文件重命名: {e.OldFullPath} 更改为 {e.FullPath}, 类型: {e.ChangeType}");
+
+                var lf = GetLocalFile(e.FullPath, localBackupFullPath);
+                if (lf != null)
+                {
+                    _localFiles.TryAdd(lf.Key, lf);
+                }
+
+                var oldFileKey = GetFileKey(localBackupFullPath, e.OldFullPath);
+                _localFiles.TryRemove(oldFileKey, out _);
+            }
+            else if (Directory.Exists(e.FullPath))
+            {
+                // 文件夹重命名
+                _log.LogInformation($"文件夹重命名: {e.OldFullPath} 更改为 {e.FullPath}, 类型: {e.ChangeType}");
+            }
+            else
+            {
+                // 不处理
+                _log.LogInformation($"文件/文件夹夹重命名: {e.OldFullPath} 更改为 {e.FullPath}, 类型: {e.ChangeType}");
             }
         }
+
+        /// <summary>
+        /// 文件监听出错了
+        /// </summary>
+        /// <param name="source"></param>
+        /// <param name="e"></param>
+        private void OnError(object source, ErrorEventArgs e)
+        {
+            _log.LogError(e.GetException(), $"文件系统监听发生错误");
+        }
+
+        #endregion 文件监听处理
     }
 }
