@@ -234,8 +234,6 @@ namespace MDriveSync.Core
                 case JobState.Scanning:
                     {
                         // TODO
-                        // 校验完成，切换为空闲
-                        ChangeState(JobState.Idle);
                     }
                     break;
 
@@ -251,30 +249,6 @@ namespace MDriveSync.Core
                 case JobState.Verifying:
                     {
                         // 校验中
-
-                        // TODO
-                        // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
-                        switch (_jobConfig.Mode)
-                        {
-                            case JobMode.Mirror:
-                                {
-                                    // 计算需要删除的远程文件/文件夹
-                                    // TODO
-                                }
-                                break;
-
-                            case JobMode.Redundancy:
-                                break;
-
-                            case JobMode.TwoWaySync:
-                                break;
-
-                            default:
-                                break;
-                        }
-
-                        // 校验通过 -> 空闲
-                        ChangeState(JobState.Idle);
                     }
                     break;
 
@@ -699,12 +673,13 @@ namespace MDriveSync.Core
                 _log.LogError(ex, "同步作业完成执行异常");
             }
 
-            // 开始校验
-            ChangeState(JobState.Verifying);
 
             _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
 
-            await Maintenance();
+            // 开始校验
+            ChangeState(JobState.Verifying);
+
+            AliyunDriveVerify();
         }
 
         /// <summary>
@@ -1286,7 +1261,54 @@ namespace MDriveSync.Core
             return ld;
         }
 
-        #region 阿里云盘 SDK
+        #region 阿里云盘
+
+        /// <summary>
+        /// 阿里云盘 - 文件校验
+        /// </summary>
+        /// <returns></returns>
+        private void AliyunDriveVerify()
+        {
+            if (State != JobState.Verifying)
+                return;
+
+            // TODO
+            // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
+            switch (_jobConfig.Mode)
+            {
+                case JobMode.Mirror:
+                    {
+                        // 计算需要删除的远程文件
+                        var removeKeys = _driveFiles.Keys.Except(_localFiles.Keys.Select(c => $"{_driveSavePath}/{c}".TrimPath())).ToList();
+                        if (removeKeys.Count > 0)
+                        {
+                            foreach (var k in removeKeys)
+                            {
+                                if (_driveFiles.TryRemove(k, out var v))
+                                {
+                                    ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken);
+                                }
+                            }
+                        }
+
+                        // 计算需要删除的远程文件夹
+                        // TODO
+                    }
+                    break;
+
+                case JobMode.Redundancy:
+                    break;
+
+                case JobMode.TwoWaySync:
+                    break;
+
+                default:
+                    break;
+            }
+
+            // 校验通过 -> 空闲
+            ChangeState(JobState.Idle);
+        }
 
         /// <summary>
         /// 阿里云盘 - 搜索文件
@@ -2056,9 +2078,9 @@ namespace MDriveSync.Core
             }
         }
 
-        #endregion 阿里云盘 SDK
+        #endregion 阿里云盘
 
-        #region 文件监听处理
+        #region 文件监听事件
 
         /// <summary>
         /// 文件/文件夹删除事件
@@ -2175,6 +2197,6 @@ namespace MDriveSync.Core
             _log.LogError(e.GetException(), $"文件系统监听发生错误");
         }
 
-        #endregion 文件监听处理
+        #endregion 文件监听事件
     }
 }
