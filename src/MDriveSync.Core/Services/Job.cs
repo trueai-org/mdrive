@@ -342,7 +342,7 @@ namespace MDriveSync.Core
 
             // 格式化路径
             _localRestorePath = _jobConfig.Restore.TrimPath();
-            _driveSavePath = _jobConfig.Target.ToUrlPath();
+            _driveSavePath = _jobConfig.Target.TrimPrefix();
 
             // 格式化备份目录
             var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
@@ -487,12 +487,6 @@ namespace MDriveSync.Core
             // 触发状态改变事件 (如果有)
         }
 
-        private Task ScanAsync()
-        {
-            // 扫描逻辑
-            return Task.CompletedTask;
-        }
-
         // 其他任务相关的异步方法...
 
         /// <summary>
@@ -617,7 +611,7 @@ namespace MDriveSync.Core
             sw.Restart();
             _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
             ChangeState(JobState.Verifying);
-            AliyunDriveVerify();
+            await AliyunDriveVerify();
             sw.Stop();
             _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
         }
@@ -628,122 +622,12 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private async Task SyncFiles()
         {
+            ScanLocalFiles();
+
             var now = DateTime.Now;
 
-            var processorCount = Environment.ProcessorCount;
-            if (processorCount <= 0)
-            {
-                processorCount = 1;
-            }
-            else if (processorCount >= 12)
-            {
-                processorCount = 4;
-            }
-            else if (processorCount >= 24)
-            {
-                processorCount = 8;
-            }
-
-#if DEBUG
-            processorCount = 1;
-#endif
-
-            // 序列化回 JSON
-            var oldLocalFiles = new ConcurrentDictionary<string, LocalFileInfo>();
-            if (File.Exists(_localFileCacheName))
-            {
-                var localJson = File.ReadAllText(_localFileCacheName, Encoding.UTF8);
-                if (!string.IsNullOrWhiteSpace(localJson))
-                {
-                    // 从本地缓存中加载
-                    oldLocalFiles = JsonSerializer.Deserialize<ConcurrentDictionary<string, LocalFileInfo>>(localJson);
-                }
-            }
-
+            var processorCount = GetUploadThreadCount();
             var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
-
-            // 循环多个目录处理
-            foreach (var backupRootPath in _jobConfig.Sources)
-            {
-                var backupRootInfo = new DirectoryInfo(backupRootPath);
-                var backupDirs = Directory.EnumerateDirectories(backupRootPath, "*", SearchOption.AllDirectories);
-
-                // 加载文件
-                LoadFiles(backupRootPath);
-                Parallel.ForEach(backupDirs, options, LoadFiles);
-
-                void LoadFiles(string dir)
-                {
-                    try
-                    {
-                        var ld = GetLocalDirectory(dir, backupRootPath);
-                        if (ld == null)
-                        {
-                            return;
-                        }
-                        _localFolders.AddOrUpdate(ld.Key, ld, (k, v) => ld);
-
-                        var files = Directory.EnumerateFiles(dir);
-                        foreach (var fileFullPath in files)
-                        {
-                            var lf = GetLocalFile(fileFullPath, backupRootPath);
-                            if (lf == null)
-                            {
-                                continue;
-                            }
-
-                            // 计算 hash
-                            lf.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
-
-                            // 如果没有获取到，从本地缓存中对比获取 sha1
-                            if (oldLocalFiles.TryGetValue(lf.Key, out var cacheFile) && cacheFile != null)
-                            {
-                                // 如果本地缓存 hash 和 当前文件一致，则使用缓存中的 sha1
-                                if (cacheFile.Hash == lf.Hash
-                                    && !string.IsNullOrWhiteSpace(cacheFile.Hash)
-                                    && !string.IsNullOrWhiteSpace(cacheFile.Sha1)
-                                    && lf.LastWriteTime == cacheFile.LastWriteTime
-                                    && lf.Length == cacheFile.Length
-                                    && lf.CreationTime == cacheFile.CreationTime)
-                                {
-                                    lf.Sha1 = cacheFile.Sha1;
-                                }
-                            }
-
-                            _localFiles.AddOrUpdate(lf.Key, lf, (k, v) =>
-                            {
-                                // 如果旧的 hash = 当前 hash，说明文件没有变
-                                // 如果扫描过的文件包含 sha1 则使用曾经扫描过的
-
-                                // 且时间、大小无变化
-                                if (lf.Hash == v.Hash && !string.IsNullOrWhiteSpace(v.Hash) && !string.IsNullOrWhiteSpace(v.Sha1)
-                                && lf.LastWriteTime == v.LastWriteTime && lf.Length == v.Length && lf.CreationTime == v.CreationTime)
-                                {
-                                    // 如果之前内存中有文件的 sha1
-                                    lf.Sha1 = v.Sha1;
-                                }
-
-                                return lf;
-                            });
-                        }
-                    }
-                    catch (UnauthorizedAccessException ex)
-                    {
-                        _log.LogWarning(ex, $"加载本地目录文件没有权限 {dir}");
-                    }
-                    catch (Exception ex)
-                    {
-                        _log.LogError(ex, $"加载本地目录文件异常 {dir}");
-                        throw;
-                    }
-                }
-            }
-
-            // 持久化本地文件
-            _isLoadLocalFiles = true;
-            PersistentDoWork(null);
-
-            _log.LogInformation($"同步开始，总文件数：{_localFiles.Count}, 扫描文件用时: {(DateTime.Now - now).TotalMilliseconds}ms");
 
             var process = 0;
             var total = _localFiles.Count;
@@ -841,25 +725,7 @@ namespace MDriveSync.Core
         {
             var now = DateTime.Now;
 
-            // 自动线程梳理
-            var processorCount = Environment.ProcessorCount;
-            if (processorCount <= 0)
-            {
-                processorCount = 1;
-            }
-            else if (processorCount >= 12)
-            {
-                processorCount = 4;
-            }
-            else if (processorCount >= 24)
-            {
-                processorCount = 8;
-            }
-
-#if DEBUG
-            processorCount = 1;
-#endif
-
+            var processorCount = GetDownloadThreadCount();
             var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
             var dirs = Directory.EnumerateDirectories(_localRestorePath, "*", SearchOption.AllDirectories);
 
@@ -932,8 +798,8 @@ namespace MDriveSync.Core
             // 先处理文件夹
             foreach (var item in _driveFolders)
             {
-                var subPaths = item.Key.ToUrlPath(_driveSavePath)
-                              .Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                var subPaths = item.Key.TrimPrefix(_driveSavePath)
+                    .Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
                 var savePath = Path.Combine(_localRestorePath, Path.Combine(subPaths));
 
                 var tmpPath = Path.GetDirectoryName(savePath);
@@ -957,6 +823,7 @@ namespace MDriveSync.Core
                     // 根目录
                     if (item.Value.ParentFileId == "root")
                     {
+                        throw new Exception("不支持根目录文件下载");
                     }
                     else
                     {
@@ -964,7 +831,7 @@ namespace MDriveSync.Core
                         var parent = _driveFolders.First(x => x.Value.IsFolder && x.Value.FileId == item.Value.ParentFileId)!;
 
                         // 移除云盘前缀
-                        var subPaths = parent.Key.ToUrlPath(_driveSavePath)
+                        var subPaths = parent.Key.TrimPrefix(_driveSavePath)
                             .Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
                         savePath = Path.Combine(_localRestorePath, Path.Combine(subPaths));
                     }
@@ -994,14 +861,19 @@ namespace MDriveSync.Core
                     var response = await _apiClient.ExecuteAsync<AliyunDriveFileItem>(request);
                     if (response.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(response.Data.Url))
                     {
-                        await AliyunDriveDownload(response.Data.Url, item.Value.Name, item.Value.ContentHash, savePath);
+                        await AliyunDriveDownload(response.Data.Url,
+                            item.Value.Name,
+                            item.Value.ContentHash,
+                            savePath,
+                            _localRestorePath);
                     }
                     else
                     {
                         throw response.ErrorException;
                     }
 
-                    // 如果是大文件 TODO 则通过下载链接下载文件
+                    // TODO
+                    // 如果是大文件，则通过下载链接下载文件
                 }
                 catch (Exception)
                 {
@@ -1014,25 +886,8 @@ namespace MDriveSync.Core
                 }
             });
 
-            //foreach (var item in _driveFiles)
-            //{
-            //}
-
-            // 清理临时文件
-            var tempPath = Path.Combine(_localRestorePath, ".duplicaticache");
-            if (Directory.Exists(tempPath))
-            {
-                Directory.Delete(tempPath, true);
-            }
-
-            var tmpFiles = Directory.GetFiles(_localRestorePath, "*.duplicatidownload", SearchOption.AllDirectories);
-            foreach (var file in tmpFiles)
-            {
-                if (File.Exists(file))
-                {
-                    File.Delete(file);
-                }
-            }
+            // 清理下载缓存
+            ClearDownloadCache(_localRestorePath);
         }
 
         public void Dispose()
@@ -1046,6 +901,199 @@ namespace MDriveSync.Core
         #region 私有方法
 
         /// <summary>
+        /// 扫描本地文件
+        /// </summary>
+        private void ScanLocalFiles()
+        {
+            var now = DateTime.Now;
+
+            // 序列化回 JSON
+            var oldLocalFiles = new ConcurrentDictionary<string, LocalFileInfo>();
+            if (File.Exists(_localFileCacheName))
+            {
+                var localJson = File.ReadAllText(_localFileCacheName, Encoding.UTF8);
+                if (!string.IsNullOrWhiteSpace(localJson))
+                {
+                    // 从本地缓存中加载
+                    oldLocalFiles = JsonSerializer.Deserialize<ConcurrentDictionary<string, LocalFileInfo>>(localJson);
+                }
+            }
+
+            var processorCount = GetUploadThreadCount();
+            var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
+
+            // 循环多个目录处理
+            foreach (var backupRootPath in _jobConfig.Sources)
+            {
+                var backupRootInfo = new DirectoryInfo(backupRootPath);
+                var backupDirs = Directory.EnumerateDirectories(backupRootPath, "*", SearchOption.AllDirectories);
+
+                // 加载文件
+                LoadFiles(backupRootPath);
+                Parallel.ForEach(backupDirs, options, LoadFiles);
+
+                void LoadFiles(string dir)
+                {
+                    try
+                    {
+                        var ld = GetLocalDirectory(dir, backupRootPath);
+                        if (ld == null)
+                        {
+                            return;
+                        }
+                        _localFolders.AddOrUpdate(ld.Key, ld, (k, v) => ld);
+
+                        var files = Directory.EnumerateFiles(dir);
+                        foreach (var fileFullPath in files)
+                        {
+                            var lf = GetLocalFile(fileFullPath, backupRootPath);
+                            if (lf == null)
+                            {
+                                continue;
+                            }
+
+                            // 计算 hash
+                            lf.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
+
+                            // 如果没有获取到，从本地缓存中对比获取 sha1
+                            if (oldLocalFiles.TryGetValue(lf.Key, out var cacheFile) && cacheFile != null)
+                            {
+                                // 如果本地缓存 hash 和 当前文件一致，则使用缓存中的 sha1
+                                if (cacheFile.Hash == lf.Hash
+                                    && !string.IsNullOrWhiteSpace(cacheFile.Hash)
+                                    && !string.IsNullOrWhiteSpace(cacheFile.Sha1)
+                                    && lf.LastWriteTime == cacheFile.LastWriteTime
+                                    && lf.Length == cacheFile.Length
+                                    && lf.CreationTime == cacheFile.CreationTime)
+                                {
+                                    lf.Sha1 = cacheFile.Sha1;
+                                }
+                            }
+
+                            _localFiles.AddOrUpdate(lf.Key, lf, (k, v) =>
+                            {
+                                // 如果旧的 hash = 当前 hash，说明文件没有变
+                                // 如果扫描过的文件包含 sha1 则使用曾经扫描过的
+
+                                // 且时间、大小无变化
+                                if (lf.Hash == v.Hash && !string.IsNullOrWhiteSpace(v.Hash) && !string.IsNullOrWhiteSpace(v.Sha1)
+                                && lf.LastWriteTime == v.LastWriteTime && lf.Length == v.Length && lf.CreationTime == v.CreationTime)
+                                {
+                                    // 如果之前内存中有文件的 sha1
+                                    lf.Sha1 = v.Sha1;
+                                }
+
+                                return lf;
+                            });
+                        }
+                    }
+                    catch (UnauthorizedAccessException ex)
+                    {
+                        _log.LogWarning(ex, $"加载本地目录文件没有权限 {dir}");
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.LogError(ex, $"加载本地目录文件异常 {dir}");
+                        throw;
+                    }
+                }
+            }
+
+            // 持久化本地文件
+            _isLoadLocalFiles = true;
+
+            PersistentDoWork(null);
+
+            _log.LogInformation($"扫描本地文件，总文件数：{_localFiles.Count}, 扫描文件用时: {(DateTime.Now - now).TotalMilliseconds}ms");
+        }
+
+        /// <summary>
+        /// 获取上传线程数
+        /// </summary>
+        /// <returns></returns>
+        private int GetUploadThreadCount()
+        {
+            var processorCount = Environment.ProcessorCount;
+            if (processorCount <= 0)
+            {
+                processorCount = 1;
+            }
+            else if (processorCount >= 12)
+            {
+                processorCount = 4;
+            }
+            else if (processorCount >= 24)
+            {
+                processorCount = 8;
+            }
+
+#if DEBUG
+            processorCount = 1;
+#endif
+
+            if (_jobConfig.UploadThread > 0)
+            {
+                processorCount = _jobConfig.UploadThread;
+            }
+
+            return processorCount;
+        }
+
+        /// <summary>
+        /// 获取下载线程数
+        /// </summary>
+        /// <returns></returns>
+        private int GetDownloadThreadCount()
+        {
+            var processorCount = Environment.ProcessorCount;
+            if (processorCount <= 0)
+            {
+                processorCount = 1;
+            }
+            else if (processorCount >= 12)
+            {
+                processorCount = 4;
+            }
+            else if (processorCount >= 24)
+            {
+                processorCount = 8;
+            }
+
+#if DEBUG
+            processorCount = 1;
+#endif
+
+            if (_jobConfig.DownloadThread > 0)
+            {
+                processorCount = _jobConfig.DownloadThread;
+            }
+
+            return processorCount;
+        }
+
+        /// <summary>
+        /// 清理下载缓存
+        /// </summary>
+        private void ClearDownloadCache(string saveRootPath)
+        {
+            // 清理临时文件
+            var tempPath = Path.Combine(saveRootPath, ".duplicaticache");
+            if (Directory.Exists(tempPath))
+            {
+                Directory.Delete(tempPath, true);
+            }
+
+            var tmpFiles = Directory.GetFiles(saveRootPath, "*.duplicatidownload", SearchOption.AllDirectories);
+            foreach (var file in tmpFiles)
+            {
+                if (File.Exists(file))
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+
+        /// <summary>
         /// 获取文件夹路径 key
         /// 将本地路径转为 {备份目录}/{子目录}
         /// </summary>
@@ -1056,7 +1104,7 @@ namespace MDriveSync.Core
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
             var rootPathName = localRootInfo.Name;
-            var subPath = directoryInfo.FullName.ToUrlPath(localRootPath);
+            var subPath = directoryInfo.FullName.TrimPrefix(localRootPath);
             return $"{rootPathName}/{subPath}".TrimPath();
         }
 
@@ -1070,7 +1118,7 @@ namespace MDriveSync.Core
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
             var rootPathName = localRootInfo.Name;
-            var subPath = fileFullPath.ToUrlPath(localRootInfo.FullName);
+            var subPath = fileFullPath.TrimPrefix(localRootInfo.FullName);
             return $"{rootPathName}/{subPath}".TrimPath();
         }
 
@@ -1084,7 +1132,7 @@ namespace MDriveSync.Core
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
             var rootPathName = localRootInfo.Name;
-            var subPath = Path.GetDirectoryName(fileInfo.FullName).ToUrlPath(localRootInfo.FullName);
+            var subPath = Path.GetDirectoryName(fileInfo.FullName).TrimPrefix(localRootInfo.FullName);
             return $"{rootPathName}/{subPath}".TrimPath();
         }
 
@@ -1182,7 +1230,7 @@ namespace MDriveSync.Core
             };
 
             // 过滤文件
-            var cfile = lf.Key.ToUrlPath(backupDirInfo.Name).TrimPath();
+            var cfile = lf.Key.TrimPrefix(backupDirInfo.Name).TrimPath();
             if (!string.IsNullOrWhiteSpace(cfile))
             {
                 if (ShouldFilter($"/{cfile}"))
@@ -1228,7 +1276,7 @@ namespace MDriveSync.Core
             };
 
             // 过滤文件夹
-            var cpath = ld.Key.ToUrlPath(backupDirInfo.Name).TrimPath();
+            var cpath = ld.Key.TrimPrefix(backupDirInfo.Name).TrimPath();
             if (!string.IsNullOrWhiteSpace(cpath))
             {
                 if (ShouldFilter($"/{cpath}/"))
@@ -1251,7 +1299,7 @@ namespace MDriveSync.Core
         /// 阿里云盘 - 文件校验
         /// </summary>
         /// <returns></returns>
-        private void AliyunDriveVerify()
+        private async Task AliyunDriveVerify()
         {
             if (State != JobState.Verifying)
                 return;
@@ -1308,7 +1356,146 @@ namespace MDriveSync.Core
                 // 双向同步
                 case JobMode.TwoWaySync:
                     {
-                        // TODO 下载远程文件到本地，如果有冲突，则将本地和远程文件同时重命名
+                        // 计算需要同步的远程文件
+                        var localFileKeys = _localFiles.Keys.Select(c => $"{_driveSavePath}/{c}".TrimPath()).ToList();
+                        var addFileKeys = _driveFiles.Keys.Except(localFileKeys).ToList();
+                        if (addFileKeys.Count > 0)
+                        {
+                            // 验证本地文件是否存在
+                            // 验证本地文件是否和远程文件一致
+                            // 多线程下载处理
+
+                            var processorCount = GetDownloadThreadCount();
+                            var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
+
+                            // 开启并行下载
+                            await Parallel.ForEachAsync(addFileKeys, options, async (item, cancellationToken) =>
+                            {
+                                if (!_driveFiles.TryGetValue(item, out var dinfo) || dinfo == null)
+                                {
+                                    return;
+                                }
+
+                                // 根目录
+                                if (dinfo.ParentFileId == "root")
+                                {
+                                    throw new Exception("不支持根目录文件下载");
+                                }
+
+                                // 子目录
+                                var parent = _driveFolders.First(x => x.Value.IsFolder && x.Value.FileId == dinfo.ParentFileId)!;
+
+                                // 移除云盘前缀
+                                var subPaths = parent.Key.TrimPrefix(_driveSavePath)
+                                    .Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+
+                                // 判断是哪个备份的根目录
+                                var saveRootPath = _jobConfig.Sources
+                                .Where(c => $"{string.Join('/', subPaths).TrimPath()}/".StartsWith(new DirectoryInfo(c).Name + "/"))
+                                .FirstOrDefault();
+
+                                if (saveRootPath == null)
+                                {
+                                    throw new Exception("未找到匹配的根目录");
+                                }
+
+                                // 找到备份的根目录
+                                // 同时移除同步目录的根目录名称
+                                var saveRootInfo = new DirectoryInfo(saveRootPath);
+                                var savePath = Path.Combine(saveRootPath, Path.Combine(subPaths).TrimPath().TrimPrefix(saveRootInfo.Name));
+
+                                try
+                                {
+                                    var finalFilePath = Path.Combine(savePath, dinfo.Name);
+                                    if (File.Exists(finalFilePath))
+                                    {
+                                        // 验证本地是否已存在文件，并比较 sha1 值
+                                        var hash = HashHelper.ComputeFileHash(finalFilePath, "sha1");
+                                        if (hash == dinfo.ContentHash)
+                                        {
+                                            _log.LogInformation($"文件已存在，跳过 {finalFilePath}");
+                                            return;
+                                        }
+                                        else
+                                        {
+                                            // 文件重命名
+                                            // 下载远程文件到本地，如果有冲突，则将本地和远程文件同时重命名
+                                            // 如果不一致，则重命名远程文件并下载
+                                            var fi = 0;
+                                            do
+                                            {
+                                                var fname = Path.GetFileNameWithoutExtension(dinfo.Name);
+                                                var fext = Path.GetExtension(dinfo.Name);
+                                                var suffix = $"";
+                                                if (fi > 0)
+                                                {
+                                                    suffix = $" ({fi})";
+                                                }
+                                                var newName = $"{fname} - 副本{suffix}{fext}";
+                                                finalFilePath = Path.Combine(savePath, newName);
+
+                                                // 如果本地和远程都不存在，说明可以重命名
+                                                var anyFile = await AliyunDriveFileExist(dinfo.ParentFileId, newName);
+                                                if (!File.Exists(finalFilePath) && !anyFile)
+                                                {
+                                                    // 远程文件重命名
+                                                    var upData = ProviderApiHelper.FileUpdate(_driveId, dinfo.FileId, newName, AccessToken);
+                                                    if (upData == null)
+                                                    {
+                                                        throw new Exception("文件重命名失败");
+                                                    }
+
+                                                    // 添加新的文件
+                                                    _driveFiles.TryAdd($"{parent.Key}/{newName}".TrimPath(), upData);
+
+                                                    // 删除旧的文件
+                                                    _driveFiles.TryRemove(item, out _);
+                                                    break;
+                                                }
+                                                fi++;
+                                            } while (true);
+                                        }
+                                    }
+
+                                    // 获取详情 url
+                                    var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
+                                    request.AddHeader("Content-Type", "application/json");
+                                    request.AddHeader("Authorization", $"Bearer {AccessToken}");
+                                    object body = new
+                                    {
+                                        drive_id = _driveId,
+                                        file_id = dinfo.FileId
+                                    };
+                                    request.AddBody(body);
+                                    var response = await _apiClient.ExecuteAsync<AliyunDriveFileItem>(request);
+                                    if (response.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(response.Data.Url))
+                                    {
+                                        await AliyunDriveDownload(response.Data.Url,
+                                            dinfo.Name,
+                                            dinfo.ContentHash,
+                                            savePath,
+                                            saveRootPath);
+                                    }
+                                    else
+                                    {
+                                        throw response.ErrorException;
+                                    }
+
+                                    // TODO
+                                    // 如果是大文件，则通过下载链接下载文件
+                                }
+                                catch (Exception)
+                                {
+                                    throw;
+                                }
+                            });
+
+                            foreach (var path in _jobConfig.Sources)
+                            {
+                                // 清理下载缓存
+                                ClearDownloadCache(path);
+                            }
+                        }
                     }
                     break;
 
@@ -1467,9 +1654,9 @@ namespace MDriveSync.Core
         /// <param name="fileSha1"></param>
         /// <param name="savePath"></param>
         /// <returns></returns>
-        private async Task AliyunDriveDownload(string url, string fileName, string fileSha1, string savePath)
+        private async Task AliyunDriveDownload(string url, string fileName, string fileSha1, string savePath, string saveRootPath)
         {
-            var tempFilePath = Path.Combine(_localRestorePath, ".duplicaticache", $"{fileName}.{Guid.NewGuid():N}.duplicatidownload");
+            var tempFilePath = Path.Combine(saveRootPath, ".duplicaticache", $"{fileName}.{Guid.NewGuid():N}.duplicatidownload");
             var finalFilePath = Path.Combine(savePath, fileName);
 
             using (var httpClient = new HttpClient())
@@ -2197,6 +2384,38 @@ namespace MDriveSync.Core
                     searchParentFileId = okPath.FileId;
                 }
             }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 判断文件是否存在
+        /// </summary>
+        /// <param name="parentFileId"></param>
+        /// <param name="name"></param>
+        /// <param name="type">folder | file</param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        private async Task<bool> AliyunDriveFileExist(string parentFileId, string name, string type = "file")
+        {
+            var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+            object body = new
+            {
+                drive_id = _driveId,
+                query = $"parent_file_id='{parentFileId}' and type = '{type}' and name = '{name}'"
+            };
+            request.AddBody(body);
+            var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
+            }
+            if (response.Data?.Items?.Count > 0)
+            {
+                return true;
+            }
+            return false;
         }
 
         #endregion 阿里云盘

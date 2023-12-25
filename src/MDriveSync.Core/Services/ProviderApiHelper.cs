@@ -127,7 +127,8 @@ namespace MDriveSync.Core.Services
         /// <param name="name"></param>
         /// <param name="accessToken"></param>
         /// <returns></returns>
-        public static AliyunDriveFileItem FileUpdate(string driveId, string fileId, string name, string accessToken)
+        public static AliyunDriveFileItem FileUpdate(string driveId, string fileId, string name, string accessToken,
+            string check_name_mode = "refuse")
         {
             var options = new RestClientOptions(ALIYUNDRIVE_API_HOST)
             {
@@ -142,7 +143,10 @@ namespace MDriveSync.Core.Services
                 drive_id = driveId,
                 file_id = fileId,
                 name = name,
-                check_name_mode = "ignore"
+
+                // refuse 同名不创建
+                // ignore 同名文件可创建
+                check_name_mode = check_name_mode
             };
             request.AddBody(body);
             var response = client.Execute<AliyunDriveFileItem>(request);

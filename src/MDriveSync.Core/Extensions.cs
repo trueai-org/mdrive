@@ -19,7 +19,7 @@
         /// <param name="path"></param>
         /// <param name="removePrefix">移除的前缀</param>
         /// <returns></returns>
-        public static string ToUrlPath(this string path, string removePrefix = "")
+        public static string TrimPrefix(this string path, string removePrefix = "")
         {
             if (string.IsNullOrWhiteSpace(path))
             {
