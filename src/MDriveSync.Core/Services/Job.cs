@@ -2286,7 +2286,7 @@ namespace MDriveSync.Core
         /// <exception cref="Exception"></exception>
         private async Task<RestResponse<T>> AliyunDriveExecuteWithRetry<T>(RestRequest request)
         {
-            const int maxRetries = 10;
+            const int maxRetries = 5;
             int retries = 0;
             while (true)
             {
@@ -2297,12 +2297,13 @@ namespace MDriveSync.Core
                 }
                 else if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
+                    retries++;
+                    _log.LogWarning("请求次数过多，第 {@0} 次： {@1}", retries, request.Resource);
+
                     if (retries >= maxRetries)
                     {
                         throw new Exception("请求次数过多，已达到最大重试次数");
                     }
-
-                    _log.LogWarning("请求次数过多，第 {@0} 次： {@1}", retries, request.Resource);
 
                     var waitTime = response.Headers.FirstOrDefault(x => x.Name == "x-retry-after")?.Value?.ToString();
                     if (!string.IsNullOrWhiteSpace(waitTime) && int.TryParse(waitTime, out var waitValue) && waitValue > _listRequestInterval)
@@ -2313,8 +2314,6 @@ namespace MDriveSync.Core
                     {
                         await Task.Delay(_listRequestInterval);
                     }
-
-                    retries++;
                 }
                 else
                 {
