@@ -68,7 +68,7 @@ Supports a variety of algorithms for synchronization and backup.
             "RapidUpload": true, // 是否启用秒传功能
             "DefaultDrive": "backup", // 默认备份的云盘类型，备份盘或资源盘
             "CheckAlgorithm": "sha256", // 文件对比检查算法
-            "CheckLevel": 1, // 文件对比检查级别
+            "CheckLevel": 1, // 文件差异算法检查级别
             "FileWatcher": true, // 是否启用文件系统监听
             "Order": 0, // 任务显示顺序
             "IsTemporary": false, // 是否为临时任务
