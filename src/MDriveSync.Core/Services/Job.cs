@@ -1558,7 +1558,7 @@ namespace MDriveSync.Core
                         query = ""
                     };
                     request.AddJsonBody(body);
-                    var response =  await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
+                    var response = await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
                         if (response.Data?.Items.Count > 0)
@@ -2016,7 +2016,7 @@ namespace MDriveSync.Core
                 }
             }
             request.AddBody(body);
-            var response = await _apiClient.ExecuteAsync(request);
+            var response = await AliyunDriveExecuteWithRetry<dynamic>(request);
 
             // 如果需要秒传，并且需要预处理时
             // System.Net.HttpStatusCode.Conflict 注意可能不是 409
@@ -2038,13 +2038,6 @@ namespace MDriveSync.Core
                         }
                     }
                 }
-            }
-
-            // 限流
-            if (response.StatusCode == HttpStatusCode.TooManyRequests)
-            {
-                await Task.Delay(_listRequestInterval);
-                response = await AliyunDriveExecuteWithRetry<dynamic>(request);
             }
 
             if (response.StatusCode != HttpStatusCode.OK)
@@ -2292,9 +2285,16 @@ namespace MDriveSync.Core
                         await Task.Delay(_listRequestInterval);
                     }
                 }
+                else if ((response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
+                    && response.Content.Contains("PreHashMatched"))
+                {
+                    // 如果是秒传预处理的错误码，则直接返回
+                    return response;
+                }
                 else
                 {
                     _log.LogError(response.ErrorException, $"请求失败：{request.Resource} {response.StatusCode} {response.Content}");
+
                     throw response.ErrorException ?? new Exception($"请求失败：{response.StatusCode} {response.Content}");
                 }
             }
