@@ -155,6 +155,11 @@ namespace MDriveSync.Core
         private List<FileSystemWatcher> _localWatchers = [];
 
         /// <summary>
+        /// 一次性任务是否已执行
+        /// </summary>
+        public bool isTemporaryIsEnd = false;
+
+        /// <summary>
         /// 作业状态
         /// </summary>
         public JobState State { get; private set; }
@@ -308,21 +313,42 @@ namespace MDriveSync.Core
         /// <summary>
         /// 初始化作业
         /// </summary>
-        public void InitJobScheduling()
+        public async void InitJobScheduling()
         {
             // 开始计算业务
             // 计算下一次执行备份等计划作业
-            foreach (var cron in _jobConfig.Schedules)
+            if (_jobConfig.Schedules.Count > 0)
             {
-                if (!_schedulers.TryGetValue(cron, out var sch) || sch == null)
+                foreach (var cron in _jobConfig.Schedules)
                 {
-                    // 创建备份计划
-                    var scheduler = new QuartzCronScheduler(cron, async () =>
+                    if (!_schedulers.TryGetValue(cron, out var sch) || sch == null)
                     {
-                        await StartSync();
-                    });
-                    scheduler.Start();
-                    _schedulers[cron] = scheduler;
+                        // 创建备份计划
+                        var scheduler = new QuartzCronScheduler(cron, async () =>
+                        {
+                            await StartSync();
+                        });
+                        scheduler.Start();
+                        _schedulers[cron] = scheduler;
+
+                        // 如果立即执行的
+                        if (_jobConfig.IsTemporary)
+                        {
+                            await Task.Run(StartSync);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                // 如果是一次性任务
+                if (_jobConfig.IsTemporary)
+                {
+                    if (!isTemporaryIsEnd)
+                    {
+                        await Task.Run(StartSync);
+                        isTemporaryIsEnd = true;
+                    }
                 }
             }
         }

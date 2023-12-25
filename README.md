@@ -30,9 +30,10 @@ Supports a variety of algorithms for synchronization and backup.
 
 - `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:read,file:all:write&relogin=true)令牌，或登录官网获取授权令牌。
 - `Jobs` 可以配置多个作业，计划中的作业时间可以可以配置多个时间点。
-  - `Schedules` 定时计划，可配置多个计划时间，必填
   - `Sources` 备份源目录列表，可以配置多个备份源，必填
   - `Target` 云盘存储目录，必填
+  - `Schedules` 定时计划，可配置多个计划时间
+  - `IsTemporary` 是否为临时任务或一次性的同步任务，也表示是否立即执行，如果为 `true`，则启动时立即执行作业
   - `State` 作业状态，例如：100 表示暂停，0 表示未开始
   - `Mode` 同步模式，0 镜像同步（以本地为主，远程为镜像，删除不一致冗余的远程文件），1 冗余同步（同步到远程，不删除远程文件），2 双向同步（远程与本地如果有冲突则进行重命名）
 
@@ -71,7 +72,7 @@ Supports a variety of algorithms for synchronization and backup.
             "CheckLevel": 1, // 文件差异算法检查级别
             "FileWatcher": true, // 是否启用文件系统监听
             "Order": 0, // 任务显示顺序
-            "IsTemporary": false, // 是否为临时任务
+            "IsTemporary": false, // 是否为临时任务，是否立即执行
             "IsRecycleBin": false, // 是否启用删除到回收站
             "UploadThread": 0, // 上传并行任务数
             "DownloadThread": 0, // 下载并行任务数
