@@ -1,6 +1,7 @@
 ﻿using MDriveSync.Core.Models;
 using MDriveSync.Core.ViewModels;
 using RestSharp;
+using Serilog;
 using System.Net;
 
 namespace MDriveSync.Core.Services
@@ -74,19 +75,29 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 文件删除
+        /// 文件删除或放入回收站
         /// https://www.yuque.com/aliyundrive/zpfszx/get3mkr677pf10ws
         /// </summary>
         /// <param name="driveId"></param>
         /// <param name="fileId"></param>
-        public static AliyunDriveOpenFileDeleteResponse FileDelete(string driveId, string fileId, string accessToken)
+        /// <param name="accessToken"></param>
+        /// <param name="isRecycleBin">是否放入回收站，默认：false</param>
+        public static AliyunDriveOpenFileDeleteResponse FileDelete(string driveId, string fileId, string accessToken, bool isRecycleBin = false)
         {
             var options = new RestClientOptions(ALIYUNDRIVE_API_HOST)
             {
                 MaxTimeout = -1
             };
             var client = new RestClient(options);
-            var request = new RestRequest($"/adrive/v1.0/openFile/delete", Method.Post);
+
+            // 不放入回收站
+            var resource = "/adrive/v1.0/openFile/delete";
+            if (isRecycleBin)
+            {
+                resource = "/adrive/v1.0/openFile/recyclebin/trash";
+            }
+
+            var request = new RestRequest(resource, Method.Post);
             request.AddHeader("Content-Type", "application/json");
             request.AddHeader("Authorization", $"Bearer {accessToken}");
             object body = new
@@ -100,7 +111,10 @@ namespace MDriveSync.Core.Services
             {
                 return response.Data;
             }
-
+            else if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
             throw response?.ErrorException ?? new Exception("文件删除失败，请重试");
         }
 

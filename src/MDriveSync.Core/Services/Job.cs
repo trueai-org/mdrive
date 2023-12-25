@@ -56,6 +56,8 @@ namespace MDriveSync.Core
 
         private readonly object _lock = new();
 
+        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
+
         private readonly IMemoryCache _cache;
 
         private const string TOEKN_KEY = "TOKEN";
@@ -152,6 +154,9 @@ namespace MDriveSync.Core
         /// </summary>
         private List<FileSystemWatcher> _localWatchers = [];
 
+        /// <summary>
+        /// 作业状态
+        /// </summary>
         public JobState State { get; private set; }
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
@@ -195,96 +200,138 @@ namespace MDriveSync.Core
         /// <returns></returns>
         public async Task Maintenance()
         {
-            switch (State)
+            if (_semaphoreSlim.CurrentCount == 0)
             {
-                case JobState.None:
-                    {
-                        // 初始化
-                        await Initialize();
-                    }
-                    break;
-
-                case JobState.Starting:
-                    {
-                        // 启动中
-                        await Start();
-                    }
-                    break;
-
-                case JobState.Idle:
-                    {
-                        // 开始计算业务
-                        // 计算下一次执行备份等计划作业
-                        foreach (var cron in _jobConfig.Schedules)
-                        {
-                            if (!_schedulers.TryGetValue(cron, out var sch) || sch == null)
-                            {
-                                // 创建备份计划
-                                var scheduler = new QuartzCronScheduler(cron, async () =>
-                                {
-                                    await StartSync();
-                                });
-                                scheduler.Start();
-                                _schedulers[cron] = scheduler;
-                            }
-                        }
-                    }
-                    break;
-
-                case JobState.Scanning:
-                    {
-                        // TODO
-                    }
-                    break;
-
-                case JobState.BackingUp:
-                    {
-                        // 备份中
-                    }
-                    break;
-
-                case JobState.Restoring:
-                    break;
-
-                case JobState.Verifying:
-                    {
-                        // 校验中
-                    }
-                    break;
-
-                case JobState.Queued:
-                    break;
-
-                case JobState.Completed:
-                    break;
-
-                case JobState.Paused:
-                    break;
-
-                case JobState.Error:
-                    break;
-
-                case JobState.Cancelling:
-                    break;
-
-                case JobState.Cancelled:
-                    break;
-
-                case JobState.Disabled:
-                    break;
-
-                default:
-                    break;
+                // 如果检查执行中，则跳过，保证执行中的只有 1 个
+                return;
             }
 
-            GC.Collect();
+            await _semaphoreSlim.WaitAsync();
+
+            try
+            {
+                switch (State)
+                {
+                    case JobState.None:
+                        {
+                            // 初始化
+                            Initialize();
+                        }
+                        break;
+
+                    case JobState.Starting:
+                        {
+                            // 启动中
+                            StartJob();
+                        }
+                        break;
+
+                    case JobState.Idle:
+                        {
+                            // 初始化作业调度
+                            // 检查作业调度
+                            InitJobScheduling();
+                        }
+                        break;
+
+                    case JobState.Scanning:
+                        {
+                            // 扫描中
+                        }
+                        break;
+
+                    case JobState.BackingUp:
+                        {
+                            // 备份中
+                        }
+                        break;
+
+                    case JobState.Restoring:
+                        {
+                            // 还原中
+                        }
+                        break;
+
+                    case JobState.Verifying:
+                        {
+                            // 校验中
+                        }
+                        break;
+
+                    case JobState.Queued:
+                        {
+                        }
+                        break;
+
+                    case JobState.Completed:
+                        {
+                        }
+                        break;
+
+                    case JobState.Paused:
+                        {
+                        }
+                        break;
+
+                    case JobState.Error:
+                        {
+                        }
+                        break;
+
+                    case JobState.Cancelling:
+                        {
+                        }
+                        break;
+
+                    case JobState.Cancelled:
+                        {
+                        }
+                        break;
+
+                    case JobState.Disabled:
+                        {
+                        }
+                        break;
+
+                    default:
+                        break;
+                }
+            }
+            finally
+            {
+                GC.Collect();
+
+                _semaphoreSlim.Release();
+            }
+        }
+
+        /// <summary>
+        /// 初始化作业
+        /// </summary>
+        public void InitJobScheduling()
+        {
+            // 开始计算业务
+            // 计算下一次执行备份等计划作业
+            foreach (var cron in _jobConfig.Schedules)
+            {
+                if (!_schedulers.TryGetValue(cron, out var sch) || sch == null)
+                {
+                    // 创建备份计划
+                    var scheduler = new QuartzCronScheduler(cron, async () =>
+                    {
+                        await StartSync();
+                    });
+                    scheduler.Start();
+                    _schedulers[cron] = scheduler;
+                }
+            }
         }
 
         /// <summary>
         /// 初始化作业（路径、云盘信息等）
         /// </summary>
         /// <returns></returns>
-        private async Task Initialize()
+        private void Initialize()
         {
             ChangeState(JobState.Initializing);
 
@@ -318,17 +365,14 @@ namespace MDriveSync.Core
             sw.Stop();
             _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
 
-            // 初始化完成处于启动中
-            ChangeState(JobState.Starting);
-
-            await Maintenance();
+            StartJob();
         }
 
         /// <summary>
         /// 启动后台作业、启动缓存、启动监听等
         /// </summary>
         /// <returns></returns>
-        public async Task Start()
+        public void StartJob()
         {
             ChangeState(JobState.Starting);
 
@@ -379,14 +423,13 @@ namespace MDriveSync.Core
                 }
             }
 
-            // 启动完成，处于空闲
-            ChangeState(JobState.Idle);
-
             sw.Stop();
             _log.LogInformation($"作业启动完成，用时：{sw.ElapsedMilliseconds}ms");
 
-            // 再次执行检查
-            await Maintenance();
+            // 启动完成，处于空闲
+            ChangeState(JobState.Idle);
+
+            InitJobScheduling();
         }
 
         /// <summary>
@@ -500,109 +543,6 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 获取文件夹路径 key
-        /// 将本地路径转为 {备份目录}/{子目录}
-        /// </summary>
-        /// <param name="localRootPath"></param>
-        /// <param name="directoryInfo"></param>
-        /// <returns></returns>
-        private string GetDirectoryKey(string localRootPath, DirectoryInfo directoryInfo)
-        {
-            var localRootInfo = new DirectoryInfo(localRootPath);
-            var rootPathName = localRootInfo.Name;
-            var subPath = directoryInfo.FullName.ToUrlPath(localRootPath);
-            return $"{rootPathName}/{subPath}".TrimPath();
-        }
-
-        /// <summary>
-        /// 获取文件路径 key
-        /// </summary>
-        /// <param name="localRootPath"></param>
-        /// <param name="fileInfo"></param>
-        /// <returns></returns>
-        private string GetFileKey(string localRootPath, string fileFullPath)
-        {
-            var localRootInfo = new DirectoryInfo(localRootPath);
-            var rootPathName = localRootInfo.Name;
-            var subPath = fileFullPath.ToUrlPath(localRootInfo.FullName);
-            return $"{rootPathName}/{subPath}".TrimPath();
-        }
-
-        /// <summary>
-        /// 获取文件路径 key
-        /// </summary>
-        /// <param name="localRootPath"></param>
-        /// <param name="fileInfo"></param>
-        /// <returns></returns>
-        private string GetFileKeyPath(string localRootPath, FileInfo fileInfo)
-        {
-            var localRootInfo = new DirectoryInfo(localRootPath);
-            var rootPathName = localRootInfo.Name;
-            var subPath = Path.GetDirectoryName(fileInfo.FullName).ToUrlPath(localRootInfo.FullName);
-            return $"{rootPathName}/{subPath}".TrimPath();
-        }
-
-        /// <summary>
-        /// 检查一个给定的路径是否应该被过滤
-        /// </summary>
-        /// <param name="path"></param>
-        /// <returns></returns>
-        private bool ShouldFilter(string path)
-        {
-            if (string.IsNullOrWhiteSpace(path))
-            {
-                return false;
-            }
-
-            // 检查是否有过滤规则
-            if (_jobConfig.Filters.Count > 0)
-            {
-                foreach (var item in _jobConfig.Filters)
-                {
-                    // 忽略注释
-                    if (item.StartsWith("#")) continue;
-
-                    // 处理其他规则
-                    var pattern = ConvertToRegexPattern(item);
-                    var regex = new Regex(pattern);
-
-                    if (regex.IsMatch(path))
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            // 如果没有匹配的过滤规则，则返回 false
-            return false;
-        }
-
-        /// <summary>
-        /// 将Kopia规则转换为正则表达式
-        /// </summary>
-        /// <param name="kopiaPattern"></param>
-        /// <returns></returns>
-        private string ConvertToRegexPattern(string kopiaPattern)
-        {
-            var pattern = Regex.Escape(kopiaPattern)
-                               .Replace("\\*", ".*")       // 处理 *
-                               .Replace("\\?", ".")        // 处理 ?
-                               .Replace("\\[", "[")        // 处理范围匹配
-                               .Replace("\\]", "]");
-
-            if (pattern.StartsWith("/")) // 根目录匹配
-            {
-                pattern = "^" + pattern + "$";
-            }
-            else if (pattern.StartsWith("**/")) // 双通配符
-            {
-                pattern = ".*" + pattern.TrimStart('*');
-            }
-
-            return pattern;
-        }
-
-        /// <summary>
         /// 开始同步
         /// </summary>
         /// <returns></returns>
@@ -625,12 +565,12 @@ namespace MDriveSync.Core
             // 备份中
             ChangeState(JobState.BackingUp);
 
+            var sw = new Stopwatch();
+            sw.Start();
+
             try
             {
-                var sw = new Stopwatch();
-                sw.Start();
-
-                await InitBackupPath();
+                await AliyunDriveInitBackupPath();
 
                 sw.Stop();
                 _log.LogInformation($"云盘存储根目录初始化完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -673,13 +613,13 @@ namespace MDriveSync.Core
                 _log.LogError(ex, "同步作业完成执行异常");
             }
 
-
-            _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
-
             // 开始校验
+            sw.Restart();
+            _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
             ChangeState(JobState.Verifying);
-
             AliyunDriveVerify();
+            sw.Stop();
+            _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
         }
 
         /// <summary>
@@ -830,69 +770,6 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 初始化备份目录
-        /// </summary>
-        /// <returns></returns>
-        private async Task InitBackupPath()
-        {
-            // 首先加载根目录结构
-            // 并计算需要保存的目录
-            // 计算/创建备份文件夹
-            // 如果备份文件夹不存在
-            var saveRootSubPaths = _driveSavePath.Split('/').Select(c => c.Trim().Trim('/')).Where(c => !string.IsNullOrWhiteSpace(c)).ToArray();
-            var searchParentFileId = "root";
-            foreach (var subPath in saveRootSubPaths)
-            {
-                var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-                object body = new
-                {
-                    drive_id = _driveId,
-                    query = $"parent_file_id='{searchParentFileId}' and type = 'folder' and name = '{subPath}'"
-                };
-                request.AddBody(body);
-                var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
-                }
-                if (response.Data == null)
-                {
-                    throw new Exception("云盘目录查询失败");
-                }
-
-                var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
-                if (okPath == null)
-                {
-                    // 未找到目录
-                    searchParentFileId = await AliyunDriveCreateFolder(subPath, searchParentFileId);
-                }
-                else
-                {
-                    if (searchParentFileId == "root")
-                    {
-                        // 当前目录在根路径
-                        // /{当前路径}/
-                        _driveFolders.TryAdd($"{okPath.Name}".TrimPath(), okPath);
-                    }
-                    else
-                    {
-                        // 计算父级路径
-                        var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == searchParentFileId).First()!;
-                        var path = $"{parent.Key}/{okPath.Name}".TrimPath();
-
-                        // /{父级路径}/{当前路径}/
-                        _driveFolders.TryAdd(path, okPath);
-                    }
-
-                    searchParentFileId = okPath.FileId;
-                }
-            }
-        }
-
-        /// <summary>
         /// 开始还原
         /// </summary>
         /// <returns></returns>
@@ -909,7 +786,7 @@ namespace MDriveSync.Core
                 var sw = new Stopwatch();
                 sw.Restart();
                 _log.LogInformation("计算云盘存储根目录...");
-                await InitBackupPath();
+                await AliyunDriveInitBackupPath();
                 sw.Stop();
                 _log.LogInformation($"计算云盘存储根目录完成. 用时 {sw.ElapsedMilliseconds}ms");
                 sw.Restart();
@@ -1166,6 +1043,111 @@ namespace MDriveSync.Core
             }
         }
 
+        #region 私有方法
+
+        /// <summary>
+        /// 获取文件夹路径 key
+        /// 将本地路径转为 {备份目录}/{子目录}
+        /// </summary>
+        /// <param name="localRootPath"></param>
+        /// <param name="directoryInfo"></param>
+        /// <returns></returns>
+        private string GetDirectoryKey(string localRootPath, DirectoryInfo directoryInfo)
+        {
+            var localRootInfo = new DirectoryInfo(localRootPath);
+            var rootPathName = localRootInfo.Name;
+            var subPath = directoryInfo.FullName.ToUrlPath(localRootPath);
+            return $"{rootPathName}/{subPath}".TrimPath();
+        }
+
+        /// <summary>
+        /// 获取文件路径 key
+        /// </summary>
+        /// <param name="localRootPath"></param>
+        /// <param name="fileInfo"></param>
+        /// <returns></returns>
+        private string GetFileKey(string localRootPath, string fileFullPath)
+        {
+            var localRootInfo = new DirectoryInfo(localRootPath);
+            var rootPathName = localRootInfo.Name;
+            var subPath = fileFullPath.ToUrlPath(localRootInfo.FullName);
+            return $"{rootPathName}/{subPath}".TrimPath();
+        }
+
+        /// <summary>
+        /// 获取文件路径 key
+        /// </summary>
+        /// <param name="localRootPath"></param>
+        /// <param name="fileInfo"></param>
+        /// <returns></returns>
+        private string GetFileKeyPath(string localRootPath, FileInfo fileInfo)
+        {
+            var localRootInfo = new DirectoryInfo(localRootPath);
+            var rootPathName = localRootInfo.Name;
+            var subPath = Path.GetDirectoryName(fileInfo.FullName).ToUrlPath(localRootInfo.FullName);
+            return $"{rootPathName}/{subPath}".TrimPath();
+        }
+
+        /// <summary>
+        /// 检查一个给定的路径是否应该被过滤
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        private bool ShouldFilter(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            // 检查是否有过滤规则
+            if (_jobConfig.Filters.Count > 0)
+            {
+                foreach (var item in _jobConfig.Filters)
+                {
+                    // 忽略注释
+                    if (item.StartsWith("#")) continue;
+
+                    // 处理其他规则
+                    var pattern = ConvertToRegexPattern(item);
+                    var regex = new Regex(pattern);
+
+                    if (regex.IsMatch(path))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            // 如果没有匹配的过滤规则，则返回 false
+            return false;
+        }
+
+        /// <summary>
+        /// 将Kopia规则转换为正则表达式
+        /// </summary>
+        /// <param name="kopiaPattern"></param>
+        /// <returns></returns>
+        private string ConvertToRegexPattern(string kopiaPattern)
+        {
+            var pattern = Regex.Escape(kopiaPattern)
+                               .Replace("\\*", ".*")       // 处理 *
+                               .Replace("\\?", ".")        // 处理 ?
+                               .Replace("\\[", "[")        // 处理范围匹配
+                               .Replace("\\]", "]");
+
+            if (pattern.StartsWith("/")) // 根目录匹配
+            {
+                pattern = "^" + pattern + "$";
+            }
+            else if (pattern.StartsWith("**/")) // 双通配符
+            {
+                pattern = ".*" + pattern.TrimStart('*');
+            }
+
+            return pattern;
+        }
+
         /// <summary>
         /// 尝试获取本地文件，如果本地文件不存在或不符合则返回 NULL
         /// </summary>
@@ -1261,6 +1243,8 @@ namespace MDriveSync.Core
             return ld;
         }
 
+        #endregion 私有方法
+
         #region 阿里云盘
 
         /// <summary>
@@ -1272,17 +1256,18 @@ namespace MDriveSync.Core
             if (State != JobState.Verifying)
                 return;
 
-            // TODO
             // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
             switch (_jobConfig.Mode)
             {
+                // 镜像同步
                 case JobMode.Mirror:
                     {
                         // 计算需要删除的远程文件
-                        var removeKeys = _driveFiles.Keys.Except(_localFiles.Keys.Select(c => $"{_driveSavePath}/{c}".TrimPath())).ToList();
-                        if (removeKeys.Count > 0)
+                        var localFileKeys = _localFiles.Keys.Select(c => $"{_driveSavePath}/{c}".TrimPath()).ToList();
+                        var removeFileKeys = _driveFiles.Keys.Except(localFileKeys).ToList();
+                        if (removeFileKeys.Count > 0)
                         {
-                            foreach (var k in removeKeys)
+                            foreach (var k in removeFileKeys)
                             {
                                 if (_driveFiles.TryRemove(k, out var v))
                                 {
@@ -1292,14 +1277,39 @@ namespace MDriveSync.Core
                         }
 
                         // 计算需要删除的远程文件夹
-                        // TODO
+                        // 注意需要排除云盘根目录
+                        var localFolderKeys = _localFolders.Keys.Select(c => $"{_driveSavePath}/{c}".TrimPath()).ToList();
+                        var removeFolderKeys = _driveFolders.Keys
+                            .Where(c => !$"{_driveSavePath}/".StartsWith(c))
+                            .Except(localFolderKeys).ToList();
+
+                        while (removeFolderKeys.Count > 0)
+                        {
+                            var k = removeFolderKeys.First();
+                            if (_driveFolders.TryRemove(k, out var v))
+                            {
+                                ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken);
+
+                                // 如果删除父文件夹时，则移除所有的子文件夹
+                                removeFolderKeys.RemoveAll(c => c.StartsWith(k));
+                            }
+                            removeFolderKeys.Remove(k);
+                        }
                     }
                     break;
 
+                // 冗余同步
                 case JobMode.Redundancy:
+                    {
+                        // 以本地为主，将本地备份到远程，不删除远程文件
+                    }
                     break;
 
+                // 双向同步
                 case JobMode.TwoWaySync:
+                    {
+                        // TODO 下载远程文件到本地，如果有冲突，则将本地和远程文件同时重命名
+                    }
                     break;
 
                 default:
@@ -1677,11 +1687,53 @@ namespace MDriveSync.Core
 
             // 如果文件已上传则跳过
             // 对比文件差异 sha1
-            if (_driveFiles.TryGetValue(saveFilePath, out var driveItem)
-                && driveItem != null
-                && driveItem.ContentHash == localFileInfo.Sha1)
+            if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null)
             {
-                return;
+                // 如果存在同名文件，且内容相同则跳过
+                if (driveItem.ContentHash == localFileInfo.Sha1)
+                {
+                    return;
+                }
+                else
+                {
+                    // 删除同名文件
+                    ProviderApiHelper.FileDelete(_driveId, driveItem.FileId, AccessToken);
+                    _driveFiles.TryRemove(saveFilePath, out _);
+
+                    // 再次搜索确认是否有同名文件，有则删除
+                    do
+                    {
+                        var dupRequest = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
+                        dupRequest.AddHeader("Content-Type", "application/json");
+                        dupRequest.AddHeader("Authorization", $"Bearer {AccessToken}");
+                        object dupBody = new
+                        {
+                            drive_id = _driveId,
+                            query = $"parent_file_id='{saveParentFileId}' and type = 'file' and name = '{name}'"
+                        };
+                        dupRequest.AddBody(dupBody);
+                        var dupResponse = await _apiClient.ExecuteAsync<AliyunFileList>(dupRequest);
+                        if (dupResponse.StatusCode != HttpStatusCode.OK)
+                        {
+                            throw dupResponse.ErrorException ?? new Exception(dupResponse.Content ?? "查询云盘目录重复文件失败");
+                        }
+                        if (dupResponse.Data?.Items?.Count > 0)
+                        {
+                            foreach (var f in dupResponse.Data.Items)
+                            {
+                                var delRes = ProviderApiHelper.FileDelete(_driveId, f.FileId, AccessToken);
+                                if (delRes == null)
+                                {
+                                    _log.LogWarning($"远程文件已删除 {localFileInfo.Key}");
+                                }
+                            }
+                        }
+                        else
+                        {
+                            break;
+                        }
+                    } while (true);
+                }
             }
 
             _log.LogInformation($"正在上传文件 {localFileInfo.Key}");
@@ -1727,7 +1779,10 @@ namespace MDriveSync.Core
                         parent_file_id = saveParentFileId,
                         name = name,
                         type = "file",
-                        check_name_mode = "ignore",
+
+                        // refuse 同名不创建
+                        // ignore 同名文件可创建
+                        check_name_mode = "refuse",
                         size = fileInfo.Length,
                         pre_hash = preHash
                     };
@@ -1744,7 +1799,10 @@ namespace MDriveSync.Core
                         parent_file_id = saveParentFileId,
                         name = name,
                         type = "file",
-                        check_name_mode = "ignore",
+
+                        // refuse 同名不创建
+                        // ignore 同名文件可创建
+                        check_name_mode = "refuse",
                         size = fileInfo.Length,
                         content_hash = contentHash,
                         content_hash_name = "sha1",
@@ -2075,6 +2133,69 @@ namespace MDriveSync.Core
             var response = await _apiClient.ExecuteAsync<AliyunDriveVipInfo>(request);
             if (response.StatusCode == HttpStatusCode.OK)
             {
+            }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 初始化备份目录
+        /// </summary>
+        /// <returns></returns>
+        private async Task AliyunDriveInitBackupPath()
+        {
+            // 首先加载根目录结构
+            // 并计算需要保存的目录
+            // 计算/创建备份文件夹
+            // 如果备份文件夹不存在
+            var saveRootSubPaths = _driveSavePath.Split('/').Select(c => c.Trim().Trim('/')).Where(c => !string.IsNullOrWhiteSpace(c)).ToArray();
+            var searchParentFileId = "root";
+            foreach (var subPath in saveRootSubPaths)
+            {
+                var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
+                request.AddHeader("Content-Type", "application/json");
+                request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+                object body = new
+                {
+                    drive_id = _driveId,
+                    query = $"parent_file_id='{searchParentFileId}' and type = 'folder' and name = '{subPath}'"
+                };
+                request.AddBody(body);
+                var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
+                if (response.StatusCode != HttpStatusCode.OK)
+                {
+                    throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
+                }
+                if (response.Data == null)
+                {
+                    throw new Exception("云盘目录查询失败");
+                }
+
+                var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
+                if (okPath == null)
+                {
+                    // 未找到目录
+                    searchParentFileId = await AliyunDriveCreateFolder(subPath, searchParentFileId);
+                }
+                else
+                {
+                    if (searchParentFileId == "root")
+                    {
+                        // 当前目录在根路径
+                        // /{当前路径}/
+                        _driveFolders.TryAdd($"{okPath.Name}".TrimPath(), okPath);
+                    }
+                    else
+                    {
+                        // 计算父级路径
+                        var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == searchParentFileId).First()!;
+                        var path = $"{parent.Key}/{okPath.Name}".TrimPath();
+
+                        // /{父级路径}/{当前路径}/
+                        _driveFolders.TryAdd(path, okPath);
+                    }
+
+                    searchParentFileId = okPath.FileId;
+                }
             }
         }
 
