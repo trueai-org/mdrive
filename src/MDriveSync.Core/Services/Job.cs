@@ -1547,9 +1547,6 @@ namespace MDriveSync.Core
                 var marker = "";
                 do
                 {
-                    //var sw = new Stopwatch();
-                    //sw.Start();
-
                     var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
                     request.AddHeader("Content-Type", "application/json");
                     request.AddHeader("Authorization", $"Bearer {AccessToken}");
@@ -1562,7 +1559,15 @@ namespace MDriveSync.Core
                     };
                     request.AddJsonBody(body);
                     var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
-                    if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                    {
+                        // 其他API加一起有个10秒150次的限制。
+                        // 可以根据429和 x-retry-after 头部来判断等待重试的时间
+                        await Task.Delay(_listRequestInterval);
+                        response = await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
+                    }
+
+                    if (response.StatusCode == HttpStatusCode.OK)
                     {
                         if (response.Data?.Items.Count > 0)
                         {
@@ -1574,12 +1579,6 @@ namespace MDriveSync.Core
                     {
                         throw response.ErrorException;
                     }
-
-                    //sw.Stop();
-
-                    //// 等待 250ms 以遵守限流策略
-                    //if (sw.ElapsedMilliseconds < _listRequestInterval)
-                    //    await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
                 } while (!string.IsNullOrEmpty(marker));
 
                 // 先加载文件夹
@@ -1797,6 +1796,14 @@ namespace MDriveSync.Core
 
                 request.AddBody(body);
                 var response = await _apiClient.ExecuteAsync(request);
+                if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                {
+                    // 其他API加一起有个10秒150次的限制。
+                    // 可以根据429和 x-retry-after 头部来判断等待重试的时间
+                    await Task.Delay(_listRequestInterval);
+                    response = await AliyunDriveExecuteWithRetry<dynamic>(request);
+                }
+
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw response.ErrorException ?? new Exception(response.Content ?? "创建文件夹失败");
@@ -2049,6 +2056,13 @@ namespace MDriveSync.Core
                 }
             }
 
+            // 限流
+            if (response.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                await Task.Delay(_listRequestInterval);
+                response = await AliyunDriveExecuteWithRetry<dynamic>(request);
+            }
+
             if (response.StatusCode != HttpStatusCode.OK)
             {
                 _log.LogError(response.ErrorException, $"文件上传失败 {localFileInfo.Key}");
@@ -2117,6 +2131,14 @@ namespace MDriveSync.Core
             };
             reqCom.AddBody(bodyCom);
             var resCom = await _apiClient.ExecuteAsync(reqCom);
+
+            // 限流
+            if (resCom.StatusCode == HttpStatusCode.TooManyRequests)
+            {
+                await Task.Delay(_listRequestInterval);
+                resCom = await AliyunDriveExecuteWithRetry<dynamic>(reqCom);
+            }
+
             if (resCom.StatusCode != HttpStatusCode.OK)
             {
                 throw resCom.ErrorException ?? throw new Exception(resCom.Content ?? "上传标记完成失败");
@@ -2166,7 +2188,7 @@ namespace MDriveSync.Core
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    var response = await AliyunDriveFetchFileList(driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type);
+                    var response = await AliyunDriveFetchFileList<dynamic>(driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type);
                     var responseData = JsonSerializer.Deserialize<AliyunFileList>(response.Content);
                     if (responseData.Items.Count > 0)
                     {
@@ -2235,7 +2257,7 @@ namespace MDriveSync.Core
         /// <param name="category"></param>
         /// <param name="type"></param>
         /// <returns></returns>
-        private async Task<RestResponse> AliyunDriveFetchFileList(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type)
+        private async Task<RestResponse<T>> AliyunDriveFetchFileList<T>(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type)
         {
             var request = new RestRequest("/adrive/v1.0/openFile/list", Method.Post);
             request.AddHeader("Content-Type", "application/json");
@@ -2253,7 +2275,7 @@ namespace MDriveSync.Core
             };
             request.AddJsonBody(body);
 
-            return await AliyunDriveExecuteWithRetry(request);
+            return await AliyunDriveExecuteWithRetry<T>(request);
         }
 
         /// <summary>
@@ -2262,27 +2284,36 @@ namespace MDriveSync.Core
         /// <param name="request"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        private async Task<RestResponse> AliyunDriveExecuteWithRetry(RestRequest request)
+        private async Task<RestResponse<T>> AliyunDriveExecuteWithRetry<T>(RestRequest request)
         {
-            const int maxRetries = 5;
+            const int maxRetries = 10;
             int retries = 0;
             while (true)
             {
-                var response = await _apiClient.ExecuteAsync(request);
-                if (response.StatusCode == System.Net.HttpStatusCode.OK)
+                var response = await _apiClient.ExecuteAsync<T>(request);
+                if (response.StatusCode == HttpStatusCode.OK)
                 {
                     return response;
                 }
-                else if (response.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+                else if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     if (retries >= maxRetries)
                     {
                         throw new Exception("请求次数过多，已达到最大重试次数");
                     }
 
-                    _log.LogInformation("请求次数过多");
+                    _log.LogWarning("请求次数过多，第 {@0} 次： {@1}", retries, request.Resource);
 
-                    await Task.Delay(_listRequestInterval);
+                    var waitTime = response.Headers.FirstOrDefault(x => x.Name == "x-retry-after")?.Value?.ToString();
+                    if (!string.IsNullOrWhiteSpace(waitTime) && int.TryParse(waitTime, out var waitValue) && waitValue > _listRequestInterval)
+                    {
+                        await Task.Delay(waitValue);
+                    }
+                    else
+                    {
+                        await Task.Delay(_listRequestInterval);
+                    }
+
                     retries++;
                 }
                 else
