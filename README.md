@@ -33,6 +33,8 @@ Supports a variety of algorithms for synchronization and backup.
   - `Schedules` 定时计划，必填
   - `Sources` 备份源目录列表，必填
   - `Target` 云盘存储目录，必填
+  - `State` 作业状态，例如：100 表示暂停，0 表示未开始
+  - `Mode` 同步模式，0 镜像同步（以本地为主，远程为镜像，删除不一致冗余的远程文件），1 冗余同步（同步到远程，不删除远程文件），2 双向同步（远程与本地如果有冲突则进行重命名）
 
 ```json
 {
@@ -50,7 +52,8 @@ Supports a variety of algorithms for synchronization and backup.
             "Id": "1", // 任务 ID
             "Name": "gpkopia", // 任务/作业名称
             "Description": "", // 作业描述
-            "State": 100, // 作业状态，例如 100 表示暂停，0 表示未开始
+            "State": 0, // 作业状态，例如：100 表示暂停，0 表示未开始
+            "Mode": 0, // 同步模式，0 镜像同步，1 冗余同步，2 双向同步（如果有冲突则重命名）
             "Schedules": [ // 【必填】定时计划，使用cron表达式定义
               "0 0/10 * * * ?"
             ],
