@@ -1558,15 +1558,7 @@ namespace MDriveSync.Core
                         query = ""
                     };
                     request.AddJsonBody(body);
-                    var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
-                    if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                    {
-                        // 其他API加一起有个10秒150次的限制。
-                        // 可以根据429和 x-retry-after 头部来判断等待重试的时间
-                        await Task.Delay(_listRequestInterval);
-                        response = await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
-                    }
-
+                    var response =  await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
                     if (response.StatusCode == HttpStatusCode.OK)
                     {
                         if (response.Data?.Items.Count > 0)
@@ -1795,15 +1787,7 @@ namespace MDriveSync.Core
                 };
 
                 request.AddBody(body);
-                var response = await _apiClient.ExecuteAsync(request);
-                if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    // 其他API加一起有个10秒150次的限制。
-                    // 可以根据429和 x-retry-after 头部来判断等待重试的时间
-                    await Task.Delay(_listRequestInterval);
-                    response = await AliyunDriveExecuteWithRetry<dynamic>(request);
-                }
-
+                var response = await AliyunDriveExecuteWithRetry<dynamic>(request);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw response.ErrorException ?? new Exception(response.Content ?? "创建文件夹失败");
@@ -2065,7 +2049,8 @@ namespace MDriveSync.Core
 
             if (response.StatusCode != HttpStatusCode.OK)
             {
-                _log.LogError(response.ErrorException, $"文件上传失败 {localFileInfo.Key}");
+                _log.LogError(response.ErrorException, $"文件上传失败 {localFileInfo.Key} {response.Content}");
+
                 throw response.ErrorException ?? new Exception($"文件上传失败 {localFileInfo.Key}");
             }
 
@@ -2130,15 +2115,7 @@ namespace MDriveSync.Core
                 upload_id = upload_id,
             };
             reqCom.AddBody(bodyCom);
-            var resCom = await _apiClient.ExecuteAsync(reqCom);
-
-            // 限流
-            if (resCom.StatusCode == HttpStatusCode.TooManyRequests)
-            {
-                await Task.Delay(_listRequestInterval);
-                resCom = await AliyunDriveExecuteWithRetry<dynamic>(reqCom);
-            }
-
+            var resCom = await AliyunDriveExecuteWithRetry<dynamic>(reqCom);
             if (resCom.StatusCode != HttpStatusCode.OK)
             {
                 throw resCom.ErrorException ?? throw new Exception(resCom.Content ?? "上传标记完成失败");
@@ -2317,7 +2294,8 @@ namespace MDriveSync.Core
                 }
                 else
                 {
-                    throw new Exception($"请求失败: {response.StatusCode}");
+                    _log.LogError(response.ErrorException, $"请求失败：{request.Resource} {response.StatusCode} {response.Content}");
+                    throw response.ErrorException ?? new Exception($"请求失败：{response.StatusCode} {response.Content}");
                 }
             }
         }
