@@ -82,7 +82,8 @@ namespace MDriveSync.Core.Services
         /// <param name="fileId"></param>
         /// <param name="accessToken"></param>
         /// <param name="isRecycleBin">是否放入回收站，默认：false</param>
-        public static AliyunDriveOpenFileDeleteResponse FileDelete(string driveId, string fileId, string accessToken, bool isRecycleBin = false)
+        public static AliyunDriveOpenFileDeleteResponse FileDelete(string driveId, string fileId, 
+            string accessToken, bool isRecycleBin = false)
         {
             var options = new RestClientOptions(ALIYUNDRIVE_API_HOST)
             {

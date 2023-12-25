@@ -1319,7 +1319,7 @@ namespace MDriveSync.Core
                             {
                                 if (_driveFiles.TryRemove(k, out var v))
                                 {
-                                    ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken);
+                                    ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
                                 }
                             }
                         }
@@ -1336,7 +1336,7 @@ namespace MDriveSync.Core
                             var k = removeFolderKeys.First();
                             if (_driveFolders.TryRemove(k, out var v))
                             {
-                                ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken);
+                                ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
 
                                 // 如果删除父文件夹时，则移除所有的子文件夹
                                 removeFolderKeys.RemoveAll(c => c.StartsWith(k));
@@ -1884,7 +1884,7 @@ namespace MDriveSync.Core
                 else
                 {
                     // 删除同名文件
-                    ProviderApiHelper.FileDelete(_driveId, driveItem.FileId, AccessToken);
+                    ProviderApiHelper.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
                     _driveFiles.TryRemove(saveFilePath, out _);
 
                     // 再次搜索确认是否有同名文件，有则删除
@@ -1908,7 +1908,7 @@ namespace MDriveSync.Core
                         {
                             foreach (var f in dupResponse.Data.Items)
                             {
-                                var delRes = ProviderApiHelper.FileDelete(_driveId, f.FileId, AccessToken);
+                                var delRes = ProviderApiHelper.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
                                 if (delRes == null)
                                 {
                                     _log.LogWarning($"远程文件已删除 {localFileInfo.Key}");

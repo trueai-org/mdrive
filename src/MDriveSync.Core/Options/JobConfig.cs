@@ -105,6 +105,11 @@
         public bool IsTemporary { get; set; } = false;
 
         /// <summary>
+        /// 是否启用回收站，如果启用则删除文件时，保留到回收站
+        /// </summary>
+        public bool IsRecycleBin { get; set; } = false;
+
+        /// <summary>
         /// 上传并行任务数（0：自动，最大：10）
         /// </summary>
         public int UploadThread { get; set; } = 0;
