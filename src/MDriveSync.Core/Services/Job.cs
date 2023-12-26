@@ -19,8 +19,7 @@ namespace MDriveSync.Core
     ///
     /// TODO
     /// 文件监听变换时，移除 sha1 缓存，下次同步时重新计算
-    /// 同步文件夹，目前文件夹没有同步
-    /// 
+    ///
     /// TODO：
     /// OK: 令牌自动刷新
     /// job 管理
@@ -56,11 +55,27 @@ namespace MDriveSync.Core
     /// </summary>
     public class Job : IDisposable
     {
+        /// <summary>
+        /// 本地文件锁
+        /// </summary>
+        private readonly object _localLock = new();
+
+        /// <summary>
+        /// 例行检查锁
+        /// </summary>
+        private readonly SemaphoreSlim _maintenanceLock = new(1, 1);
+
+        /// <summary>
+        /// 异步锁
+        /// </summary>
+        private AsyncLockV2 _lock = new();
+
+        ///// <summary>
+        ///// 云盘文件夹创建锁
+        ///// </summary>
+        //private readonly AsyncLock _createFolderLock = new();
+
         private readonly ILogger _log;
-
-        private readonly object _lock = new();
-
-        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
 
         private readonly IMemoryCache _cache;
 
@@ -209,13 +224,13 @@ namespace MDriveSync.Core
         /// <returns></returns>
         public async Task Maintenance()
         {
-            if (_semaphoreSlim.CurrentCount == 0)
+            if (_maintenanceLock.CurrentCount == 0)
             {
                 // 如果检查执行中，则跳过，保证执行中的只有 1 个
                 return;
             }
 
-            await _semaphoreSlim.WaitAsync();
+            await _maintenanceLock.WaitAsync();
 
             try
             {
@@ -310,7 +325,7 @@ namespace MDriveSync.Core
             {
                 GC.Collect();
 
-                _semaphoreSlim.Release();
+                _maintenanceLock.Release();
             }
         }
 
@@ -472,7 +487,7 @@ namespace MDriveSync.Core
             if (!_isLoadLocalFiles)
                 return;
 
-            lock (_lock)
+            lock (_localLock)
             {
                 var dir = Path.GetDirectoryName(_localFileCacheName);
                 if (!Directory.Exists(dir))
@@ -660,7 +675,55 @@ namespace MDriveSync.Core
             var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
 
             var process = 0;
-            var total = _localFiles.Count;
+            var total = _localFolders.Count;
+
+            // 并行创建文件夹
+            await Parallel.ForEachAsync(_localFolders, options, async (item, cancellationToken) =>
+            {
+                try
+                {
+                    // 计算存储目录
+                    var saveParentPath = $"{_driveSavePath}/{item.Key}".TrimPath();
+
+                    // 存储目录 ID
+                    var saveParentFileId = "root";
+
+                    // 判断云盘是否存在路径，不存在则创建
+                    if (!string.IsNullOrWhiteSpace(saveParentPath))
+                    {
+                        if (!_driveFolders.ContainsKey(saveParentPath))
+                        {
+                            var savePaths = saveParentPath.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+                            var savePathsParentFileId = "root";
+                            foreach (var subPath in savePaths)
+                            {
+                                savePathsParentFileId = await AliyunDriveCreateFolder(subPath, savePathsParentFileId);
+                            }
+                        }
+
+                        if (!_driveFolders.ContainsKey(saveParentPath))
+                        {
+                            throw new Exception("文件夹创建失败");
+                        }
+
+                        saveParentFileId = _driveFolders[saveParentPath].FileId;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, $"文件上传处理异常 {item.Value.FullPath}");
+                }
+                finally
+                {
+                    Interlocked.Increment(ref process);
+                    _log.LogInformation($"同步文件夹中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
+                }
+            });
+            _log.LogInformation($"同步文件夹完成，总文件夹数：{_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
+
+            now = DateTime.Now;
+            process = 0;
+            total = _localFiles.Count;
 
             // 并行上传
             await Parallel.ForEachAsync(_localFiles, options, async (item, cancellationToken) =>
@@ -676,11 +739,11 @@ namespace MDriveSync.Core
                 finally
                 {
                     Interlocked.Increment(ref process);
-                    _log.LogInformation($"同步中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
+                    _log.LogInformation($"同步文件中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
                 }
             });
 
-            _log.LogInformation($"同步完成，总文件数：{_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
+            _log.LogInformation($"同步文件完成，总文件数：{_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
         }
 
         /// <summary>
@@ -833,7 +896,7 @@ namespace MDriveSync.Core
                 var savePath = Path.Combine(_localRestorePath, Path.Combine(subPaths));
 
                 var tmpPath = Path.GetDirectoryName(savePath);
-                lock (_lock)
+                lock (_localLock)
                 {
                     if (!Directory.Exists(tmpPath))
                     {
@@ -1690,7 +1753,7 @@ namespace MDriveSync.Core
                     var tmpPath = Path.GetDirectoryName(tempFilePath);
                     var path = Path.GetDirectoryName(finalFilePath);
 
-                    lock (_lock)
+                    lock (_localLock)
                     {
                         if (!Directory.Exists(tmpPath))
                         {
@@ -1743,17 +1806,18 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 阿里云盘 - 创建文件夹（同名不覆盖）
+        /// 阿里云盘 - 创建文件夹（同名不创建）
         /// </summary>
         /// <param name="filePath"></param>
         /// <param name="parentId"></param>
         /// <returns></returns>
         private async Task<string> AliyunDriveCreateFolder(string filePath, string parentId)
         {
-            var name = AliyunDriveHelper.EncodeFileName(filePath);
-
-            try
+            // 同一级文件夹共用一个锁
+            using (await _lock.LockAsync($"create_folder_{parentId}"))
             {
+                var name = AliyunDriveHelper.EncodeFileName(filePath);
+
                 // 判断是否需要创建文件夹
                 if (parentId == "root")
                 {
@@ -1821,10 +1885,6 @@ namespace MDriveSync.Core
                 }
 
                 return data.FileId;
-            }
-            catch (Exception)
-            {
-                throw;
             }
         }
 
@@ -2175,6 +2235,7 @@ namespace MDriveSync.Core
                     // 等待 250ms 以遵守限流策略
                     if (sw.ElapsedMilliseconds < _listRequestInterval)
                         await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
+
                 } while (!string.IsNullOrEmpty(marker));
 
                 foreach (var item in allItems)
@@ -2272,7 +2333,10 @@ namespace MDriveSync.Core
                 else if (response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     retries++;
-                    _log.LogWarning("请求次数过多，第 {@0} 次： {@1}", retries, request.Resource);
+
+                    // 其他API加一起有个10秒150次的限制。可以根据429和 x-retry - after 头部来判断等待重试的时间
+
+                    _log.LogWarning("触发限流，请求次数过多，重试第 {@0} 次： {@1}", retries, request.Resource);
 
                     if (retries >= maxRetries)
                     {
@@ -2385,7 +2449,7 @@ namespace MDriveSync.Core
                     query = $"parent_file_id='{searchParentFileId}' and type = 'folder' and name = '{subPath}'"
                 };
                 request.AddBody(body);
-                var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
+                var response = await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
                 if (response.StatusCode != HttpStatusCode.OK)
                 {
                     throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
