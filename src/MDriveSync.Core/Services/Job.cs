@@ -53,6 +53,10 @@ namespace MDriveSync.Core
     /// 待定
     ///
     /// 注意，针对快捷方式，可能会出现问题
+    ///
+    /// TODO
+    /// 计划中的工作。
+    /// APP 启动时，通过接口获取欢迎语，检查版本等
     /// </summary>
     public class Job : IDisposable
     {

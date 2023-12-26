@@ -249,9 +249,3 @@ docker run --name mdrive -d --restart=always \
 # linux
 "path": "logs/log.txt"
 ```
-
-## TODO
-
-计划中的工作。
-
-- APP 启动时，通过接口获取欢迎语，检查版本等
