@@ -7,6 +7,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Net;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
@@ -385,8 +386,15 @@ namespace MDriveSync.Core
             var sw = new Stopwatch();
             sw.Start();
 
+            var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+
             // 格式化路径
             _localRestorePath = _jobConfig.Restore.TrimPath();
+            if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
+            {
+                _localRestorePath = $"/{_localRestorePath}";
+            }
+
             _driveSavePath = _jobConfig.Target.TrimPrefix();
 
             // 格式化备份目录
@@ -394,12 +402,19 @@ namespace MDriveSync.Core
             _jobConfig.Sources.Clear();
             foreach (var item in sources)
             {
-                var dir = new DirectoryInfo(item);
+                var path = item.TrimPath();
+                if (isLinux && !string.IsNullOrWhiteSpace(path))
+                {
+                    path = $"/{path}";
+                }
+
+                var dir = new DirectoryInfo(path);
                 if (!dir.Exists)
                 {
                     dir.Create();
                 }
-                _jobConfig.Sources.Add(dir.FullName);
+
+                _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
             }
 
             _localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
