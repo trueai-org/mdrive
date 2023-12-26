@@ -262,3 +262,4 @@ docker run --name mdrive -d --restart=always \
 - 本地模式集成
 - 阿里云 OSS、腾讯云 COS 等
 - 加密、分块插件等
+- 上传增加文件的本地时间
