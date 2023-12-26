@@ -17,6 +17,10 @@ namespace MDriveSync.Core
     /// <summary>
     /// https://www.yuque.com/aliyundrive/zpfszx/ezlzok
     ///
+    /// TODO
+    /// 文件监听变换时，移除 sha1 缓存，下次同步时重新计算
+    /// 同步文件夹，目前文件夹没有同步
+    /// 
     /// TODO：
     /// OK: 令牌自动刷新
     /// job 管理
