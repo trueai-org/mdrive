@@ -6,7 +6,7 @@
 
 支持多种算法同步与备份，保证数据的安全性，任何第三方、任何云盘服务商都无法查看或分析你的数据，只有通过你本人设置的安全密钥才能解密数据，保证您的数据安全和隐私。
 
-> 目前暂未发布正式版，敬请期待~~
+> 跟多版本，敬请期待~~
 
 
 A multi-platform, modular, secure cloud drive synchronization and backup tool that supports Baidu Cloud Disk, Alibaba Cloud Disk, and others. Integrates various modules such as Duplicati and Kopia, with features like encryption and restoration. Offers different types of synchronization and backup, including unidirectional, mirror, and bidirectional. The tool is completely free and open source.
@@ -15,8 +15,89 @@ Available in multiple platform versions including Docker, Duplicati, Kopia, Wind
 
 Supports a variety of algorithms for synchronization and backup.
 
-> The official version has not yet been released. Stay tuned!
+> With multiple versions, stay tuned!
 
+## 安装与使用
+
+### Docker 版
+
+https://hub.docker.com/r/trueaiorg/m-drive-sync-client
+
+```
+# 确保目录存在
+# 确保映射/挂载了备份目录
+# 创建云盘存储目录
+mkdir /home/mdrive
+cd /home/mdirve
+
+# 创建配置文件
+vi appsettings.Client.json
+
+# 输入授权令牌，修改备份目录、作业计划时间、目标位置等
+{
+  "Client": {
+    "AliyunDrives": [
+      {
+        "Id": "1",
+        "Name": "云盘",
+        "RefreshToken": "这里输入授权令牌",
+        "Jobs": [
+          {
+            "Id": "1",
+            "Name": "test",
+            "State": 0,
+            "Schedules": [
+              "0 * * * * ?"
+            ],
+            "Sources": [
+               "/data"
+            ],
+            "Target": "backups/test",
+            "RapidUpload": true,
+            "FileWatcher": true,
+            "IsTemporary": true
+          }
+        ]
+      }
+    ]
+  }
+}
+
+# 确保配置具有可写配置权限 appsettings.Client.json
+chmod 666 appsettings.Client.json
+
+# 拉取镜像
+docker pull trueaiorg/m-drive-sync-client
+
+# 快速启动示例，并挂载 /data 目录到容器 /data 只读默认，并映射端口 8080
+docker run --name mdrive -d --restart=always \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
+ -v /data:/data:ro \
+ -p 8080:8080 trueaiorg/m-drive-sync-client
+
+# 调试日志
+docker logs mdrive
+
+# 进入容器
+docker exec -it mdrive /bin/bash
+
+# 访问端口
+http://{ip}:8080
+
+# 跟多示例
+# 配置日志、映射云盘配置、映射程序配置、挂载 /data
+mkdir /home/mdrive/logs
+docker run --name mdrive -d --restart=always \
+ -v /home/mdrive/appsettings.json:/app/appsettings.json \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
+ -v /home/mdrive/logs:/app/appsettings.Client.json \
+ -v /data:/data:ro \
+ -p 8080:8080 trueaiorg/m-drive-sync-client
+```
+
+### Windows 服务版
+
+- TODO
 
 ## 友情链接
 
