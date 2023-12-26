@@ -88,9 +88,9 @@ http://{ip}:8080
 # 配置日志、映射云盘配置、映射程序配置、挂载 /data
 mkdir /home/mdrive/logs
 docker run --name mdrive -d --restart=always \
- -v /home/mdrive/appsettings.json:/app/appsettings.json \
+ -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
  -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
- -v /home/mdrive/logs:/app/appsettings.Client.json \
+ -v /home/mdrive/logs:/app/logs \
  -v /data:/data:ro \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 ```
