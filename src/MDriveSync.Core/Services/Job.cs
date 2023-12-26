@@ -392,6 +392,8 @@ namespace MDriveSync.Core
 
             var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
+            _log.LogInformation($"Linux: {isLinux}");
+
             // 格式化路径
             _localRestorePath = _jobConfig.Restore.TrimPath();
             if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
@@ -409,16 +411,25 @@ namespace MDriveSync.Core
                 var path = item.TrimPath();
                 if (isLinux && !string.IsNullOrWhiteSpace(path))
                 {
+                    // Linux
                     path = $"/{path}";
+                    var dir = new DirectoryInfo(path);
+                    if (!dir.Exists)
+                    {
+                        dir.Create();
+                    }
+                    _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
                 }
-
-                var dir = new DirectoryInfo(path);
-                if (!dir.Exists)
+                else
                 {
-                    dir.Create();
+                    // Windows
+                    var dir = new DirectoryInfo(path);
+                    if (!dir.Exists)
+                    {
+                        dir.Create();
+                    }
+                    _jobConfig.Sources.Add(dir.FullName);
                 }
-
-                _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
             }
 
             _localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
