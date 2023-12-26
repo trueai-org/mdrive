@@ -257,7 +257,7 @@ docker run --name mdrive -d --restart=always \
 - Web 版本
 - Mac 版本
 - 移动端（IOS、Andorid）版本
-- Kopoia 模式、插件开发
-- 百度云盘
-- 本地模式
+- Kopia 模式、插件开发
+- 百度云盘集成
+- 本地模式集成
 - 阿里云 OSS、腾讯云 COS 等
