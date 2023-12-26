@@ -249,3 +249,12 @@ docker run --name mdrive -d --restart=always \
 # linux
 "path": "logs/log.txt"
 ```
+
+## 路线图
+
+- Windows 服务版
+- Windows 客户端版本
+- Web 版本
+- Mac 版本
+- 移动端（IOS、Andorid）版本
+- Kopoia 模式集成
