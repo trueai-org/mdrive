@@ -1,4 +1,4 @@
-name: MDriveSync.Client.API Docker Image CI
+name: Client Docker Image CI
 
 on:
   push:
