@@ -3,12 +3,10 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-
-    xmlns:local="clr-namespace:MDriveSync.WPF" xmlns:svgc="http://sharpvectors.codeplex.com/svgc/"
-    x:Class="MDriveSync.WPF.MainWindow"
+        xmlns:local="clr-namespace:MDriveSync.WPF" xmlns:svgc="http://sharpvectors.codeplex.com/svgc/"
+        x:Class="MDriveSync.WPF.MainWindow"
         mc:Ignorable="d"
         WindowStartupLocation="CenterScreen"
-
         Title="阿里云盘 - MDrive Sync - v1.1.2.beta - 2023/12/27 - 免费开源不限速（Duplicati 版、Kopia 版、Docker 版、Web 版等，限时优惠购阿里云盘会员返现金奖励）" Height="680" Width="960" Background="{x:Null}">
 
     <Window.Resources>
@@ -53,11 +51,11 @@
             </Border>
 
             <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding Path=TaskType}">
+                <DataTrigger Binding="{Binding Path=JobStateColor}">
                     <DataTrigger.Value>
-                        <local:TaskType>Home</local:TaskType>
+                        <local:JobStateColor>Fail</local:JobStateColor>
                     </DataTrigger.Value>
-                    <Setter TargetName="border" Property="BorderBrush" Value="Yellow" />
+                    <Setter TargetName="border" Property="BorderBrush" Value="Red" />
                 </DataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>

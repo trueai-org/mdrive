@@ -137,5 +137,14 @@ namespace MDriveSync.Core
         {
             return _jobs;
         }
+
+        /// <summary>
+        /// 获取所有云盘
+        /// </summary>
+        /// <returns></returns>
+        public List<AliyunDriveConfig> GetDrives()
+        {
+            return _clientOptions.CurrentValue.AliyunDrives;
+        }
     }
 }

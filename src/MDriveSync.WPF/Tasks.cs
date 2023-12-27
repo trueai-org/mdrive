@@ -9,12 +9,12 @@ namespace MDriveSync.WPF
     {
         public Tasks()
         {
-            Add(new Task("Groceries", "Pick up Groceries and Detergent", 2, TaskType.Home));
-            Add(new Task("Laundry", "Do my Laundry", 2, TaskType.Home));
-            Add(new Task("Email", "Email clients", 1, TaskType.Work));
-            Add(new Task("Clean", "Clean my office", 3, TaskType.Work));
-            Add(new Task("Dinner", "Get ready for family reunion", 1, TaskType.Home));
-            Add(new Task("Proposals", "Review new budget proposals", 2, TaskType.Work));
+            Add(new Task("Groceries", "Pick up Groceries and Detergent", 2, JobStateColor.Success));
+            Add(new Task("Laundry", "Do my Laundry", 2, JobStateColor.Success));
+            Add(new Task("Email", "Email clients", 1, JobStateColor.Fail));
+            Add(new Task("Clean", "Clean my office", 3, JobStateColor.Fail));
+            Add(new Task("Dinner", "Get ready for family reunion", 1, JobStateColor.Success));
+            Add(new Task("Proposals", "Review new budget proposals", 2, JobStateColor.Fail));
         }
     }
 }

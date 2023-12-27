@@ -28,16 +28,40 @@ namespace MDriveSync.WPF
 
             Service = App.TimedHostedService;
 
+            UpdateJobs();
+        }
+
+        public void UpdateJobs()
+        {
+
             var taskList = new List<Task>();
 
-            
 
-            taskList.Add(new Task("阿里云盘", "阿里云盘", 1, TaskType.Work));
-            taskList.Add(new Task("Groceries11", "Pick up Groceries and Detergent", 2, TaskType.Home));
-            taskList.Add(new Task("Laundry22", "Do my Laundry", 2, TaskType.Home));
-            taskList.Add(new Task("Clean", "Clean my office", 3, TaskType.Work));
-            taskList.Add(new Task("Dinner", "Get ready for family reunion", 2, TaskType.Home));
-            taskList.Add(new Task("Proposals", "Review new budget proposals", 2, TaskType.Work));
+            var jobs = Service.GetJobs();
+            var drives = Service.GetDrives();
+
+            foreach (var d in drives)
+            {
+                taskList.Add(new Task(d.Name, d.Name, 1, JobStateColor.Fail));
+
+                foreach (var dj in d.Jobs)
+                {
+                    if (jobs.TryGetValue(dj.Id, out var jb) && jb != null)
+                    {
+                        taskList.Add(new Task(dj.Name, dj.Description ?? "-", 2, jb.State == JobState.Disabled ? JobStateColor.Fail : JobStateColor.Success));
+                    }
+                }
+            }
+
+
+            taskList.Add(new Task("阿里云盘", "阿里云盘", 1, JobStateColor.Fail));
+            taskList.Add(new Task("Groceries11", "Pick up Groceries and Detergent hhhhhhhhh", 2, JobStateColor.Success));
+            taskList.Add(new Task("Laundry22", "Do my Laundry hhhhh", 2, JobStateColor.Success));
+
+            taskList.Add(new Task("Clean", "Clean my office", 3, JobStateColor.Fail));
+
+            taskList.Add(new Task("Dinner", "Get ready for family reunion", 2, JobStateColor.Success));
+            taskList.Add(new Task("Proposals", "Review new budget proposals", 2, JobStateColor.Fail));
 
             jobListBox.ItemsSource = taskList;
         }
@@ -59,7 +83,8 @@ namespace MDriveSync.WPF
 
         private void OnImagesDirChangeClick(object sender, RoutedEventArgs e)
         {
-            var jobs = App.TimedHostedService.GetJobs();
+            //var jobs = App.TimedHostedService.GetJobs();
+
             var auth = ProviderApiHelper.GetAuthQrcode();
 
             var pvWindow = new PhotoViewer { SelectedPhoto = new Photo(auth.QrCodeUrl) };
@@ -79,6 +104,8 @@ namespace MDriveSync.WPF
             {
                 this.jobContent.Content = box.SelectedItem;
             }
+
+            UpdateJobs();
         }
     }
 }

@@ -3,9 +3,9 @@
 
 namespace MDriveSync.WPF
 {
-    public enum TaskType
+    public enum JobStateColor
     {
-        Home,
-        Work
+        Success,
+        Fail
     }
 }
