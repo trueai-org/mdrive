@@ -58,10 +58,10 @@ namespace MDriveSync.Client.API
             // 确保在应用程序结束时关闭并刷新日志
             AppDomain.CurrentDomain.ProcessExit += (s, e) => Log.CloseAndFlush();
 
-            Log.Logger.Information($"当前目录：{Directory.GetCurrentDirectory()}");
-
             try
             {
+                Log.Information($"Current: {Directory.GetCurrentDirectory()}");
+
                 // 使用 Serilog
                 builder.Host.UseSerilog();
 
