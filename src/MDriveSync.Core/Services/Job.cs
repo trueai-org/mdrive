@@ -2304,7 +2304,7 @@ namespace MDriveSync.Core
                     _log.LogInformation($"云盘文件加载中，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹，{item.Name}");
                 }
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 throw;
             }

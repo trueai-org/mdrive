@@ -32,7 +32,7 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         private static bool LockExit(string key)
         {
-            if (_lockObjs.TryGetValue(key, out object? obj) && obj != null)
+            if (_lockObjs.TryGetValue(key, out object obj) && obj != null)
             {
                 Monitor.Exit(obj);
             }
