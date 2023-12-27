@@ -268,6 +268,7 @@ docker run --name mdrive -d --restart=always \
 - 上传增加文件的本地时间
 - WebDAV、磁盘挂载
 - 多版本、多备份、版本还原
+- 分块上传、分块下载、超大文件支持
 
 ## 发布
 
