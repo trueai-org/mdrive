@@ -97,7 +97,11 @@ docker run --name mdrive -d --restart=always \
 
 ### Windows 服务版
 
-- TODO
+下载 `MDrive` 并解压，修改授权、密钥等配置，运行 `.exe` 程序即可。
+
+- 作为服务后台执行：
+  - 可使用系统自带的 `任务计划程序`，创建基本任务，选择 `.exe` 程序即可，主要要选择`请勿启动多个实例`，保证只有一个任务执行即可。
+  - 可使用其他服务集成，例如：nssm、winsw等。
 
 ## 友情链接
 
@@ -265,3 +269,7 @@ docker run --name mdrive -d --restart=always \
 - 上传增加文件的本地时间
 - WebDAV、磁盘挂载
 - 多版本、多备份、版本还原
+
+## 发布
+
+通过 `Github Actions` 自动或生成到 `Docker Hub`、`Window` 安装包等，保证程序的安全。
