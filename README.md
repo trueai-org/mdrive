@@ -69,7 +69,7 @@ chmod 666 appsettings.Client.json
 # 拉取镜像
 docker pull trueaiorg/m-drive-sync-client
 
-# 快速启动示例，并挂载 /data 目录到容器 /data 只读默认，并映射端口 8080
+# 快速启动示例，并挂载 /data 目录到容器 /data 只读模式，并映射端口 8080
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
  -v /data:/data:ro \
@@ -273,3 +273,7 @@ docker run --name mdrive -d --restart=always \
 ## 发布
 
 通过 `Github Actions` 自动或生成到 `Docker Hub`、`Window` 安装包等，保证程序的安全。
+
+## 性能
+
+- 极致
