@@ -834,7 +834,7 @@ namespace MDriveSync.Core
                 sw.Stop();
                 _log.LogInformation($"end. {_driveFiles.Count}, {sw.ElapsedMilliseconds}ms");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 throw;
             }

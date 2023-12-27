@@ -263,3 +263,5 @@ docker run --name mdrive -d --restart=always \
 - 阿里云 OSS、腾讯云 COS 等
 - 加密、分块插件等
 - 上传增加文件的本地时间
+- WebDAV、磁盘挂载
+- 多版本、多备份、版本还原
