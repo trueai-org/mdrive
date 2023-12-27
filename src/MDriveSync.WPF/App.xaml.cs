@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using Quartz.Logging;
 using Serilog;
 using Serilog.Debugging;
+using Serilog.Settings.Configuration;
 using System.Windows;
 
 namespace MDriveSync.WPF
@@ -56,6 +57,7 @@ namespace MDriveSync.WPF
                     .Build();
 
                     var loggerConfig = new LoggerConfiguration();
+
                     if (env.IsDevelopment())
                     {
                         loggerConfig.MinimumLevel.Debug().Enrich.FromLogContext();
@@ -64,7 +66,18 @@ namespace MDriveSync.WPF
                         SelfLog.Enable(Console.Error);
                     }
 
-                    Log.Logger = loggerConfig.ReadFrom.Configuration(configuration).CreateLogger();
+                    // 当打包为单个 exe 程序时，使用代码显式配置 Serilog，而不是完全依赖于配置文件。
+                    // 这可能导致 Serilog 在尝试自动发现和加载其扩展程序集（如 Sinks）时遇到问题
+                    // 显式配置 Serilog：在程序的 Main 方法中，使用代码显式配置 Serilog，而不是完全依赖于配置文件。
+                    // 即：要么手动列出 Sinks 或者通过下面这种方式
+                    var logOptions = new ConfigurationReaderOptions(
+                        typeof(ConsoleLoggerConfigurationExtensions).Assembly);
+
+                    Log.Logger = loggerConfig
+                    .ReadFrom.Configuration(configuration, logOptions)
+                    // 打包为单个 exe 文件，无法写日志，因此在这里配置写死
+                    .WriteTo.File("logs/log.txt", rollingInterval: RollingInterval.Day)
+                    .CreateLogger();
 
                     // Quartz Log
                     var loggerFactory = new LoggerFactory().AddSerilog(Log.Logger);

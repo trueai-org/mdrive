@@ -244,14 +244,14 @@ namespace MDriveSync.Core
                     case JobState.None:
                         {
                             // 初始化
-                            Initialize();
+                            await Initialize();
                         }
                         break;
 
                     case JobState.Starting:
                         {
                             // 启动中
-                            StartJob();
+                            await StartJob();
                         }
                         break;
 
@@ -259,7 +259,7 @@ namespace MDriveSync.Core
                         {
                             // 初始化作业调度
                             // 检查作业调度
-                            InitJobScheduling();
+                            await InitJobScheduling();
                         }
                         break;
 
@@ -337,7 +337,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 初始化作业
         /// </summary>
-        public async void InitJobScheduling()
+        public async Task InitJobScheduling()
         {
             // 开始计算业务
             // 计算下一次执行备份等计划作业
@@ -358,7 +358,7 @@ namespace MDriveSync.Core
                         // 如果立即执行的
                         if (_jobConfig.IsTemporary)
                         {
-                            await Task.Run(StartSync);
+                            await StartSync();
                         }
                     }
                 }
@@ -370,7 +370,7 @@ namespace MDriveSync.Core
                 {
                     if (!isTemporaryIsEnd)
                     {
-                        await Task.Run(StartSync);
+                        await StartSync();
                         isTemporaryIsEnd = true;
                     }
                 }
@@ -381,7 +381,7 @@ namespace MDriveSync.Core
         /// 初始化作业（路径、云盘信息等）
         /// </summary>
         /// <returns></returns>
-        private void Initialize()
+        private async Task Initialize()
         {
             ChangeState(JobState.Initializing);
 
@@ -437,17 +437,26 @@ namespace MDriveSync.Core
             // 获取云盘信息
             AliyunDriveInitInfo();
 
+            // 空间信息
+            await AliyunDriveInitSpaceInfo();
+
+            // VIP 信息
+            await AliyunDriveInitVipInfo();
+
+            // 保存配置
+            _driveConfig.Save();
+
             sw.Stop();
             _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
 
-            StartJob();
+            await StartJob();
         }
 
         /// <summary>
         /// 启动后台作业、启动缓存、启动监听等
         /// </summary>
         /// <returns></returns>
-        public void StartJob()
+        public async Task StartJob()
         {
             ChangeState(JobState.Starting);
 
@@ -504,7 +513,7 @@ namespace MDriveSync.Core
             // 启动完成，处于空闲
             ChangeState(JobState.Idle);
 
-            InitJobScheduling();
+            await InitJobScheduling();
         }
 
         /// <summary>
@@ -2422,6 +2431,8 @@ namespace MDriveSync.Core
                 {
                     _driveId = data.ResourceDriveId;
                 }
+
+                _driveConfig.Name = !string.IsNullOrWhiteSpace(data.NickName) ? data.NickName : data.Name;
             }
         }
 
@@ -2437,6 +2448,9 @@ namespace MDriveSync.Core
             var response = await _apiClient.ExecuteAsync<AliyunDriveSpaceInfo>(request);
             if (response.StatusCode == HttpStatusCode.OK)
             {
+                _driveConfig.Metadata ??= new();
+                _driveConfig.Metadata.UsedSize = response.Data?.PersonalSpaceInfo?.UsedSize;
+                _driveConfig.Metadata.TotalSize = response.Data?.PersonalSpaceInfo?.TotalSize;
             }
         }
 
@@ -2452,6 +2466,10 @@ namespace MDriveSync.Core
             var response = await _apiClient.ExecuteAsync<AliyunDriveVipInfo>(request);
             if (response.StatusCode == HttpStatusCode.OK)
             {
+                _driveConfig.Metadata ??= new();
+                _driveConfig.Metadata.Identity = response.Data?.Identity;
+                _driveConfig.Metadata.Level = response.Data?.Level;
+                _driveConfig.Metadata.Expire = response.Data?.ExpireDateTime;
             }
         }
 

@@ -1,4 +1,5 @@
-﻿using MDriveSync.Core.Services;
+﻿using MDriveSync.Core;
+using MDriveSync.Core.Services;
 using RestSharp;
 using System.Security.Policy;
 using System.Text.Json;
@@ -12,6 +13,8 @@ namespace MDriveSync.WPF
     /// </summary>
     public partial class MainWindow : Window
     {
+        public TimedHostedService Service { get; private set; }
+
         public MainWindow()
         {
             InitializeComponent();
@@ -23,7 +26,11 @@ namespace MDriveSync.WPF
 
             SelectionChanged.ItemsSource = new ItemsForSale();
 
+            Service = App.TimedHostedService;
+
             var taskList = new List<Task>();
+
+            
 
             taskList.Add(new Task("阿里云盘", "阿里云盘", 1, TaskType.Work));
             taskList.Add(new Task("Groceries11", "Pick up Groceries and Detergent", 2, TaskType.Home));
@@ -64,6 +71,14 @@ namespace MDriveSync.WPF
         private void itemsControl_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
 
+        }
+
+        private void jobListBox_Selected(object sender, RoutedEventArgs e)
+        {
+            if (sender is ListBox box && box.SelectedItem != null)
+            {
+                this.jobContent.Content = box.SelectedItem;
+            }
         }
     }
 }

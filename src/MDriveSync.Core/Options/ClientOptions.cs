@@ -37,6 +37,11 @@ namespace MDriveSync.Core
     public class AliyunDriveConfig
     {
         /// <summary>
+        /// 云盘唯一标识
+        /// </summary>
+        public string Id { get; set; }
+
+        /// <summary>
         /// 云盘名称
         /// </summary>
         public string Name { get; set; }
@@ -64,7 +69,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 阿里云盘元信息（用户信息、云盘信息、VIP 信息）
         /// </summary>
-        public object Metadata { get; set; }
+        public AliyunDriveMetadata Metadata { get; set; }
 
         /// <summary>
         /// 作业
@@ -81,7 +86,7 @@ namespace MDriveSync.Core
             var aliyunDriveConfig = JsonSerializer.Deserialize<ClientSettings>(jsonString);
 
             // 移除重新添加
-            var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Name == Name);
+            var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
             if (current >= 0)
             {
                 aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
@@ -102,5 +107,36 @@ namespace MDriveSync.Core
             // 写入文件
             File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
         }
+    }
+
+    /// <summary>
+    /// 阿里云盘元信息（用户信息、云盘信息、VIP 信息）
+    /// </summary>
+    public class AliyunDriveMetadata
+    {
+        /// <summary>
+        /// 使用容量，单位bytes
+        /// </summary>
+        public long? UsedSize { get; set; }
+
+        /// <summary>
+        /// 总容量，单位bytes
+        /// </summary>
+        public long? TotalSize { get; set; }
+
+        /// <summary>
+        /// 枚举：member, vip, svip
+        /// </summary>
+        public string Identity { get; set; }
+
+        /// <summary>
+        /// 20t、8t
+        /// </summary>
+        public string Level { get; set; }
+
+        /// <summary>
+        /// 过期时间
+        /// </summary>
+        public DateTime? Expire { get; set; }
     }
 }

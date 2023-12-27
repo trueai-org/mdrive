@@ -9,11 +9,9 @@
         mc:Ignorable="d"
         WindowStartupLocation="CenterScreen"
 
-        Title="阿里云盘 - Drive Sync - v1.0.2.beta - 2023/12/17 - 免费开源不限速（Duplicati 版、Kopia 版、Docker 版、Web 版等，限时优惠购阿里云盘会员返现金奖励）" Height="680" Width="960" Background="{x:Null}">
+        Title="阿里云盘 - MDrive Sync - v1.1.2.beta - 2023/12/27 - 免费开源不限速（Duplicati 版、Kopia 版、Docker 版、Web 版等，限时优惠购阿里云盘会员返现金奖励）" Height="680" Width="960" Background="{x:Null}">
 
     <Window.Resources>
-        <local:Tasks x:Key="MyTodoList" />
-
         <local:JobListDataTemplateSelector x:Key="JobDataTemplateSelector" />
 
         <!--云盘账号模板-->
@@ -138,9 +136,9 @@
             <ListBox Name="jobListBox" Height="360" Margin="10"
                      ItemTemplateSelector="{StaticResource JobDataTemplateSelector}"
                      HorizontalContentAlignment="Stretch"
-                     IsSynchronizedWithCurrentItem="True" />
+                     IsSynchronizedWithCurrentItem="True"  SelectionChanged="jobListBox_Selected"/>
             <TextBlock  FontSize="18" Text="详情" Margin="10,0,0,0" />
-            <ContentControl Content="{Binding Source={StaticResource MyTodoList}}" ContentTemplate="{StaticResource DriveJobTemplate}" />
+            <ContentControl x:Name="jobContent" ContentTemplate="{StaticResource DriveJobTemplate}" />
 
             <StackPanel DockPanel.Dock="Bottom">
                 <Button HorizontalAlignment="Right"  Height="30px"  Width="100px" Click="OnImagesDirChangeClick" Margin="0,0,5,0">编辑</Button>
@@ -182,7 +180,7 @@
                     </ListView.View>
                 </ListView>
             </StackPanel>
-            <DockPanel DockPanel.Dock="Bottom">
+            <DockPanel DockPanel.Dock="Bottom" Height="94">
                 <TextBox DockPanel.Dock="Top" VerticalContentAlignment="Center" TextWrapping="Wrap" Margin="8,0,8,8" Background="LightGreen" Height="30">
                     包含 1331 个文件，13 个文件夹，总大小 24 MB
                 </TextBox>
