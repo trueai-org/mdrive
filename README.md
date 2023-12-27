@@ -256,10 +256,9 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
-- Windows 服务版
-- Windows 客户端版本
-- Web 版本
-- Mac 版本
+- Windows 客户端 UI/WPF 版本
+- WebUI 版本
+- MacUI 版本
 - 移动端（IOS、Andorid）版本
 - Kopia 模式、插件开发
 - 百度云盘集成
