@@ -14,7 +14,7 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="httpRequest"></param>
         /// <returns></returns>
-        public static string? GetRequestBody(this HttpRequest httpRequest)
+        public static string GetRequestBody(this HttpRequest httpRequest)
         {
             if (httpRequest == null)
             {

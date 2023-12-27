@@ -15,7 +15,7 @@ internal static class ThrowHelper
 
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void ThrowArgumentNullException(string? paramName, string? message)
+    internal static void ThrowArgumentNullException(string paramName, string message)
     {
         throw new ArgumentNullException(paramName, message);
     }
@@ -45,7 +45,7 @@ internal static class ThrowHelper
 
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void ThrowArgumentOutOfRangeException(string? paramName = null)
+    internal static void ThrowArgumentOutOfRangeException(string paramName = null)
     {
         throw new ArgumentOutOfRangeException(paramName);
     }
@@ -59,14 +59,14 @@ internal static class ThrowHelper
 
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void ThrowNotSupportedException(string? message = null)
+    internal static void ThrowNotSupportedException(string message = null)
     {
         throw new NotSupportedException(message);
     }
 
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void ThrowInvalidOperationException(string? message = null)
+    internal static void ThrowInvalidOperationException(string message = null)
     {
         throw new InvalidOperationException(message);
     }
@@ -82,7 +82,7 @@ internal static class ThrowHelper
 
     [DoesNotReturn]
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void ThrowFormatException(string message, Exception? innerException = null)
+    internal static void ThrowFormatException(string message, Exception innerException = null)
     {
         throw new FormatException(message, innerException);
     }

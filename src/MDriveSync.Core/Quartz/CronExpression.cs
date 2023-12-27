@@ -211,7 +211,7 @@ namespace Quartz;
 [Serializable]
 public sealed class CronExpression : ISerializable
 {
-    private TimeZoneInfo? timeZone;
+    private TimeZoneInfo timeZone;
 
     [NonSerialized] private readonly CronField seconds = new();
     [NonSerialized] private readonly CronField minutes = new();
@@ -2088,7 +2088,7 @@ public sealed class CronExpression : ISerializable
     /// true if the specified <see cref="T:System.Object"/> is equal to the current <see cref="T:System.Object"/>; otherwise, false.
     /// </returns>
     /// <param name="obj">The <see cref="T:System.Object"/> to compare with the current <see cref="T:System.Object"/>. </param>
-    public override bool Equals(object? obj)
+    public override bool Equals(object obj)
     {
         if (ReferenceEquals(null, obj)) return false;
         if (ReferenceEquals(this, obj)) return true;
@@ -2129,7 +2129,7 @@ internal sealed class CronField : IEnumerable<int>
 {
     // null == not set, all spec or individual value
     private int? singleValue;
-    private SortedSet<int>? values;
+    private SortedSet<int> values;
     private bool hasAllOrNoSpec;
 
     public CronField()
