@@ -282,7 +282,7 @@ docker run --name mdrive -d --restart=always \
 大小 29.7 GB, 1,467 个文件，3,640 个文件夹
 首次同步：0.8秒 + 8秒（列表加载用时 9 秒）
 
-[11:14:01 INF] Current: E:\guanpeng\__my\MDriveSync\src\MDriveSync.Client.API\bin\Release\net8.0\publish
+[11:14:01 INF] Current: E:\***\publish
 [11:14:01 INF] 开始例行检查
 [11:14:01 INF] 作业初始化
 [11:14:01 INF] Linux: False
