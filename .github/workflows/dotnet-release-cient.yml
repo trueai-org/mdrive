@@ -17,11 +17,11 @@ jobs:
       uses: actions/checkout@v4
 
     - name: Build
-      run:  cd srcipts && .\build.ps1
+      run:  cd scripts && .\build.ps1
         
     - name: Upload build artifacts
       uses: actions/upload-artifact@v3
       with:
         name: MDrive
         path: 
-          .\srcipts\MDrive.zip
+          .\scripts\MDrive.zip
