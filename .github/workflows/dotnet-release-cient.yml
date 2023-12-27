@@ -1,10 +1,8 @@
-name: release
+name: release-windows-client
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  release:
+    types: [published]
 
 jobs:
   build:
