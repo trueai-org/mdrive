@@ -75,6 +75,32 @@ namespace MDriveSync.Client.API
 
                 var app = builder.Build();
 
+                //// 区分 API 和静态/客户端路由
+                //app.Use(async (context, next) =>
+                //{
+                //    if (context.Request.Path.StartsWithSegments("/api"))
+                //    {
+                //        // 如果是 API 请求，继续执行后续中间件
+                //        await next();
+                //    }
+                //    //else
+                //    //{
+                //    //    app.MapFallbackToFile("index.html");
+
+                //    //    //// 非 API 请求，尝试作为静态文件处理
+                //    //    //await next();
+
+                //    //    //// 不是 API 请求，重写请求到 index.html
+                //    //    //if (!Path.HasExtension(context.Request.Path.Value))
+                //    //    //{
+                //    //    //    context.Request.Path = "/index.html";
+                //    //    //    await next();
+                //    //    //}
+                //    //}
+                //});
+
+                app.UseStaticFiles();
+
                 app.UseCors(builder =>
                 {
                     builder.AllowAnyMethod().AllowAnyHeader().SetIsOriginAllowed(origin => true).AllowCredentials();
@@ -82,10 +108,32 @@ namespace MDriveSync.Client.API
 
                 app.MapControllers();
 
-                app.MapGet("/", () =>
-                {
-                    return "ok";
-                });
+                //app.MapGet("/", () =>
+                //{
+                //    return "ok";
+                //});
+
+                //app.UseEndpoints(endpoints =>
+                //{
+                //    //endpoints.MapControllers();
+
+                //    // 配置回退路由
+                //    endpoints.MapFallbackToFile("index.html");
+                //});
+
+                // 配置回退路由
+                app.MapFallbackToFile("/", "index.html");
+
+                //app.Use(async (context, next) =>
+                //{
+                //    await next();
+
+                //    if (context.Response.StatusCode == 404 && !Path.HasExtension(context.Request.Path.Value))
+                //    {
+                //        context.Request.Path = "/index.html"; // 将请求重定向到首页
+                //        await next();
+                //    }
+                //});
 
                 app.Run();
             }
