@@ -71,7 +71,12 @@ namespace MDriveSync.Client.API
                 builder.Services.AddControllers();
 
                 // 后台服务
-                builder.Services.AddHostedService<TimedHostedService>();
+                //builder.Services.AddHostedService<TimedHostedService>();
+
+                // 使用单例模式
+                builder.Services.AddSingleton<TimedHostedService>();
+                builder.Services.AddHostedService(provider => provider.GetRequiredService<TimedHostedService>());
+
 
                 var app = builder.Build();
 

@@ -122,6 +122,27 @@
         /// <summary>
         /// 作业元信息（文件大小、数量、执行结果）
         /// </summary>
-        public object Metadata { get; set; }
+        public JobMetadata Metadata { get; set; }
+    }
+
+    /// <summary>
+    /// 作业元信息（文件大小、数量、执行结果）
+    /// </summary>
+    public class JobMetadata
+    {
+        /// <summary>
+        /// 总大小，单位bytes
+        /// </summary>
+        public long? TotalSize { get; set; }
+
+        /// <summary>
+        /// 文件数量
+        /// </summary>
+        public int FileCount { get; set; }
+
+        /// <summary>
+        /// 文件夹数量
+        /// </summary>
+        public int FolderCount { get; set; }
     }
 }
