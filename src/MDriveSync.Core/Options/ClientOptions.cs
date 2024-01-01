@@ -107,6 +107,50 @@ namespace MDriveSync.Core
             // 写入文件
             File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
         }
+
+        /// <summary>
+        /// 保存
+        /// </summary>
+        public void SaveJob(JobConfig jobConfig)
+        {
+            // 读取 JSON 文件
+            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            var aliyunDriveConfig = JsonSerializer.Deserialize<ClientSettings>(jsonString);
+
+            // 移除重新添加
+            var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
+            if (current >= 0)
+            {
+                aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
+                aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
+            }
+            else
+            {
+                aliyunDriveConfig.Client.AliyunDrives.Add(this);
+            }
+
+            // 保存作业
+            var currentJob = Jobs.FindIndex(x => x.Id == jobConfig.Id);
+            if (current >= 0)
+            {
+                Jobs.RemoveAt(current);
+                Jobs.Insert(current, jobConfig);
+            }
+            else
+            {
+                Jobs.Add(jobConfig);
+            }
+
+            // 序列化回 JSON
+            var updatedJsonString = JsonSerializer.Serialize(aliyunDriveConfig, new JsonSerializerOptions
+            {
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                WriteIndented = true
+            });
+
+            // 写入文件
+            File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
+        }
     }
 
     /// <summary>

@@ -695,7 +695,9 @@ namespace MDriveSync.Core
             sw.Restart();
             _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
             ChangeState(JobState.Verifying);
+
             await AliyunDriveVerify();
+
             sw.Stop();
             _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
         }
@@ -981,30 +983,14 @@ namespace MDriveSync.Core
                     }
 
                     // 获取详情 url
-                    var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
-                    request.AddHeader("Content-Type", "application/json");
-                    request.AddHeader("Authorization", $"Bearer {AccessToken}");
-                    object body = new
-                    {
-                        drive_id = _driveId,
-                        file_id = item.Value.FileId
-                    };
-                    request.AddBody(body);
-                    var response = await _apiClient.ExecuteAsync<AliyunDriveFileItem>(request);
-                    if (response.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(response.Data.Url))
-                    {
-                        await AliyunDriveDownload(response.Data.Url,
-                            item.Value.Name,
-                            item.Value.ContentHash,
-                            savePath,
-                            _localRestorePath);
-                    }
-                    else
-                    {
-                        throw response.ErrorException;
-                    }
+                    var data = await AliyunDriveGetDetail(item.Value.FileId);
+                    await AliyunDriveDownload(data.Url,
+                                   item.Value.Name,
+                                   item.Value.ContentHash,
+                                   savePath,
+                                   _localRestorePath);
 
-                    // TODO
+                    // TODO > 100MB
                     // 如果是大文件，则通过下载链接下载文件
                 }
                 catch (Exception)
@@ -1028,6 +1014,36 @@ namespace MDriveSync.Core
             {
                 watcher.Dispose();
             }
+        }
+
+        /// <summary>
+        /// 获取云盘文件文件夹
+        /// </summary>
+        /// <param name="parentId"></param>
+        public List<AliyunDriveFileItem> GetDrivleFiles(string parentId = "")
+        {
+            if (string.IsNullOrWhiteSpace(parentId))
+            {
+                if (_driveFolders.TryGetValue(_driveSavePath, out var p))
+                {
+                    parentId = p.FileId;
+                }
+            }
+
+            var list = new List<AliyunDriveFileItem>();
+
+            // 目录下的所有文件文件夹
+            var fdirs = _driveFolders.Values.Where(c => c.ParentFileId == parentId)
+                .OrderBy(c => c.Name)
+                .ToList();
+            var fs = _driveFiles.Values.Where(c => c.ParentFileId == parentId)
+                .OrderBy(c => c.Name)
+                .ToList();
+
+            list.AddRange(fdirs);
+            list.AddRange(fs);
+
+            return list;
         }
 
         #region 私有方法
@@ -1634,6 +1650,19 @@ namespace MDriveSync.Core
                 default:
                     break;
             }
+
+            // 计算云盘文件
+            // 计算变动的文件
+            // TODO
+            // 计算新增、更新、删除、下载的文件
+            _jobConfig.Metadata = new JobMetadata()
+            {
+                FileCount = _driveFiles.Count,
+                FolderCount = _driveFolders.Count,
+                TotalSize = _driveFiles.Values.Sum(c => c.Size ?? 0)
+            };
+
+            _driveConfig.SaveJob(_jobConfig);
 
             // 校验通过 -> 空闲
             ChangeState(JobState.Idle);
@@ -2274,7 +2303,6 @@ namespace MDriveSync.Core
                     // 等待 250ms 以遵守限流策略
                     if (sw.ElapsedMilliseconds < _listRequestInterval)
                         await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
-
                 } while (!string.IsNullOrEmpty(marker));
 
                 foreach (var item in allItems)
@@ -2566,6 +2594,62 @@ namespace MDriveSync.Core
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件详情
+        /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        public async Task<AliyunDriveFileItem> AliyunDriveGetDetail(string fileId)
+        {
+            // 获取详情 url
+            var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            object body = new
+            {
+                drive_id = _driveId,
+                file_id = fileId
+            };
+            request.AddBody(body);
+            var response = await AliyunDriveExecuteWithRetry<AliyunDriveFileItem>(request);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                return response.Data;
+            }
+            else
+            {
+                throw response.ErrorException;
+            }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件下载 URL
+        /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        public async Task<AliyunDriveOpenFileGetDownloadUrlResponse> AliyunDriveGetDownloadUrl(string fileId)
+        {
+            var request = new RestRequest("/adrive/v1.0/openFile/getDownloadUrl", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            object body = new
+            {
+                drive_id = _driveId,
+                file_id = fileId,
+                expire_sec = 14400
+            };
+            request.AddBody(body);
+            var response = await AliyunDriveExecuteWithRetry<AliyunDriveOpenFileGetDownloadUrlResponse>(request);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                return response.Data;
+            }
+            else
+            {
+                throw response.ErrorException;
+            }
         }
 
         #endregion 阿里云盘

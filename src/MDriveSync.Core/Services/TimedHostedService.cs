@@ -144,7 +144,21 @@ namespace MDriveSync.Core
         /// <returns></returns>
         public List<AliyunDriveConfig> GetDrives()
         {
-            return _clientOptions.CurrentValue.AliyunDrives;
+            var jobs = GetJobs();
+
+            var ds = _clientOptions.CurrentValue.AliyunDrives;
+            foreach (var kvp in ds)
+            {
+                foreach (var j in kvp.Jobs)
+                {
+                    if (jobs.TryGetValue(j.Id, out var job))
+                    {
+                        j.State = job.State;
+                    }
+                }
+            }
+
+            return ds;
         }
     }
 }
