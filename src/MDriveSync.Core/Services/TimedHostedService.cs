@@ -148,10 +148,11 @@ namespace MDriveSync.Core
         {
             var jobs = GetJobs();
 
-            var ds = _clientOptions.CurrentValue.AliyunDrives;
+            var ds = _clientOptions.CurrentValue.AliyunDrives.ToList();
             foreach (var kvp in ds)
             {
-                foreach (var j in kvp.Jobs)
+                var js = kvp.Jobs.ToList();
+                foreach (var j in js)
                 {
                     if (jobs.TryGetValue(j.Id, out var job))
                     {
