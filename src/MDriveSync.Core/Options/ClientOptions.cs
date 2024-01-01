@@ -131,10 +131,10 @@ namespace MDriveSync.Core
 
             // 保存作业
             var currentJob = Jobs.FindIndex(x => x.Id == jobConfig.Id);
-            if (current >= 0)
+            if (currentJob >= 0)
             {
-                Jobs.RemoveAt(current);
-                Jobs.Insert(current, jobConfig);
+                Jobs.RemoveAt(currentJob);
+                Jobs.Insert(currentJob, jobConfig);
             }
             else
             {

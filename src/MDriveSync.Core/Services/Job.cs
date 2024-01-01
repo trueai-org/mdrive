@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.Services;
+using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -983,7 +984,7 @@ namespace MDriveSync.Core
                     }
 
                     // 获取详情 url
-                    var data = await AliyunDriveGetDetail(item.Value.FileId);
+                    var data = await AliyunDriveGetDetail<AliyunDriveFileItem>(item.Value.FileId);
                     await AliyunDriveDownload(data.Url,
                                    item.Value.Name,
                                    item.Value.ContentHash,
@@ -1044,6 +1045,34 @@ namespace MDriveSync.Core
             list.AddRange(fs);
 
             return list;
+        }
+
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件详情
+        /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        public async Task<FilePathDetailResult> GetFileDetail(string fileId)
+        {
+            var info = await AliyunDriveGetDetail<FilePathDetailResult>(fileId);
+            if (info.IsFolder)
+            {
+                var f = _driveFolders.Where(c => c.Value.FileId == fileId).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(f.Key))
+                {
+                    info.Key = f.Key;
+                }
+            }
+            else
+            {
+                var f = _driveFiles.Where(c => c.Value.FileId == fileId).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(f.Key))
+                {
+                    info.Key = f.Key;
+                }
+            }
+            return info;
         }
 
         #region 私有方法
@@ -2601,7 +2630,7 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="fileId"></param>
         /// <returns></returns>
-        public async Task<AliyunDriveFileItem> AliyunDriveGetDetail(string fileId)
+        public async Task<T> AliyunDriveGetDetail<T>(string fileId) where T : AliyunDriveFileItem
         {
             // 获取详情 url
             var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
@@ -2613,7 +2642,7 @@ namespace MDriveSync.Core
                 file_id = fileId
             };
             request.AddBody(body);
-            var response = await AliyunDriveExecuteWithRetry<AliyunDriveFileItem>(request);
+            var response = await AliyunDriveExecuteWithRetry<T>(request);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 return response.Data;

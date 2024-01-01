@@ -1,5 +1,7 @@
 ﻿using MDriveSync.Core;
+using MDriveSync.Core.ViewModels;
 using Microsoft.AspNetCore.Mvc;
+using System.Net.Http.Headers;
 
 namespace MDriveSync.Client.API.Controllers
 {
@@ -67,14 +69,42 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="fileId"></param>
         /// <returns></returns>
         [HttpGet("file/{jobId}/{fileId}")]
-        public async Task<AliyunDriveFileItem> GetDetail(string jobId, string fileId)
+        public async Task<FilePathDetailResult> GetDetail(string jobId, string fileId)
         {
             var jobs = _timedHostedService.GetJobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
-                return await job.AliyunDriveGetDetail(fileId);
+                return await job.GetFileDetail(fileId);
             }
             return null;
+        }
+
+        /// <summary>
+        /// 文件下载
+        /// </summary>
+        /// <param name="fileUrl"></param>
+        /// <returns></returns>
+        [HttpGet("download")]
+        public async Task<IActionResult> DownloadFile([FromQuery] string url, [FromQuery] string name)
+        {
+            using (var httpClient = new HttpClient())
+            {
+                var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return BadRequest("无法下载文件");
+                }
+
+                var stream = await response.Content.ReadAsStreamAsync();
+                var contentDisposition = new ContentDispositionHeaderValue("attachment")
+                {
+                    FileName = name
+                };
+
+                Response.Headers.Append("Content-Disposition", contentDisposition.ToString());
+                return File(stream, "application/octet-stream");
+            }
         }
 
         // POST api/<JobController>

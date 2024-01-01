@@ -81,9 +81,11 @@ namespace MDriveSync.Core
             {
                 _logger.LogInformation("开始例行检查");
 
-                foreach (var ad in _clientOptions.CurrentValue.AliyunDrives)
+                var ds = _clientOptions.CurrentValue.AliyunDrives.ToList();
+                foreach (var ad in ds)
                 {
-                    foreach (var cf in ad.Jobs)
+                    var jobs = ad.Jobs.ToList();
+                    foreach (var cf in jobs)
                     {
                         if (!_jobs.TryGetValue(cf.Id, out var job) || job == null)
                         {
