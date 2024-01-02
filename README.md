@@ -73,6 +73,7 @@ docker pull trueaiorg/m-drive-sync-client
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
  -v /data:/data:ro \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 
 # 调试日志
@@ -92,6 +93,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
  -v /home/mdrive/logs:/app/logs \
  -v /data:/data:ro \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 ```
 
