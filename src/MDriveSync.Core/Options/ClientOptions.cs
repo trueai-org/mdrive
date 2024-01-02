@@ -82,8 +82,16 @@ namespace MDriveSync.Core
         public void Save()
         {
             // 读取 JSON 文件
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonSerializer.Deserialize<ClientSettings>(jsonString);
+            var jsonString = string.Empty;
+            if (File.Exists(ClientSettings.ClientSettingsPath))
+            {
+                jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            }
+
+            var aliyunDriveConfig = string.IsNullOrWhiteSpace(jsonString) ? null
+                : JsonSerializer.Deserialize<ClientSettings>(jsonString);
+            aliyunDriveConfig ??= new ClientSettings();
+            aliyunDriveConfig.Client ??= new ClientOptions();
 
             // 移除重新添加
             var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
