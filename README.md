@@ -174,6 +174,16 @@ docker run --name mdrive -d --restart=always \
 
 ```
 
+```json
+# 管理后台账号密码
+# 可以通过配置，直接修改管理后台账号密码。在 docker 启动时，也可以通过环境变量设置。
+{
+  "BasicAuth": {
+    "User": "admin",
+    "Password": "123456"
+  }
+}
+```
 
 > `Schedules` 作业计划任务示例
 

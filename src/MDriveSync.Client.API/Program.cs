@@ -114,8 +114,8 @@ namespace MDriveSync.Client.API
 
                 // 添加基础认证
                 // 从环境变量获取配置，如果 appsettings.json 中的配置为空
-                var userFromConfig = builder.Configuration["BaseAuth:User"];
-                var passwordFromConfig = builder.Configuration["BaseAuth:Password"];
+                var userFromConfig = builder.Configuration["BasicAuth:User"];
+                var passwordFromConfig = builder.Configuration["BasicAuth:Password"];
                 var user = string.IsNullOrEmpty(userFromConfig) ?
                                Environment.GetEnvironmentVariable("BASIC_AUTH_USER") : userFromConfig;
                 var password = string.IsNullOrEmpty(passwordFromConfig) ?
