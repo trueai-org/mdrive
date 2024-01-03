@@ -1047,7 +1047,6 @@ namespace MDriveSync.Core
             return list;
         }
 
-
         /// <summary>
         /// 阿里云盘 - 获取文件详情
         /// </summary>
@@ -1073,6 +1072,106 @@ namespace MDriveSync.Core
                 }
             }
             return info;
+        }
+
+        /// <summary>
+        /// 更新作业配置（只有空闲、错误、取消、禁用、完成状态才可以更新）
+        /// </summary>
+        /// <param name="cfg"></param>
+        public void JobUpdate(JobConfig cfg)
+        {
+            if (cfg == null)
+            {
+                throw new LogicException("参数错误，请填写必填选项，且符合规范");
+            }
+
+            var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
+            if (!allowJobStates.Contains(State))
+            {
+                throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，不能修改作业");
+            }
+
+            if (cfg.Id != _jobConfig.Id)
+            {
+                throw new LogicException("作业标识错误");
+            }
+
+            // 清除表达式所有作业
+            _schedulers.Clear();
+
+            _jobConfig.Filters = cfg.Filters;
+            _jobConfig.Name = cfg.Name;
+            _jobConfig.Description = cfg.Description;
+            _jobConfig.CheckLevel = cfg.CheckLevel;
+            _jobConfig.CheckAlgorithm = cfg.CheckAlgorithm;
+            _jobConfig.Sources = cfg.Sources;
+            _jobConfig.DefaultDrive = cfg.DefaultDrive;
+            _jobConfig.DownloadThread = cfg.DownloadThread;
+            _jobConfig.UploadThread = cfg.UploadThread;
+            _jobConfig.Target = cfg.Target;
+            _jobConfig.Schedules = cfg.Schedules;
+            _jobConfig.FileWatcher = cfg.FileWatcher;
+            _jobConfig.IsRecycleBin = cfg.IsRecycleBin;
+            _jobConfig.IsTemporary = cfg.IsTemporary;
+            _jobConfig.Order = cfg.Order;
+            _jobConfig.RapidUpload = cfg.RapidUpload;
+            _jobConfig.Mode = cfg.Mode;
+            _jobConfig.Restore = cfg.Restore;
+
+            _driveConfig.SaveJob(_jobConfig);
+        }
+
+        /// <summary>
+        /// 作业状态修改
+        /// </summary>
+        /// <param name="state"></param>
+        public void JobStateChange(JobState state)
+        {
+            // TODO
+
+            if (state == JobState.Cancelled)
+            {
+                // 取消作业
+                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
+                if (!allowJobStates.Contains(State))
+                {
+                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，无法取消作业");
+                }
+
+            }
+            else if (state == JobState.Paused)
+            {
+                // 暂停作业
+                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
+                if (!allowJobStates.Contains(State))
+                {
+                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，无法暂停作业");
+                }
+
+            }
+            else if (state == JobState.Disabled)
+            {
+                // 禁用作业
+                var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
+                if (!allowJobStates.Contains(State))
+                {
+                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，不能禁用作业");
+                }
+            }
+            else if (state == JobState.Deleted)
+            {
+                // 删除作业
+                var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
+                if (!allowJobStates.Contains(State))
+                {
+                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，不能删除作业");
+                }
+
+            }
+            else
+            {
+                throw new LogicException("操作不支持");
+            }
         }
 
         #region 私有方法
