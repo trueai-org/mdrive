@@ -5,6 +5,11 @@
     /// </summary>
     public class JobConfig
     {
+        public JobConfig GetClone()
+        {
+            return (JobConfig)this.MemberwiseClone();
+        }
+
         /// <summary>
         /// 任务 ID
         /// </summary>

@@ -93,7 +93,7 @@ namespace MDriveSync.Core
                             _jobs[cf.Id] = job;
                         }
 
-                        if (job.State != JobState.Disabled)
+                        if (job.CurrentState != JobState.Disabled)
                         {
                             await job.Maintenance();
                         }
@@ -152,13 +152,16 @@ namespace MDriveSync.Core
             foreach (var kvp in ds)
             {
                 var js = kvp.Jobs.ToList();
-                foreach (var j in js)
+                js.ForEach(j =>
                 {
                     if (jobs.TryGetValue(j.Id, out var job))
                     {
-                        j.State = job.State;
+                        //j = job.CurrrentJob.GetClone();
+
+                        j.State = job.CurrentState;
                     }
-                }
+                });
+                kvp.Jobs = js;
             }
 
             return ds;

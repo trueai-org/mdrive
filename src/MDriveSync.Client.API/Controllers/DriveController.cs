@@ -79,6 +79,38 @@ namespace MDriveSync.Client.API.Controllers
             return null;
         }
 
+        /// <summary>
+        /// 更新作业配置（只有空闲、错误、取消、禁用、完成状态才可以更新）
+        /// </summary>
+        /// <param name="cfg"></param>
+        [HttpPut("job")]
+        public Result JobUpdate([FromBody] JobConfig cfg)
+        {
+            var jobs = _timedHostedService.GetJobs();
+            if (jobs.TryGetValue(cfg.Id, out var job) && job != null)
+            {
+                job.JobUpdate(cfg);
+            }
+            return Result.Ok();
+        }
+
+        /// <summary>
+        /// 作业状态修改
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="state"></param>
+        /// <returns></returns>
+        [HttpPut("job/{jobId}/{state}")]
+        public Result JobStateChange(string jobId, JobState state)
+        {
+            var jobs = _timedHostedService.GetJobs();
+            if (jobs.TryGetValue(jobId, out var job) && job != null)
+            {
+                job.JobStateChange(state);
+            }
+            return Result.Ok();
+        }
+
         ///// <summary>
         ///// 文件下载
         ///// </summary>
@@ -188,12 +220,6 @@ namespace MDriveSync.Client.API.Controllers
 
         //    return new FileStreamResult(stream, "application/octet-stream");
         //}
-
-        // POST api/<JobController>
-        [HttpPost]
-        public void Post([FromBody] string value)
-        {
-        }
 
         // PUT api/<JobController>/5
         [HttpPut("{id}")]

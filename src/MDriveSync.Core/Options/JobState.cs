@@ -17,7 +17,7 @@ namespace MDriveSync.Core
         /// 初始化中。
         /// 表示作业正在进行初始化操作。
         /// </summary>
-        [Description("初始化中")]
+        [Description("初始化")]
         Initializing = 1,
 
         /// <summary>

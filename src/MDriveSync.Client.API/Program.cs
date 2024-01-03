@@ -19,10 +19,10 @@ namespace MDriveSync.Client.API
             // 添加配置文件
             var configuration = builder.Configuration
                 .AddJsonFile($"appsettings.json", optional: true, reloadOnChange: true)
-                // 优先加载默认的
-                .AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true)
-                // 在这里环境变量中的覆盖默认的
-                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
+                // 环境变量中的
+                .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
+                // 加载默认的
+                .AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true);
 
             //// 添加自定义配置文件
             //builder.Configuration.AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true);

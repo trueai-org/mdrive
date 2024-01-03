@@ -48,7 +48,7 @@ namespace MDriveSync.WPF
                 {
                     if (jobs.TryGetValue(dj.Id, out var jb) && jb != null)
                     {
-                        taskList.Add(new Task(dj.Name, dj.Description ?? "-", 2, jb.State == JobState.Disabled ? JobStateColor.Fail : JobStateColor.Success));
+                        taskList.Add(new Task(dj.Name, dj.Description ?? "-", 2, jb.CurrentState == JobState.Disabled ? JobStateColor.Fail : JobStateColor.Success));
                     }
                 }
             }

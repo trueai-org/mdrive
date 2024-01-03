@@ -187,7 +187,8 @@ namespace MDriveSync.Core
         /// <summary>
         /// 作业状态
         /// </summary>
-        public JobState State { get; private set; }
+        public JobState CurrentState { get; private set; }
+        public JobConfig CurrrentJob => _jobConfig;
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
@@ -216,13 +217,14 @@ namespace MDriveSync.Core
             // 非禁用状态时，创建默认为 none 状态
             if (jobConfig.State != JobState.Disabled)
             {
-                State = JobState.None;
+                CurrentState = JobState.None;
             }
             else
             {
-                State = JobState.Disabled;
+                CurrentState = JobState.Disabled;
             }
         }
+
 
         /// <summary>
         /// 定期检查
@@ -240,7 +242,7 @@ namespace MDriveSync.Core
 
             try
             {
-                switch (State)
+                switch (CurrentState)
                 {
                     case JobState.None:
                         {
@@ -567,7 +569,7 @@ namespace MDriveSync.Core
 
         private void ChangeState(JobState newState)
         {
-            State = newState;
+            CurrentState = newState;
 
             // 触发状态改变事件 (如果有)
         }
@@ -628,13 +630,13 @@ namespace MDriveSync.Core
         public async Task StartSync()
         {
             // 备份中 | 校验中 跳过
-            if (State == JobState.BackingUp || State == JobState.Verifying)
+            if (CurrentState == JobState.BackingUp || CurrentState == JobState.Verifying)
             {
                 return;
             }
 
             // 如果不是处于空闲状态，则终止
-            if (State != JobState.Idle)
+            if (CurrentState != JobState.Idle)
             {
                 return;
             }
@@ -1086,9 +1088,9 @@ namespace MDriveSync.Core
             }
 
             var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
-            if (!allowJobStates.Contains(State))
+            if (!allowJobStates.Contains(CurrentState))
             {
-                throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，不能修改作业");
+                throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能修改作业");
             }
 
             if (cfg.Id != _jobConfig.Id)
@@ -1133,9 +1135,9 @@ namespace MDriveSync.Core
             {
                 // 取消作业
                 var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
-                if (!allowJobStates.Contains(State))
+                if (!allowJobStates.Contains(CurrentState))
                 {
-                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，无法取消作业");
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法取消作业");
                 }
 
             }
@@ -1143,9 +1145,9 @@ namespace MDriveSync.Core
             {
                 // 暂停作业
                 var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
-                if (!allowJobStates.Contains(State))
+                if (!allowJobStates.Contains(CurrentState))
                 {
-                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，无法暂停作业");
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法暂停作业");
                 }
 
             }
@@ -1153,20 +1155,35 @@ namespace MDriveSync.Core
             {
                 // 禁用作业
                 var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
-                if (!allowJobStates.Contains(State))
+                if (!allowJobStates.Contains(CurrentState))
                 {
-                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，不能禁用作业");
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能禁用作业");
                 }
+                CurrentState = state;
+                _jobConfig.State = state;
+                _driveConfig.SaveJob(_jobConfig);
             }
             else if (state == JobState.Deleted)
             {
                 // 删除作业
                 var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
-                if (!allowJobStates.Contains(State))
+                if (!allowJobStates.Contains(CurrentState))
                 {
-                    throw new LogicException($"当前作业处于 {State.GetDescription()} 状态，不能删除作业");
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能删除作业");
                 }
 
+            }
+            else if (state == JobState.None)
+            {
+                // 启用作业，恢复默认状态
+                var allowJobStates = new[] { JobState.Disabled };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能启用作业");
+                }
+                CurrentState = state;
+                _jobConfig.State = state;
+                _driveConfig.SaveJob(_jobConfig);
             }
             else
             {
@@ -1577,7 +1594,7 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private async Task AliyunDriveVerify()
         {
-            if (State != JobState.Verifying)
+            if (CurrentState != JobState.Verifying)
                 return;
 
             // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
