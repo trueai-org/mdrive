@@ -26,7 +26,7 @@
         public JobState State { get; set; } = JobState.Idle;
 
         /// <summary>
-        /// 作业级别
+        /// 同步模式
         /// </summary>
         public JobMode Mode { get; set; } = JobMode.Mirror;
 
