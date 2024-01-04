@@ -38,8 +38,6 @@ namespace MDriveSync.Core
             return Task.CompletedTask;
         }
 
-
-
         //private void DoWork(object state)
         //{
         //    // 加锁，以防万一重复执行
@@ -141,6 +139,31 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
+        /// 添加作业
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="cfg"></param>
+        /// <exception cref="LogicException"></exception>
+        public void AddJob(string driveId, JobConfig cfg)
+        {
+            var drive = _clientOptions.CurrentValue.AliyunDrives.Where(c => c.Id == driveId).FirstOrDefault();
+            if (drive == null)
+            {
+                throw new LogicException("云盘不存在");
+            }
+
+            // 默认禁用状态
+            cfg.State = JobState.Disabled;
+            cfg.Id = Guid.NewGuid().ToString("N");
+
+            drive.Jobs ??= new List<JobConfig>();
+            drive.Jobs.Add(cfg);
+
+            // 持久化
+            drive.Save();
+        }
+
+        /// <summary>
         /// 获取所有云盘
         /// </summary>
         /// <returns></returns>
@@ -157,7 +180,6 @@ namespace MDriveSync.Core
                     if (jobs.TryGetValue(j.Id, out var job))
                     {
                         //j = job.CurrrentJob.GetClone();
-
                         j.State = job.CurrentState;
                     }
                 });

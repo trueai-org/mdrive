@@ -95,6 +95,18 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 作业添加
+        /// </summary>
+        /// <param name="cfg"></param>
+        /// <returns></returns>
+        [HttpPost("job/{driveId}")]
+        public Result JobAdd(string driveId, [FromBody] JobConfig cfg)
+        {
+            _timedHostedService.AddJob(driveId, cfg);
+            return Result.Ok();
+        }
+
+        /// <summary>
         /// 作业状态修改
         /// </summary>
         /// <param name="jobId"></param>
@@ -220,17 +232,5 @@ namespace MDriveSync.Client.API.Controllers
 
         //    return new FileStreamResult(stream, "application/octet-stream");
         //}
-
-        // PUT api/<JobController>/5
-        [HttpPut("{id}")]
-        public void Put(int id, [FromBody] string value)
-        {
-        }
-
-        // DELETE api/<JobController>/5
-        [HttpDelete("{id}")]
-        public void Delete(int id)
-        {
-        }
     }
 }
