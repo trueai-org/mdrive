@@ -119,7 +119,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 保存
         /// </summary>
-        public void SaveJob(JobConfig jobConfig)
+        public void SaveJob(JobConfig jobConfig, bool isRemove = false)
         {
             // 读取 JSON 文件
             var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
@@ -142,11 +142,18 @@ namespace MDriveSync.Core
             if (currentJob >= 0)
             {
                 Jobs.RemoveAt(currentJob);
-                Jobs.Insert(currentJob, jobConfig);
+
+                if (!isRemove && jobConfig != null)
+                {
+                    Jobs.Insert(currentJob, jobConfig);
+                }
             }
             else
             {
-                Jobs.Add(jobConfig);
+                if (!isRemove && jobConfig != null)
+                {
+                    Jobs.Add(jobConfig);
+                }
             }
 
             // 序列化回 JSON

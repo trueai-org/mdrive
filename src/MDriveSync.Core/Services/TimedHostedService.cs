@@ -38,34 +38,6 @@ namespace MDriveSync.Core
             return Task.CompletedTask;
         }
 
-        //private void DoWork(object state)
-        //{
-        //    // 加锁，以防万一重复执行
-        //    lock (_lock)
-        //    {
-        //        // 重新设定定时器，防止在当前工作完成前触发下一次执行
-        //        _timer?.Change(Timeout.Infinite, 0);
-
-        //        try
-        //        {
-        //            _logger.LogInformation("刷新图片、视频大小服务开始工作.");
-        //            using (var scope = _serviceScopeFactory.CreateScope())
-        //            {
-        //                var mediaService = scope.ServiceProvider.GetRequiredService<IMediaService>();
-        //                await mediaService.RefreshMetaJob();
-        //            }
-        //            // 执行刷新图片、视频大小服务
-        //            var task = Task.Run(async () => await _mediaService.RefreshMetaJob());
-        //            task.Wait();
-        //        }
-        //        finally
-        //        {
-        //            // 任务完成后重新启动定时器
-        //            _timer?.Change(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
-        //        }
-        //    }
-        //}
-
         private async void DoWork(object state)
         {
             if (_semaphoreSlim.CurrentCount == 0)
@@ -161,6 +133,22 @@ namespace MDriveSync.Core
 
             // 持久化
             drive.Save();
+
+            // 添加到队列
+            if (!_jobs.TryGetValue(cfg.Id, out var job) || job == null)
+            {
+                job = new Job(drive, cfg, _logger);
+                _jobs[cfg.Id] = job;
+            }
+        }
+
+        /// <summary>
+        /// 删除作业
+        /// </summary>
+        /// <param name="jobId"></param>
+        public void RemoveJob(string jobId)
+        {
+            _jobs.TryRemove(jobId, out _);
         }
 
         /// <summary>
@@ -188,5 +176,33 @@ namespace MDriveSync.Core
 
             return ds;
         }
+
+        //private void DoWork(object state)
+        //{
+        //    // 加锁，以防万一重复执行
+        //    lock (_lock)
+        //    {
+        //        // 重新设定定时器，防止在当前工作完成前触发下一次执行
+        //        _timer?.Change(Timeout.Infinite, 0);
+
+        //        try
+        //        {
+        //            _logger.LogInformation("刷新图片、视频大小服务开始工作.");
+        //            using (var scope = _serviceScopeFactory.CreateScope())
+        //            {
+        //                var mediaService = scope.ServiceProvider.GetRequiredService<IMediaService>();
+        //                await mediaService.RefreshMetaJob();
+        //            }
+        //            // 执行刷新图片、视频大小服务
+        //            var task = Task.Run(async () => await _mediaService.RefreshMetaJob());
+        //            task.Wait();
+        //        }
+        //        finally
+        //        {
+        //            // 任务完成后重新启动定时器
+        //            _timer?.Change(TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        //        }
+        //    }
+        //}
     }
 }

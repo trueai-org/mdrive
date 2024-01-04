@@ -1171,7 +1171,7 @@ namespace MDriveSync.Core
                 {
                     throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能删除作业");
                 }
-
+                _driveConfig.SaveJob(_jobConfig, true);
             }
             else if (state == JobState.None)
             {

@@ -119,6 +119,12 @@ namespace MDriveSync.Client.API.Controllers
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
                 job.JobStateChange(state);
+
+                // 删除作业，清除服务
+                if (state == JobState.Deleted)
+                {
+                    _timedHostedService.RemoveJob(jobId);
+                }
             }
             return Result.Ok();
         }
