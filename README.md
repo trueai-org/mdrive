@@ -71,7 +71,7 @@ docker pull trueaiorg/m-drive-sync-client
 
 # 快速启动示例，并挂载 /data 目录到容器 /data 只读模式，并映射端口 8080
 docker run --name mdrive -d --restart=always \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
@@ -85,12 +85,12 @@ docker exec -it mdrive /bin/bash
 # 访问端口
 http://{ip}:8080
 
-# 跟多示例
+# 更多示例
 # 配置日志、映射云盘配置、映射程序配置、挂载 /data
 mkdir /home/mdrive/logs
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -v /home/mdrive/logs:/app/logs \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \

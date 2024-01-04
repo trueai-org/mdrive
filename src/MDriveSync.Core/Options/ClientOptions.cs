@@ -79,7 +79,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 保存
         /// </summary>
-        public void Save()
+        public void Save(bool isRemove = false)
         {
             // 读取 JSON 文件
             var jsonString = string.Empty;
@@ -98,11 +98,18 @@ namespace MDriveSync.Core
             if (current >= 0)
             {
                 aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
-                aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
+
+                if (!isRemove)
+                {
+                    aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
+                }
             }
             else
             {
-                aliyunDriveConfig.Client.AliyunDrives.Add(this);
+                if (!isRemove)
+                {
+                    aliyunDriveConfig.Client.AliyunDrives.Add(this);
+                }
             }
 
             // 序列化回 JSON

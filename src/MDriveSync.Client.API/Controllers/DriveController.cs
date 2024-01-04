@@ -80,6 +80,43 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 云盘添加
+        /// </summary>
+        /// <param name="cfg"></param>
+        /// <returns></returns>
+        [HttpPost()]
+        public Result DriveAdd([FromBody] RefreshTokenRequest cfg)
+        {
+            _timedHostedService.DriveAdd(cfg);
+            return Result.Ok();
+        }
+
+        /// <summary>
+        /// 云盘编辑
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="cfg"></param>
+        /// <returns></returns>
+        [HttpPut("{driveId}")]
+        public Result DriveEdit(string driveId, [FromBody] RefreshTokenRequest cfg)
+        {
+            _timedHostedService.DriveEdit(driveId, cfg);
+            return Result.Ok();
+        }
+
+        /// <summary>
+        /// 云盘删除
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <returns></returns>
+        [HttpDelete("{driveId}")]
+        public Result DriveDelete(string driveId)
+        {
+            _timedHostedService.DriveDelete(driveId);
+            return Result.Ok();
+        }
+
+        /// <summary>
         /// 更新作业配置（只有空闲、错误、取消、禁用、完成状态才可以更新）
         /// </summary>
         /// <param name="cfg"></param>
@@ -128,34 +165,6 @@ namespace MDriveSync.Client.API.Controllers
             }
             return Result.Ok();
         }
-
-        ///// <summary>
-        ///// 文件下载
-        ///// </summary>
-        ///// <param name="fileUrl"></param>
-        ///// <returns></returns>
-        //[HttpGet("download")]
-        //public async Task<IActionResult> DownloadFile([FromQuery] string url, [FromQuery] string name)
-        //{
-        //    using (var httpClient = new HttpClient())
-        //    {
-        //        var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
-
-        //        if (!response.IsSuccessStatusCode)
-        //        {
-        //            return BadRequest("无法下载文件");
-        //        }
-
-        //        var stream = await response.Content.ReadAsStreamAsync();
-        //        var contentDisposition = new ContentDispositionHeaderValue("attachment")
-        //        {
-        //            FileName = name
-        //        };
-
-        //        Response.Headers.Append("Content-Disposition", contentDisposition.ToString());
-        //        return File(stream, "application/octet-stream");
-        //    }
-        //}
 
         /// <summary>
         /// 文件下载
@@ -211,6 +220,34 @@ namespace MDriveSync.Client.API.Controllers
             // 返回 FileStreamResult，使用原始流
             return new FileStreamResult(stream, mimeType);
         }
+
+        ///// <summary>
+        ///// 文件下载
+        ///// </summary>
+        ///// <param name="fileUrl"></param>
+        ///// <returns></returns>
+        //[HttpGet("download")]
+        //public async Task<IActionResult> DownloadFile([FromQuery] string url, [FromQuery] string name)
+        //{
+        //    using (var httpClient = new HttpClient())
+        //    {
+        //        var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+
+        //        if (!response.IsSuccessStatusCode)
+        //        {
+        //            return BadRequest("无法下载文件");
+        //        }
+
+        //        var stream = await response.Content.ReadAsStreamAsync();
+        //        var contentDisposition = new ContentDispositionHeaderValue("attachment")
+        //        {
+        //            FileName = name
+        //        };
+
+        //        Response.Headers.Append("Content-Disposition", contentDisposition.ToString());
+        //        return File(stream, "application/octet-stream");
+        //    }
+        //}
 
         ///// <summary>
         ///// 使用分块传输和流式处理来优化大文件下载

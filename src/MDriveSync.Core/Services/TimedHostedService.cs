@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Hosting;
+﻿using MDriveSync.Core.ViewModels;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
@@ -179,22 +180,65 @@ namespace MDriveSync.Core
         /// <summary>
         /// 添加云盘
         /// </summary>
-        public void DriveAdd()
+        public void DriveAdd(RefreshTokenRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request?.RefreshToken))
+            {
+                throw new LogicParamException();
+            }
+
+            var drive = new AliyunDriveConfig()
+            {
+                Id = Guid.NewGuid().ToString("N"),
+                AccessToken = request.RefreshToken,
+                Jobs = []
+            };
+
+            // 保存配置
+            drive.Save();
         }
 
         /// <summary>
         /// 编辑云盘
         /// </summary>
-        public void DriveEdit()
+        public void DriveEdit(string driveId, RefreshTokenRequest request)
         {
+            if (string.IsNullOrWhiteSpace(request?.RefreshToken))
+            {
+                throw new LogicParamException();
+            }
+
+            var drive = _clientOptions.CurrentValue.AliyunDrives.FirstOrDefault(c => c.Id == driveId);
+            if (drive == null)
+            {
+                throw new LogicException("云盘不存在");
+            }
+
+            drive.AccessToken = request.RefreshToken;
+
+            // 保存配置
+            drive.Save();
         }
 
         /// <summary>
         /// 删除云盘
         /// </summary>
-        public void DriveDelete()
+        public void DriveDelete(string driveId)
         {
+            var drive = _clientOptions.CurrentValue.AliyunDrives.FirstOrDefault(c => c.Id == driveId);
+            if (drive == null)
+            {
+                throw new LogicException("云盘不存在");
+            }
+
+            // 清除作业
+            foreach (var j in drive.Jobs)
+            {
+                JobDelete(j.Id);
+            }
+
+            // 保存配置
+            drive.Save(true);
         }
 
         //private void DoWork(object state)
