@@ -1,6 +1,8 @@
 using MDriveSync.Core;
 using MDriveSync.Core.BaseAuth;
 using MDriveSync.Core.Dashboard;
+using MDriveSync.Core.Filters;
+using Microsoft.AspNetCore.Mvc;
 using Quartz.Logging;
 using Serilog;
 using Serilog.Debugging;
@@ -70,7 +72,19 @@ namespace MDriveSync.Client.API
                 // 作业客户端配置
                 builder.Services.Configure<ClientOptions>(builder.Configuration.GetSection("Client"));
 
-                builder.Services.AddControllers();
+                // API 视图模型验证 400 错误处理
+                builder.Services.Configure<ApiBehaviorOptions>(options =>
+                {
+                    options.SuppressModelStateInvalidFilter = true;
+                });
+
+                // API 异常过滤器
+                // API 方法/模型过滤器
+                builder.Services.AddControllers(options =>
+                {
+                    options.Filters.Add<CustomLogicExceptionFilterAttribute>();
+                    options.Filters.Add<CustomActionFilterAttribute>();
+                });
 
                 // 后台服务
                 //builder.Services.AddHostedService<TimedHostedService>();

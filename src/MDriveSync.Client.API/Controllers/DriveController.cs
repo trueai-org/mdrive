@@ -20,6 +20,16 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 常用的表达式
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet("crons")]
+        public List<string> GetExpressions()
+        {
+            return QuartzCronScheduler.CommonExpressions.Keys.ToList();
+        }
+
+        /// <summary>
         /// 获取云盘配置
         /// </summary>
         /// <returns></returns>

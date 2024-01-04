@@ -348,15 +348,23 @@ namespace MDriveSync.Core
             {
                 foreach (var cron in _jobConfig.Schedules)
                 {
-                    if (!_schedulers.TryGetValue(cron, out var sch) || sch == null)
+                    var exp = cron;
+
+                    // 常用表达式
+                    if (QuartzCronScheduler.CommonExpressions.ContainsKey(exp))
+                    {
+                        exp = QuartzCronScheduler.CommonExpressions[exp];
+                    }
+
+                    if (!_schedulers.TryGetValue(exp, out var sch) || sch == null)
                     {
                         // 创建备份计划
-                        var scheduler = new QuartzCronScheduler(cron, async () =>
+                        var scheduler = new QuartzCronScheduler(exp, async () =>
                         {
                             await StartSync();
                         });
                         scheduler.Start();
-                        _schedulers[cron] = scheduler;
+                        _schedulers[exp] = scheduler;
 
                         // 如果立即执行的
                         if (_jobConfig.IsTemporary)

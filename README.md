@@ -268,8 +268,10 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
-- Windows 客户端 UI/WPF 版本
 - WebUI 版本
+- 队列执行
+- 分块上传、分块下载、超大文件支持
+- Windows 客户端 UI/WPF 版本
 - MacUI 版本
 - 移动端（IOS、Andorid）版本
 - Kopia 模式、插件开发
@@ -280,7 +282,6 @@ docker run --name mdrive -d --restart=always \
 - 上传增加文件的本地时间
 - WebDAV、磁盘挂载
 - 多版本、多备份、版本还原
-- 分块上传、分块下载、超大文件支持
 
 ## 发布
 

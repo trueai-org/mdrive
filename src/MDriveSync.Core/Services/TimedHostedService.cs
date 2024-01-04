@@ -190,7 +190,7 @@ namespace MDriveSync.Core
             var drive = new AliyunDriveConfig()
             {
                 Id = Guid.NewGuid().ToString("N"),
-                AccessToken = request.RefreshToken,
+                RefreshToken = request.RefreshToken,
                 Jobs = []
             };
 
@@ -214,7 +214,7 @@ namespace MDriveSync.Core
                 throw new LogicException("云盘不存在");
             }
 
-            drive.AccessToken = request.RefreshToken;
+            drive.RefreshToken = request.RefreshToken;
 
             // 保存配置
             drive.Save();
