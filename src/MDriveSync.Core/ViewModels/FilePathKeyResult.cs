@@ -3,7 +3,7 @@
     /// <summary>
     /// 云盘文件信息和本地文件信息
     /// </summary>
-    public class FilePathDetailResult : AliyunDriveFileItem
+    public class FilePathKeyResult : AliyunDriveFileItem
     {
         /// <summary>
         /// 相对路径

@@ -12,20 +12,19 @@ namespace MDriveSync.Core
     public class TimedHostedService : BackgroundService, IDisposable
     {
         //private readonly IServiceScopeFactory _serviceScopeFactory;
-        private readonly ILogger<TimedHostedService> _logger;
 
-        private readonly SemaphoreSlim _semaphoreSlim = new SemaphoreSlim(1, 1);
+        private readonly ILogger _logger;
         private readonly IOptionsMonitor<ClientOptions> _clientOptions;
 
+        private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
+        private readonly ConcurrentDictionary<string, Job> _jobs = new();
+
         private Timer _timer;
-        private readonly ConcurrentDictionary<string, Job> _jobs = new ConcurrentDictionary<string, Job>();
 
         public TimedHostedService(
-            //IServiceScopeFactory serviceScopeFactory,
             ILogger<TimedHostedService> logger,
             IOptionsMonitor<ClientOptions> clientOptions)
         {
-            //_serviceScopeFactory = serviceScopeFactory;
             _logger = logger;
             _clientOptions = clientOptions;
         }
@@ -36,6 +35,23 @@ namespace MDriveSync.Core
 
             _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
             return Task.CompletedTask;
+        }
+
+        public override async Task StopAsync(CancellationToken stoppingToken)
+        {
+            _logger.LogInformation("例行检查服务已停止");
+
+            _timer?.Change(Timeout.Infinite, 0);
+            await _semaphoreSlim.WaitAsync();
+            _semaphoreSlim.Release();
+            await base.StopAsync(stoppingToken);
+        }
+
+        public override void Dispose()
+        {
+            _timer?.Dispose();
+            _semaphoreSlim.Dispose();
+            base.Dispose();
         }
 
         private async void DoWork(object state)
@@ -84,28 +100,11 @@ namespace MDriveSync.Core
             }
         }
 
-        public override async Task StopAsync(CancellationToken stoppingToken)
-        {
-            _logger.LogInformation("例行检查服务已停止");
-
-            _timer?.Change(Timeout.Infinite, 0);
-            await _semaphoreSlim.WaitAsync();
-            _semaphoreSlim.Release();
-            await base.StopAsync(stoppingToken);
-        }
-
-        public override void Dispose()
-        {
-            _timer?.Dispose();
-            _semaphoreSlim.Dispose();
-            base.Dispose();
-        }
-
         /// <summary>
-        /// 获取作业
+        /// 作业列表
         /// </summary>
         /// <returns></returns>
-        public ConcurrentDictionary<string, Job> GetJobs()
+        public ConcurrentDictionary<string, Job> Jobs()
         {
             return _jobs;
         }
@@ -116,7 +115,7 @@ namespace MDriveSync.Core
         /// <param name="driveId"></param>
         /// <param name="cfg"></param>
         /// <exception cref="LogicException"></exception>
-        public void AddJob(string driveId, JobConfig cfg)
+        public void JobDelete(string driveId, JobConfig cfg)
         {
             var drive = _clientOptions.CurrentValue.AliyunDrives.Where(c => c.Id == driveId).FirstOrDefault();
             if (drive == null)
@@ -146,18 +145,18 @@ namespace MDriveSync.Core
         /// 删除作业
         /// </summary>
         /// <param name="jobId"></param>
-        public void RemoveJob(string jobId)
+        public void JobDelete(string jobId)
         {
             _jobs.TryRemove(jobId, out _);
         }
 
         /// <summary>
-        /// 获取所有云盘
+        /// 云盘列表
         /// </summary>
         /// <returns></returns>
-        public List<AliyunDriveConfig> GetDrives()
+        public List<AliyunDriveConfig> Drives()
         {
-            var jobs = GetJobs();
+            var jobs = Jobs();
 
             var ds = _clientOptions.CurrentValue.AliyunDrives.ToList();
             foreach (var kvp in ds)
@@ -175,6 +174,27 @@ namespace MDriveSync.Core
             }
 
             return ds;
+        }
+
+        /// <summary>
+        /// 添加云盘
+        /// </summary>
+        public void DriveAdd()
+        {
+        }
+
+        /// <summary>
+        /// 编辑云盘
+        /// </summary>
+        public void DriveEdit()
+        {
+        }
+
+        /// <summary>
+        /// 删除云盘
+        /// </summary>
+        public void DriveDelete()
+        {
         }
 
         //private void DoWork(object state)

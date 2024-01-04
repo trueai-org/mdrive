@@ -37,8 +37,8 @@ namespace MDriveSync.WPF
             var taskList = new List<Task>();
 
 
-            var jobs = Service.GetJobs();
-            var drives = Service.GetDrives();
+            var jobs = Service.Jobs();
+            var drives = Service.Drives();
 
             foreach (var d in drives)
             {

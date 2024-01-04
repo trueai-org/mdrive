@@ -1054,9 +1054,9 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="fileId"></param>
         /// <returns></returns>
-        public async Task<FilePathDetailResult> GetFileDetail(string fileId)
+        public async Task<FilePathKeyResult> GetFileDetail(string fileId)
         {
-            var info = await AliyunDriveGetDetail<FilePathDetailResult>(fileId);
+            var info = await AliyunDriveGetDetail<FilePathKeyResult>(fileId);
             if (info.IsFolder)
             {
                 var f = _driveFolders.Where(c => c.Value.FileId == fileId).FirstOrDefault();

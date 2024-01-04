@@ -26,7 +26,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpGet("drives")]
         public List<AliyunDriveConfig> GetDrives()
         {
-            return _timedHostedService.GetDrives();
+            return _timedHostedService.Drives();
         }
 
         /// <summary>
@@ -37,7 +37,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpGet("files/{jobId}")]
         public List<AliyunDriveFileItem> GetDrivleFiles(string jobId, [FromQuery] string parentId = "")
         {
-            var jobs = _timedHostedService.GetJobs();
+            var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
                 return job.GetDrivleFiles(parentId);
@@ -54,7 +54,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpGet("download/{jobId}/{fileId}")]
         public async Task<AliyunDriveOpenFileGetDownloadUrlResponse> GetDownloadUrl(string jobId, string fileId)
         {
-            var jobs = _timedHostedService.GetJobs();
+            var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
                 return await job.AliyunDriveGetDownloadUrl(fileId);
@@ -69,9 +69,9 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="fileId"></param>
         /// <returns></returns>
         [HttpGet("file/{jobId}/{fileId}")]
-        public async Task<FilePathDetailResult> GetDetail(string jobId, string fileId)
+        public async Task<FilePathKeyResult> GetDetail(string jobId, string fileId)
         {
-            var jobs = _timedHostedService.GetJobs();
+            var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
                 return await job.GetFileDetail(fileId);
@@ -86,7 +86,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPut("job")]
         public Result JobUpdate([FromBody] JobConfig cfg)
         {
-            var jobs = _timedHostedService.GetJobs();
+            var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(cfg.Id, out var job) && job != null)
             {
                 job.JobUpdate(cfg);
@@ -102,7 +102,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("job/{driveId}")]
         public Result JobAdd(string driveId, [FromBody] JobConfig cfg)
         {
-            _timedHostedService.AddJob(driveId, cfg);
+            _timedHostedService.JobDelete(driveId, cfg);
             return Result.Ok();
         }
 
@@ -115,7 +115,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPut("job/{jobId}/{state}")]
         public Result JobStateChange(string jobId, JobState state)
         {
-            var jobs = _timedHostedService.GetJobs();
+            var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
                 job.JobStateChange(state);
@@ -123,7 +123,7 @@ namespace MDriveSync.Client.API.Controllers
                 // 删除作业，清除服务
                 if (state == JobState.Deleted)
                 {
-                    _timedHostedService.RemoveJob(jobId);
+                    _timedHostedService.JobDelete(jobId);
                 }
             }
             return Result.Ok();
