@@ -10,7 +10,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Libraries\SeleniumService\SeleniumService.csproj" />
-    <ProjectReference Include="..\src\MDriveSync.Core\MDriveSync.Core.csproj" />
+    <ProjectReference Include="..\MDriveSync.Core\MDriveSync.Core.csproj" />
   </ItemGroup>
 
   <ItemGroup>
