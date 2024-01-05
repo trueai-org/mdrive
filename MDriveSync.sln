@@ -19,7 +19,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{0FF6CD64-0
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Core", "src\MDriveSync.Core\MDriveSync.Core.csproj", "{279736DD-7A47-4F6D-8795-A8ED3278DD33}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Libraries", "Libraries", "{687C2212-CB3A-4267-9F20-C4ACA34B9570}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "libraries", "libraries", "{687C2212-CB3A-4267-9F20-C4ACA34B9570}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SeleniumService", "src\Libraries\SeleniumService\SeleniumService.csproj", "{894C26A4-BD81-49A5-9D73-AA68E5BEBDD7}"
 EndProject
