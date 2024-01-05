@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.Services;
+using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -186,7 +187,8 @@ namespace MDriveSync.Core
         /// <summary>
         /// 作业状态
         /// </summary>
-        public JobState State { get; private set; }
+        public JobState CurrentState { get; private set; }
+        public JobConfig CurrrentJob => _jobConfig;
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
@@ -215,13 +217,14 @@ namespace MDriveSync.Core
             // 非禁用状态时，创建默认为 none 状态
             if (jobConfig.State != JobState.Disabled)
             {
-                State = JobState.None;
+                CurrentState = JobState.None;
             }
             else
             {
-                State = JobState.Disabled;
+                CurrentState = JobState.Disabled;
             }
         }
+
 
         /// <summary>
         /// 定期检查
@@ -239,7 +242,7 @@ namespace MDriveSync.Core
 
             try
             {
-                switch (State)
+                switch (CurrentState)
                 {
                     case JobState.None:
                         {
@@ -345,15 +348,23 @@ namespace MDriveSync.Core
             {
                 foreach (var cron in _jobConfig.Schedules)
                 {
-                    if (!_schedulers.TryGetValue(cron, out var sch) || sch == null)
+                    var exp = cron;
+
+                    // 常用表达式
+                    if (QuartzCronScheduler.CommonExpressions.ContainsKey(exp))
+                    {
+                        exp = QuartzCronScheduler.CommonExpressions[exp];
+                    }
+
+                    if (!_schedulers.TryGetValue(exp, out var sch) || sch == null)
                     {
                         // 创建备份计划
-                        var scheduler = new QuartzCronScheduler(cron, async () =>
+                        var scheduler = new QuartzCronScheduler(exp, async () =>
                         {
                             await StartSync();
                         });
                         scheduler.Start();
-                        _schedulers[cron] = scheduler;
+                        _schedulers[exp] = scheduler;
 
                         // 如果立即执行的
                         if (_jobConfig.IsTemporary)
@@ -566,7 +577,7 @@ namespace MDriveSync.Core
 
         private void ChangeState(JobState newState)
         {
-            State = newState;
+            CurrentState = newState;
 
             // 触发状态改变事件 (如果有)
         }
@@ -627,13 +638,13 @@ namespace MDriveSync.Core
         public async Task StartSync()
         {
             // 备份中 | 校验中 跳过
-            if (State == JobState.BackingUp || State == JobState.Verifying)
+            if (CurrentState == JobState.BackingUp || CurrentState == JobState.Verifying)
             {
                 return;
             }
 
             // 如果不是处于空闲状态，则终止
-            if (State != JobState.Idle)
+            if (CurrentState != JobState.Idle)
             {
                 return;
             }
@@ -695,7 +706,9 @@ namespace MDriveSync.Core
             sw.Restart();
             _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
             ChangeState(JobState.Verifying);
+
             await AliyunDriveVerify();
+
             sw.Stop();
             _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
         }
@@ -981,30 +994,14 @@ namespace MDriveSync.Core
                     }
 
                     // 获取详情 url
-                    var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
-                    request.AddHeader("Content-Type", "application/json");
-                    request.AddHeader("Authorization", $"Bearer {AccessToken}");
-                    object body = new
-                    {
-                        drive_id = _driveId,
-                        file_id = item.Value.FileId
-                    };
-                    request.AddBody(body);
-                    var response = await _apiClient.ExecuteAsync<AliyunDriveFileItem>(request);
-                    if (response.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(response.Data.Url))
-                    {
-                        await AliyunDriveDownload(response.Data.Url,
-                            item.Value.Name,
-                            item.Value.ContentHash,
-                            savePath,
-                            _localRestorePath);
-                    }
-                    else
-                    {
-                        throw response.ErrorException;
-                    }
+                    var data = await AliyunDriveGetDetail<AliyunDriveFileItem>(item.Value.FileId);
+                    await AliyunDriveDownload(data.Url,
+                                   item.Value.Name,
+                                   item.Value.ContentHash,
+                                   savePath,
+                                   _localRestorePath);
 
-                    // TODO
+                    // TODO > 100MB
                     // 如果是大文件，则通过下载链接下载文件
                 }
                 catch (Exception)
@@ -1027,6 +1024,178 @@ namespace MDriveSync.Core
             foreach (var watcher in _localWatchers)
             {
                 watcher.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// 获取云盘文件文件夹
+        /// </summary>
+        /// <param name="parentId"></param>
+        public List<AliyunDriveFileItem> GetDrivleFiles(string parentId = "")
+        {
+            if (string.IsNullOrWhiteSpace(parentId))
+            {
+                if (_driveFolders.TryGetValue(_driveSavePath, out var p))
+                {
+                    parentId = p.FileId;
+                }
+            }
+
+            var list = new List<AliyunDriveFileItem>();
+
+            // 目录下的所有文件文件夹
+            var fdirs = _driveFolders.Values.Where(c => c.ParentFileId == parentId)
+                .OrderBy(c => c.Name)
+                .ToList();
+            var fs = _driveFiles.Values.Where(c => c.ParentFileId == parentId)
+                .OrderBy(c => c.Name)
+                .ToList();
+
+            list.AddRange(fdirs);
+            list.AddRange(fs);
+
+            return list;
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件详情
+        /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        public async Task<FilePathKeyResult> GetFileDetail(string fileId)
+        {
+            var info = await AliyunDriveGetDetail<FilePathKeyResult>(fileId);
+            if (info.IsFolder)
+            {
+                var f = _driveFolders.Where(c => c.Value.FileId == fileId).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(f.Key))
+                {
+                    info.Key = f.Key;
+                }
+            }
+            else
+            {
+                var f = _driveFiles.Where(c => c.Value.FileId == fileId).FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(f.Key))
+                {
+                    info.Key = f.Key;
+                }
+            }
+            return info;
+        }
+
+        /// <summary>
+        /// 更新作业配置（只有空闲、错误、取消、禁用、完成状态才可以更新）
+        /// </summary>
+        /// <param name="cfg"></param>
+        public void JobUpdate(JobConfig cfg)
+        {
+            if (cfg == null)
+            {
+                throw new LogicException("参数错误，请填写必填选项，且符合规范");
+            }
+
+            var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
+            if (!allowJobStates.Contains(CurrentState))
+            {
+                throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能修改作业");
+            }
+
+            if (cfg.Id != _jobConfig.Id)
+            {
+                throw new LogicException("作业标识错误");
+            }
+
+            // 清除表达式所有作业
+            _schedulers.Clear();
+
+            _jobConfig.Filters = cfg.Filters;
+            _jobConfig.Name = cfg.Name;
+            _jobConfig.Description = cfg.Description;
+            _jobConfig.CheckLevel = cfg.CheckLevel;
+            _jobConfig.CheckAlgorithm = cfg.CheckAlgorithm;
+            _jobConfig.Sources = cfg.Sources;
+            _jobConfig.DefaultDrive = cfg.DefaultDrive;
+            _jobConfig.DownloadThread = cfg.DownloadThread;
+            _jobConfig.UploadThread = cfg.UploadThread;
+            _jobConfig.Target = cfg.Target;
+            _jobConfig.Schedules = cfg.Schedules;
+            _jobConfig.FileWatcher = cfg.FileWatcher;
+            _jobConfig.IsRecycleBin = cfg.IsRecycleBin;
+            _jobConfig.IsTemporary = cfg.IsTemporary;
+            _jobConfig.Order = cfg.Order;
+            _jobConfig.RapidUpload = cfg.RapidUpload;
+            _jobConfig.Mode = cfg.Mode;
+            _jobConfig.Restore = cfg.Restore;
+
+            _driveConfig.SaveJob(_jobConfig);
+        }
+
+        /// <summary>
+        /// 作业状态修改
+        /// </summary>
+        /// <param name="state"></param>
+        public void JobStateChange(JobState state)
+        {
+            // TODO
+
+            if (state == JobState.Cancelled)
+            {
+                // 取消作业
+                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法取消作业");
+                }
+
+            }
+            else if (state == JobState.Paused)
+            {
+                // 暂停作业
+                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法暂停作业");
+                }
+
+            }
+            else if (state == JobState.Disabled)
+            {
+                // 禁用作业
+                var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能禁用作业");
+                }
+                CurrentState = state;
+                _jobConfig.State = state;
+                _driveConfig.SaveJob(_jobConfig);
+            }
+            else if (state == JobState.Deleted)
+            {
+                // 删除作业
+                var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能删除作业");
+                }
+                _driveConfig.SaveJob(_jobConfig, true);
+            }
+            else if (state == JobState.None)
+            {
+                // 启用作业，恢复默认状态
+                var allowJobStates = new[] { JobState.Disabled };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能启用作业");
+                }
+                CurrentState = state;
+                _jobConfig.State = state;
+                _driveConfig.SaveJob(_jobConfig);
+            }
+            else
+            {
+                throw new LogicException("操作不支持");
             }
         }
 
@@ -1433,7 +1602,7 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private async Task AliyunDriveVerify()
         {
-            if (State != JobState.Verifying)
+            if (CurrentState != JobState.Verifying)
                 return;
 
             // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
@@ -1634,6 +1803,19 @@ namespace MDriveSync.Core
                 default:
                     break;
             }
+
+            // 计算云盘文件
+            // 计算变动的文件
+            // TODO
+            // 计算新增、更新、删除、下载的文件
+            _jobConfig.Metadata = new JobMetadata()
+            {
+                FileCount = _driveFiles.Count,
+                FolderCount = _driveFolders.Count,
+                TotalSize = _driveFiles.Values.Sum(c => c.Size ?? 0)
+            };
+
+            _driveConfig.SaveJob(_jobConfig);
 
             // 校验通过 -> 空闲
             ChangeState(JobState.Idle);
@@ -2274,7 +2456,6 @@ namespace MDriveSync.Core
                     // 等待 250ms 以遵守限流策略
                     if (sw.ElapsedMilliseconds < _listRequestInterval)
                         await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
-
                 } while (!string.IsNullOrEmpty(marker));
 
                 foreach (var item in allItems)
@@ -2566,6 +2747,62 @@ namespace MDriveSync.Core
                 return true;
             }
             return false;
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件详情
+        /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        public async Task<T> AliyunDriveGetDetail<T>(string fileId) where T : AliyunDriveFileItem
+        {
+            // 获取详情 url
+            var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            object body = new
+            {
+                drive_id = _driveId,
+                file_id = fileId
+            };
+            request.AddBody(body);
+            var response = await AliyunDriveExecuteWithRetry<T>(request);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                return response.Data;
+            }
+            else
+            {
+                throw response.ErrorException;
+            }
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件下载 URL
+        /// </summary>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        public async Task<AliyunDriveOpenFileGetDownloadUrlResponse> AliyunDriveGetDownloadUrl(string fileId)
+        {
+            var request = new RestRequest("/adrive/v1.0/openFile/getDownloadUrl", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+            object body = new
+            {
+                drive_id = _driveId,
+                file_id = fileId,
+                expire_sec = 14400
+            };
+            request.AddBody(body);
+            var response = await AliyunDriveExecuteWithRetry<AliyunDriveOpenFileGetDownloadUrlResponse>(request);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                return response.Data;
+            }
+            else
+            {
+                throw response.ErrorException;
+            }
         }
 
         #endregion 阿里云盘

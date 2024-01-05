@@ -37,8 +37,8 @@ namespace MDriveSync.WPF
             var taskList = new List<Task>();
 
 
-            var jobs = Service.GetJobs();
-            var drives = Service.GetDrives();
+            var jobs = Service.Jobs();
+            var drives = Service.Drives();
 
             foreach (var d in drives)
             {
@@ -48,7 +48,7 @@ namespace MDriveSync.WPF
                 {
                     if (jobs.TryGetValue(dj.Id, out var jb) && jb != null)
                     {
-                        taskList.Add(new Task(dj.Name, dj.Description ?? "-", 2, jb.State == JobState.Disabled ? JobStateColor.Fail : JobStateColor.Success));
+                        taskList.Add(new Task(dj.Name, dj.Description ?? "-", 2, jb.CurrentState == JobState.Disabled ? JobStateColor.Fail : JobStateColor.Success));
                     }
                 }
             }

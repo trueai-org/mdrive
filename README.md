@@ -71,8 +71,9 @@ docker pull trueaiorg/m-drive-sync-client
 
 # 快速启动示例，并挂载 /data 目录到容器 /data 只读模式，并映射端口 8080
 docker run --name mdrive -d --restart=always \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -v /data:/data:ro \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 
 # 调试日志
@@ -84,14 +85,15 @@ docker exec -it mdrive /bin/bash
 # 访问端口
 http://{ip}:8080
 
-# 跟多示例
+# 更多示例
 # 配置日志、映射云盘配置、映射程序配置、挂载 /data
 mkdir /home/mdrive/logs
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -v /home/mdrive/logs:/app/logs \
  -v /data:/data:ro \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 ```
 
@@ -172,6 +174,16 @@ docker run --name mdrive -d --restart=always \
 
 ```
 
+```json
+# 管理后台账号密码
+# 可以通过配置，直接修改管理后台账号密码。在 docker 启动时，也可以通过环境变量设置。
+{
+  "BasicAuth": {
+    "User": "admin",
+    "Password": "123456"
+  }
+}
+```
 
 > `Schedules` 作业计划任务示例
 
@@ -256,8 +268,12 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
-- Windows 客户端 UI/WPF 版本
 - WebUI 版本
+- 队列执行
+- 分块上传、分块下载、超大文件支持
+- 只读模式，使用只读模式则通过 WEBUI 不可编辑
+- 锁定模式，超时多少时间自动推出 UI
+- Windows 客户端 UI/WPF 版本
 - MacUI 版本
 - 移动端（IOS、Andorid）版本
 - Kopia 模式、插件开发
@@ -268,7 +284,8 @@ docker run --name mdrive -d --restart=always \
 - 上传增加文件的本地时间
 - WebDAV、磁盘挂载
 - 多版本、多备份、版本还原
-- 分块上传、分块下载、超大文件支持
+- WebUI 增加下次作业时间，上次统计，日志查询等
+- WEB UI 增加主题，欢迎（可关闭），公告，官网、关于
 
 ## 发布
 

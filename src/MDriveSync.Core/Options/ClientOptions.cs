@@ -79,7 +79,54 @@ namespace MDriveSync.Core
         /// <summary>
         /// 保存
         /// </summary>
-        public void Save()
+        public void Save(bool isRemove = false)
+        {
+            // 读取 JSON 文件
+            var jsonString = string.Empty;
+            if (File.Exists(ClientSettings.ClientSettingsPath))
+            {
+                jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            }
+
+            var aliyunDriveConfig = string.IsNullOrWhiteSpace(jsonString) ? null
+                : JsonSerializer.Deserialize<ClientSettings>(jsonString);
+            aliyunDriveConfig ??= new ClientSettings();
+            aliyunDriveConfig.Client ??= new ClientOptions();
+
+            // 移除重新添加
+            var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
+            if (current >= 0)
+            {
+                aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
+
+                if (!isRemove)
+                {
+                    aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
+                }
+            }
+            else
+            {
+                if (!isRemove)
+                {
+                    aliyunDriveConfig.Client.AliyunDrives.Add(this);
+                }
+            }
+
+            // 序列化回 JSON
+            var updatedJsonString = JsonSerializer.Serialize(aliyunDriveConfig, new JsonSerializerOptions
+            {
+                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+                WriteIndented = true
+            });
+
+            // 写入文件
+            File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// 保存
+        /// </summary>
+        public void SaveJob(JobConfig jobConfig, bool isRemove = false)
         {
             // 读取 JSON 文件
             var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
@@ -95,6 +142,25 @@ namespace MDriveSync.Core
             else
             {
                 aliyunDriveConfig.Client.AliyunDrives.Add(this);
+            }
+
+            // 保存作业
+            var currentJob = Jobs.FindIndex(x => x.Id == jobConfig.Id);
+            if (currentJob >= 0)
+            {
+                Jobs.RemoveAt(currentJob);
+
+                if (!isRemove && jobConfig != null)
+                {
+                    Jobs.Insert(currentJob, jobConfig);
+                }
+            }
+            else
+            {
+                if (!isRemove && jobConfig != null)
+                {
+                    Jobs.Add(jobConfig);
+                }
             }
 
             // 序列化回 JSON
