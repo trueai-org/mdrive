@@ -271,6 +271,8 @@ docker run --name mdrive -d --restart=always \
 - WebUI 版本
 - 队列执行
 - 分块上传、分块下载、超大文件支持
+- 只读模式，使用只读模式则通过 WEBUI 不可编辑
+- 锁定模式，超时多少时间自动推出 UI
 - Windows 客户端 UI/WPF 版本
 - MacUI 版本
 - 移动端（IOS、Andorid）版本
@@ -282,6 +284,8 @@ docker run --name mdrive -d --restart=always \
 - 上传增加文件的本地时间
 - WebDAV、磁盘挂载
 - 多版本、多备份、版本还原
+- WebUI 增加下次作业时间，上次统计，日志查询等
+- WEB UI 增加主题，欢迎（可关闭），公告，官网、关于
 
 ## 发布
 
