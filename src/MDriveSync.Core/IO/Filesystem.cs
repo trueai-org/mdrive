@@ -17,10 +17,10 @@
         /// <exception cref="Exception"></exception>
         public static List<TreeNode> TreeNodes(string path = "", string command = "", bool skipFiles = true, bool showHidden = true)
         {
-            if (string.IsNullOrEmpty(path))
-            {
-                throw new LogicException("No path parameter was found");
-            }
+            //if (string.IsNullOrEmpty(path))
+            //{
+            //    throw new LogicException("No path parameter was found");
+            //}
 
             var list = new List<TreeNode>();
 

@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core;
+using MDriveSync.Core.IO;
 using MDriveSync.Core.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using System.Net.Http.Headers;
@@ -285,5 +286,16 @@ namespace MDriveSync.Client.API.Controllers
 
         //    return new FileStreamResult(stream, "application/octet-stream");
         //}
+
+        /// <summary>
+        /// 获取问价夹/路径下拉列表
+        /// </summary>
+        /// <returns></returns>
+        [HttpPost("paths")]
+        public Result<List<TreeNode>> GetPaths([FromBody] TreeNodePathRequest request)
+        {
+            var data = Filesystem.TreeNodes(request.Path);
+            return Result.Ok(data);
+        }
     }
 }
