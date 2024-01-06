@@ -288,7 +288,7 @@ namespace MDriveSync.Client.API.Controllers
         //}
 
         /// <summary>
-        /// 获取问价夹/路径下拉列表
+        /// 获取文价夹/路径下拉列表
         /// </summary>
         /// <returns></returns>
         [HttpPost("paths")]
