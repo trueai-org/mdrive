@@ -2,51 +2,55 @@
 
 namespace MDriveSync.Core.IO
 {
-    /// <summary>Contains internal path helpers that are shared between many projects.</summary>
+    /// <summary>
+    /// 包含内部路径帮助器，这些帮助器在多个项目之间共享。
+    /// 关于路径处理的实用方法，例如检查驱动器字符的有效性、判断路径是否部分合格（即相对于当前驱动器或工作目录），以及判断一个字符是否是目录分隔符
+    /// </summary>
     internal static class PathInternalWindows
     {
-        // All paths in Win32 ultimately end up becoming a path to a File object in the Windows object manager. Passed in paths get mapped through
-        // DosDevice symbolic links in the object tree to actual File objects under \Devices. To illustrate, this is what happens with a typical
-        // path "Foo" passed as a filename to any Win32 API:
+        // 所有在Win32中的路径最终都会变成对Windows对象管理器中File对象的路径。传入的路径通过对象树中的DosDevice符号链接映射到\Devices下的实际File对象。
+        // 举个例子，这是一个典型的路径“Foo”作为任何Win32 API的文件名所发生的事情：
+        // 1. “Foo”被识别为相对路径，并附加到当前目录（例如，我们的例子中的"C:\"）
+        // 2. “C:\Foo”前面加上了DosDevice命名空间“\??\”
+        // 3. CreateFile尝试创建请求文件“\??\C:\Foo”的对象句柄
+        // 4. 对象管理器识别DosDevices前缀，然后查找
+        //    a. 首先在当前会话的DosDevices中查找（例如，映射的网络驱动器会在这里）
+        //    b. 如果在会话中找不到，它会在全局DosDevices中查找（“\GLOBAL??\”）
+        // 5. 在DosDevices中找到了“C:”（在我们的案例中是“\GLOBAL??\C:”，它是指向“\Device\HarddiskVolume6”的符号链接）
+        // 6. 完整路径现在是“\Device\HarddiskVolume6\Foo”，“\Device\HarddiskVolume6”是一个文件对象，解析工作转交给文件的注册解析方法
+        // 7. 调用文件对象的注册打开方法来创建文件句柄，然后返回该句柄。
         //
-        //  1. "Foo" is recognized as a relative path and is appended to the current directory (say, "C:\" in our example)
-        //  2. "C:\Foo" is prepended with the DosDevice namespace "\??\"
-        //  3. CreateFile tries to create an object handle to the requested file "\??\C:\Foo"
-        //  4. The Object Manager recognizes the DosDevices prefix and looks
-        //      a. First in the current session DosDevices ("\Sessions\1\DosDevices\" for example, mapped network drives go here)
-        //      b. If not found in the session, it looks in the Global DosDevices ("\GLOBAL??\")
-        //  5. "C:" is found in DosDevices (in our case "\GLOBAL??\C:", which is a symbolic link to "\Device\HarddiskVolume6")
-        //  6. The full path is now "\Device\HarddiskVolume6\Foo", "\Device\HarddiskVolume6" is a File object and parsing is handed off
-        //      to the registered parsing method for Files
-        //  7. The registered open method for File objects is invoked to create the file handle which is then returned
-        //
-        // There are multiple ways to directly specify a DosDevices path. The final format of "\??\" is one way. It can also be specified
-        // as "\\.\" (the most commonly documented way) and "\\?\". If the question mark syntax is used the path will skip normalization
-        // (essentially GetFullPathName()) and path length checks.
+        // 有多种方式可以直接指定DosDevices路径。最终格式“\??\”是其中一种方式。也可以指定为“\\.\”（最常见的文档方式）和“\\?\”。如果使用问号语法，则路径将跳过规范化（基本上是GetFullPathName()）和路径长度检查。
 
-        // Windows Kernel-Mode Object Manager
+        // Windows Kernel-Mode Object Manager链接
         // https://msdn.microsoft.com/en-us/library/windows/hardware/ff565763.aspx
         // https://channel9.msdn.com/Shows/Going+Deep/Windows-NT-Object-Manager
         //
-        // Introduction to MS-DOS Device Names
+        // MS-DOS设备名介绍链接
         // https://msdn.microsoft.com/en-us/library/windows/hardware/ff548088.aspx
         //
-        // Local and Global MS-DOS Device Names
+        // 本地和全局MS-DOS设备名链接
         // https://msdn.microsoft.com/en-us/library/windows/hardware/ff554302.aspx
 
+        // 扩展设备路径前缀
         internal const string ExtendedDevicePathPrefix = @"\\?\";
+        // UNC路径前缀
         internal const string UncPathPrefix = @"\\";
+        // 插入的UNC设备前缀
         internal const string UncDevicePrefixToInsert = @"?\UNC\";
+        // 扩展的UNC路径前缀
         internal const string UncExtendedPathPrefix = @"\\?\UNC\";
+        // 设备路径前缀
         internal const string DevicePathPrefix = @"\\.\";
 
+        // 最大短路径长度
         internal const int MaxShortPath = 260;
 
-        // \\?\, \\.\, \??\
+        // \\?\, \\.\, \??\ 前缀长度
         internal const int DevicePrefixLength = 4;
 
         /// <summary>
-        /// Returns true if the given character is a valid drive letter
+        /// 如果给定字符是有效的驱动器字母，则返回true。
         /// </summary>
         internal static bool IsValidDriveChar(char value)
         {
@@ -54,45 +58,37 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Returns true if the path specified is relative to the current drive or working directory.
-        /// Returns false if the path is fixed to a specific drive or UNC path.  This method does no
-        /// validation of the path (URIs will be returned as relative as a result).
+        /// 如果指定的路径相对于当前驱动器或工作目录，则返回true。
+        /// 如果路径固定到特定的驱动器或UNC路径，则返回false。此方法不对路径进行验证（因此，URI会被认为是相对的）。
         /// </summary>
         /// <remarks>
-        /// Handles paths that use the alternate directory separator.  It is a frequent mistake to
-        /// assume that rooted paths (Path.IsPathRooted) are not relative.  This isn't the case.
-        /// "C:a" is drive relative- meaning that it will be resolved against the current directory
-        /// for C: (rooted, but relative). "C:\a" is rooted and not relative (the current directory
-        /// will not be used to modify the path).
+        /// 处理使用备用目录分隔符的路径。常见的错误是假设根路径（Path.IsPathRooted）不是相对的。但这不是情况。
+        /// "C:a" 是相对于C:的当前目录的驱动器相对路径（根，但相对）。
+        /// "C:\a" 是根的，不是相对的（当前目录不会用来修改路径）。
         /// </remarks>
         internal static bool IsPartiallyQualified(string path)
         {
             if (path.Length < 2)
             {
-                // It isn't fixed, it must be relative.  There is no way to specify a fixed
-                // path with one character (or less).
+                // 它不是固定的，它必须是相对的。用一个字符（或更少）无法指定固定路径。
                 return true;
             }
 
             if (IsDirectorySeparator(path[0]))
             {
-                // There is no valid way to specify a relative path with two initial slashes or
-                // \? as ? isn't valid for drive relative paths and \??\ is equivalent to \\?\
+                // 无效方式指定相对路径的两个初始斜杠或 \?，因为 ? 对驱动器相对路径无效，而 \??\ 等同于 \\?\
                 return !(path[1] == '?' || IsDirectorySeparator(path[1]));
             }
 
-            // The only way to specify a fixed path that doesn't begin with two slashes
-            // is the drive, colon, slash format- i.e. C:\
+            // 唯一指定不以两个斜杠开始的固定路径的方式是驱动器、冒号、斜杠格式，即 C:\
             return !((path.Length >= 3)
                 && (path[1] == Path.VolumeSeparatorChar)
                 && IsDirectorySeparator(path[2])
-                // To match old behavior we'll check the drive character for validity as the path is technically
-                // not qualified if you don't have a valid drive. "=:\" is the "=" file's default data stream.
-                && IsValidDriveChar(path[0]));
+                && IsValidDriveChar(path[0])); // 为匹配旧行为，我们也会检查驱动器字符的有效性，因为如果没有有效的驱动器，路径技术上不合格。"=:\\" 是 "=" 文件的默认数据流。
         }
 
         /// <summary>
-        /// True if the given character is a directory separator.
+        /// 如果给定字符是目录分隔符，则返回true。
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static bool IsDirectorySeparator(char c)

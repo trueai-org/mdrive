@@ -1,57 +1,57 @@
 ﻿namespace MDriveSync.Core.IO
 {
     /// <summary>
-    /// Implementation of a ExtJS treenode-like class for easy JSON export
+    /// 实现一个类似于 ExtJS treenode 的类，以便于 JSON 导出
     /// </summary>
     public class TreeNode
     {
         /// <summary>
-        /// The text displayed for the node
+        /// 节点显示的文本
         /// </summary>
         public string text { get; set; }
 
         /// <summary>
-        /// The node id
+        /// 节点的 ID
         /// </summary>
         public string id { get; set; }
 
         /// <summary>
-        /// The class applied to the node
+        /// 应用于节点的类
         /// </summary>
         public string cls { get; set; }
 
         /// <summary>
-        /// The class applied to the icon
+        /// 应用于图标的类
         /// </summary>
         public string iconCls { get; set; }
 
         /// <summary>
-        /// True if the element should be checked
+        /// 如果元素应该被选中则为 true
         /// </summary>
         public bool check { get; set; }
 
         /// <summary>
-        /// True if the element is a leaf node
+        /// 如果元素是叶节点则为 true
         /// </summary>
         public bool leaf { get; set; }
 
         /// <summary>
-        /// Gets or sets the current path, if the item is a symbolic path
+        /// 获取或设置当前路径，如果该项是一个符号路径
         /// </summary>
         public string resolvedpath { get; set; }
 
         /// <summary>
-        /// True if the element is hidden
+        /// 如果元素被隐藏则为 true
         /// </summary>
         public bool hidden { get; set; }
 
         /// <summary>
-        /// True if the element is a symlink
+        /// 如果元素是一个符号链接则为 true
         /// </summary>
         public bool symlink { get; set; }
 
         /// <summary>
-        /// Constructs a new TreeNode
+        /// 构造一个新的 TreeNode
         /// </summary>
         public TreeNode()
         {

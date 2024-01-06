@@ -10,7 +10,6 @@
 	</ItemGroup>
 	
 	<ItemGroup>
-		<PackageReference Include="AlphaFS" Version="2.2.6" />
 		<PackageReference Include="AlphaVSS" Version="2.0.3" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="Polly" Version="8.2.0" />
@@ -21,6 +20,7 @@
 		<PackageReference Include="Serilog.Settings.Configuration" Version="8.0.0" />
 		<PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
 		<PackageReference Include="Serilog.Sinks.File" Version="5.0.0" />
+		<PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
 	</ItemGroup>
 
 </Project>

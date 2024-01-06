@@ -1,7 +1,7 @@
 namespace MDriveSync.Core.IO
 {
     /// <summary>
-    /// The primary implementation of the file interface
+    /// 文件接口的主要实现类
     /// </summary>
     public class FileEntry : IFileEntry
     {
@@ -12,7 +12,7 @@ namespace MDriveSync.Core.IO
         private bool m_isFolder;
 
         /// <summary>
-        /// Gets or sets the file or folder name
+        /// 获取或设置文件或文件夹的名称
         /// </summary>
         public string Name
         {
@@ -21,7 +21,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Gets or sets the time the file or folder was last accessed
+        /// 获取或设置文件或文件夹最后访问的时间
         /// </summary>
         public DateTime LastAccess
         {
@@ -30,7 +30,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Gets or sets the time the file or folder was last modified
+        /// 获取或设置文件或文件夹最后修改的时间
         /// </summary>
         public DateTime LastModification
         {
@@ -39,7 +39,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Gets or sets the size of the file or folder
+        /// 获取或设置文件或文件夹的大小
         /// </summary>
         public long Size
         {
@@ -48,7 +48,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Gets or sets a value indicating if the entry is a folder
+        /// 获取或设置一个值，该值指示条目是否为文件夹
         /// </summary>
         public bool IsFolder
         {
@@ -57,7 +57,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Helper function to initialize the instance to default values
+        /// 辅助函数，用于将实例初始化为默认值
         /// </summary>
         private FileEntry()
         {
@@ -69,10 +69,10 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Constructs an entry using only the name.
-        /// The entry is assumed to be a file.
+        /// 仅使用名称构造条目。
+        /// 默认假定该条目为文件。
         /// </summary>
-        /// <param name="filename">The name of the file</param>
+        /// <param name="filename">文件的名称</param>
         public FileEntry(string filename)
             : this()
         {
@@ -80,11 +80,11 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Constructs an entry using only the name and size.
-        /// The entry is assumed to be a file.
+        /// 使用名称和大小构造条目。
+        /// 默认假定该条目为文件。
         /// </summary>
-        /// <param name="filename">The name of the file</param>
-        /// <param name="size">The size of the file</param>
+        /// <param name="filename">文件的名称</param>
+        /// <param name="size">文件的大小</param>
         public FileEntry(string filename, long size)
             : this(filename)
         {
@@ -92,12 +92,12 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Constructs an entry supplying all information
+        /// 提供所有信息构造条目
         /// </summary>
-        /// <param name="filename">The name of the file or folder</param>
-        /// <param name="size">The size of the file or folder</param>
-        /// <param name="lastAccess">The time the file or folder was last accessed</param>
-        /// <param name="lastModified">The time the file or folder was last modified</param>
+        /// <param name="filename">文件或文件夹的名称</param>
+        /// <param name="size">文件或文件夹的大小</param>
+        /// <param name="lastAccess">文件或文件夹最后访问的时间</param>
+        /// <param name="lastModified">文件或文件夹最后修改的时间</param>
         public FileEntry(string filename, long size, DateTime lastAccess, DateTime lastModified)
             : this(filename, size)
         {

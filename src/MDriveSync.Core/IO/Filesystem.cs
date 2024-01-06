@@ -1,28 +1,28 @@
 ﻿namespace MDriveSync.Core.IO
 {
+    /// <summary>
+    /// 文件系统
+    /// </summary>
     public class Filesystem
     {
-        //public void GET(string key, RequestInfo info)
-        //{
-        //    var parts = (key ?? "").Split(new char[] { '/' });
-        //    var path = Duplicati.Library.Utility.Uri.UrlDecode((parts.Length == 2 ? parts.FirstOrDefault() : key ?? ""));
-        //    var command = parts.Length == 2 ? parts.Last() : null;
-        //    if (string.IsNullOrEmpty(path))
-        //        path = info.Request.QueryString["path"].Value;
-
-        //    Process(command, path, info);
-        //}
-
-        public void Process(string command, string path)
+        /// <summary>
+        /// 获取文件列表
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="command"></param>
+        /// <param name="skipFiles"></param>
+        /// <param name="showHidden"></param>
+        /// <returns></returns>
+        /// <exception cref="LogicException"></exception>
+        /// <exception cref="Exception"></exception>
+        public static List<TreeNode> TreeNodes(string path = "", string command = "", bool skipFiles = true, bool showHidden = true)
         {
             if (string.IsNullOrEmpty(path))
             {
-                //info.ReportClientError("No path parameter was found", System.Net.HttpStatusCode.BadRequest);
-                return;
+                throw new LogicException("No path parameter was found");
             }
 
-            bool skipFiles = true; // Library.Utility.Utility.ParseBool(info.Request.QueryString["onlyfolders"].Value, false);
-            bool showHidden = true; // Library.Utility.Utility.ParseBool(info.Request.QueryString["showhidden"].Value, false);
+            var list = new List<TreeNode>();
 
             string specialpath = null;
             string specialtoken = null;
@@ -46,35 +46,31 @@
 
             if (Platform.IsClientPosix && !path.StartsWith("/", StringComparison.Ordinal))
             {
-                //info.ReportClientError("The path parameter must start with a forward-slash", System.Net.HttpStatusCode.BadRequest);
-                return;
+                throw new LogicException("The path parameter must start with a forward-slash");
             }
 
-            //if (!string.IsNullOrWhiteSpace(command))
-            //{
-            //    if ("validate".Equals(command, StringComparison.OrdinalIgnoreCase))
-            //    {
-            //        try
-            //        {
-            //            if (System.IO.Path.IsPathRooted(path) && (System.IO.Directory.Exists(path) || System.IO.File.Exists(path)))
-            //            {
-            //                //info.OutputOK();
-            //                return;
-            //            }
-            //        }
-            //        catch
-            //        {
-            //        }
+            if (!string.IsNullOrWhiteSpace(command))
+            {
+                if ("validate".Equals(command, StringComparison.OrdinalIgnoreCase))
+                {
+                    try
+                    {
+                        if (Path.IsPathRooted(path) && (Directory.Exists(path) || File.Exists(path)))
+                        {
+                            return list;
+                        }
+                    }
+                    catch
+                    {
+                    }
 
-            //        //info.ReportServerError("File or folder not found", System.Net.HttpStatusCode.NotFound);
-            //        return;
-            //    }
-            //    else
-            //    {
-            //        //info.ReportClientError(string.Format("No such operation found: {0}", command), System.Net.HttpStatusCode.NotFound);
-            //        return;
-            //    }
-            //}
+                    throw new LogicException("File or folder not found");
+                }
+                else
+                {
+                    throw new LogicException(string.Format("No such operation found: {0}", command));
+                }
+            }
 
             try
             {
@@ -86,8 +82,7 @@
                 if (!Platform.IsClientPosix && (path.Equals("/") || path.Equals("")))
                 {
                     res = DriveInfo.GetDrives()
-                            .Where(di =>
-                                (di.DriveType == DriveType.Fixed || di.DriveType == DriveType.Network || di.DriveType == DriveType.Removable)
+                            .Where(di => (di.DriveType == DriveType.Fixed || di.DriveType == DriveType.Network || di.DriveType == DriveType.Removable)
                                 && di.IsReady // Only try to create TreeNode entries for drives who were ready 'now'
                             )
                             .Select(TryCreateTreeNodeForDrive) // This will try to create a TreeNode for selected drives
@@ -117,33 +112,33 @@
                 // We have to resolve the query before giving it to OutputOK
                 // If we do not do this, and the query throws an exception when OutputOK resolves it,
                 // the exception would not be handled properly
-                res = res.ToList();
 
-                //info.OutputOK(res);
+                return res.ToList();
             }
             catch (Exception ex)
             {
-                //info.ReportClientError("Failed to process the path: " + ex.Message, System.Net.HttpStatusCode.InternalServerError);
+                throw new Exception($"Failed to process the path: {path}", ex);
             }
         }
 
         /// <summary>
-        /// Try to create a new TreeNode instance for the given DriveInfo instance.
+        /// 尝试为给定的DriveInfo实例创建一个新的TreeNode实例。
         ///
         /// <remarks>
-        /// If an exception occurs during creation (most likely the device became unavailable), a null is returned instead.
+        /// 如果在创建过程中发生异常（最可能的原因是设备变得不可用），则返回null。
         /// </remarks>
         /// </summary>
-        /// <param name="driveInfo">DriveInfo to try create a TreeNode for. Cannot be null.</param>
-        /// <returns>A new TreeNode instance on success; null if an exception occurred during creation.</returns>
+        /// <param name="driveInfo">尝试为其创建TreeNode的DriveInfo。不能为null。</param>
+        /// <returns>成功时返回一个新的TreeNode实例；如果在创建过程中发生异常，则返回null。</returns>
         private static TreeNode TryCreateTreeNodeForDrive(DriveInfo driveInfo)
         {
-            if (driveInfo == null) throw new ArgumentNullException(nameof(driveInfo));
+            if (driveInfo == null)
+                throw new ArgumentNullException(nameof(driveInfo));  // 如果driveInfo为null，则抛出异常
 
             try
             {
-                // Try to create the TreeNode
-                // This may still fail as the drive might become unavailable in the meanwhile
+                // 尝试创建TreeNode
+                // 这可能会失败，因为驱动器可能在此期间变得不可用
                 return new TreeNode
                 {
                     id = driveInfo.RootDirectory.FullName,
@@ -153,23 +148,23 @@
                             ? driveInfo.RootDirectory.FullName.Replace('\\', ' ')
                             : driveInfo.VolumeLabel + " - " + driveInfo.RootDirectory.FullName.Replace('\\', ' ')
                         ) + "(" + driveInfo.DriveType + ")",
-                    iconCls = "x-tree-icon-drive"
+                    iconCls = "x-tree-icon-drive"  // 设置TreeNode的图标类
                 };
             }
             catch
             {
-                // Drive became unavailable in the meanwhile or another exception occurred
-                // Return a null as fall back
+                // 驱动器在此期间变得不可用或发生其他异常
+                // 返回null作为备选方案
                 return null;
             }
         }
 
         private static IEnumerable<TreeNode> ListFolderAsNodes(string entrypath, bool skipFiles, bool showHidden)
         {
-            //Helper function for finding out if a folder has sub elements
+            // 用于确定文件夹是否具有子元素的帮助函数
             Func<string, bool> hasSubElements = (p) => skipFiles ? Directory.EnumerateDirectories(p).Any() : Directory.EnumerateFileSystemEntries(p).Any();
 
-            //Helper function for dealing with exceptions when accessing off-limits folders
+            // 用于处理在访问受限文件夹时出现的异常的帮助函数
             Func<string, bool> isEmptyFolder = (p) =>
             {
                 try { return !hasSubElements(p); }
@@ -177,7 +172,7 @@
                 return true;
             };
 
-            //Helper function for dealing with exceptions when accessing off-limits folders
+            // 用于处理在访问受限文件夹时出现的异常的帮助函数
             Func<string, bool> canAccess = (p) =>
             {
                 try { hasSubElements(p); return true; }
@@ -186,9 +181,11 @@
             };
 
             foreach (var s in SystemIO.IO_OS.EnumerateFileSystemEntries(entrypath)
-                // Group directories first
+
+                // 首先按目录分组
                 .OrderByDescending(f => SystemIO.IO_OS.GetFileAttributes(f) & FileAttributes.Directory)
-            // Sort both groups (directories and files) alphabetically
+
+                // 对两组（目录和文件）按字母顺序排序
                 .ThenBy(f => f))
             {
                 TreeNode tn = null;
@@ -217,33 +214,17 @@
                         hidden = isHidden,
                         symlink = isSymlink,
                         iconCls = isFolder ? (accessible ? (isSymlink ? "x-tree-icon-symlink" : "x-tree-icon-parent") : "x-tree-icon-locked") : "x-tree-icon-leaf",
-                        leaf = isLeaf
+                        leaf = isLeaf  // 设置是否为叶子节点
                     };
                 }
                 catch
                 {
+                    // 忽略异常，继续处理下一个文件系统条目
                 }
 
                 if (tn != null)
-                    yield return tn;
+                    yield return tn;  // 如果TreeNode不为null，则返回它
             }
         }
-
-        //public void POST(string key, RequestInfo info)
-        //{
-        //    Process(key, info.Request.Form["path"].Value, info);
-        //}
-
-        //public string Description { get { return "Enumerates the server filesystem"; } }
-
-        //public IEnumerable<KeyValuePair<string, Type>> Types
-        //{
-        //    get
-        //    {
-        //        return new KeyValuePair<string, Type>[] {
-        //            new KeyValuePair<string, Type>(HttpServer.Method.Get, typeof(string[])),
-        //        };
-        //    }
-        //}
     }
 }

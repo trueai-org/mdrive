@@ -1,91 +1,93 @@
 ﻿namespace MDriveSync.Core.IO
 {
     /// <summary>
-    /// Implements a convenient wrapping for mapping a path to a drive letter
+    /// 为映射路径到驱动器字母提供方便的封装。
     /// </summary>
     public class DefineDosDevice : IDisposable
     {
         /// <summary>
-        /// Encapsulation of Win32 calls
+        /// 封装Win32调用的内部类。
         /// </summary>
         private static class Win32API
         {
             /// <summary>
-            /// Flags that can be used with DefineDosDevice
+            /// 可以用于 DefineDosDevice 的标志。
             /// </summary>
             [Flags]
             public enum DDD_Flags : uint
             {
                 /// <summary>
-                /// Uses the targetpath string as is. Otherwise, it is converted from an MS-DOS path to a path.
+                /// 使用 targetpath 字符串原样。否则，它会从 MS-DOS 路径转换为路径。
                 /// </summary>
                 DDD_RAW_TARGET_PATH = 0x1,
 
                 /// <summary>
-                /// Removes the specified definition for the specified device. To determine which definition to remove, the function walks the list of mappings for the device, looking for a match of targetpath against a prefix of each mapping associated with this device. The first mapping that matches is the one removed, and then the function returns.
-                /// If targetpath is NULL or a pointer to a NULL string, the function will remove the first mapping associated with the device and pop the most recent one pushed. If there is nothing left to pop, the device name will be removed.
-                /// If this value is not specified, the string pointed to by the targetpath parameter will become the new mapping for this device.
+                /// 删除指定设备的指定定义。为确定要删除哪个定义，函数遍历设备映射列表，查找 targetpath 与该设备关联的每个映射的前缀的匹配项。第一个匹配的映射被删除，然后函数返回。
+                /// 如果 targetpath 为 NULL 或指向 NULL 字符串的指针，函数将删除与设备关联的第一个映射，并弹出最近推送的映射。如果没有剩余的映射可弹出，则删除设备名称。
+                /// 如果未指定此值，则 targetpath 参数指向的字符串将成为此设备的新映射。
                 /// </summary>
                 DDD_REMOVE_DEFINITION = 0x2,
 
                 /// <summary>
-                /// If this value is specified along with DDD_REMOVE_DEFINITION, the function will use an exact match to determine which mapping to remove. Use this value to ensure that you do not delete something that you did not define.
+                /// 如果指定了此值和 DDD_REMOVE_DEFINITION，则函数将使用精确匹配来确定要删除哪个映射。使用此值以确保您不会删除未定义的内容。
                 /// </summary>
                 DDD_EXACT_MATCH_ON_REMOVE = 0x4,
 
                 /// <summary>
-                /// Do not broadcast the WM_SETTINGCHANGE message. By default, this message is broadcast to notify the shell and applications of the change.
+                /// 不广播 WM_SETTINGCHANGE 消息。默认情况下，此消息被广播以通知 shell 和应用程序更改。
                 /// </summary>
                 DDD_NO_BROADCAST_SYSTEM = 0x8
             }
 
             /// <summary>
-            /// Defines, redefines, or deletes MS-DOS device names.
+            /// 定义、重新定义或删除 MS-DOS 设备名称。
             /// </summary>
-            /// <param name="flags">The controllable aspects of the DefineDosDevice function</param>
-            /// <param name="devicename">A pointer to an MS-DOS device name string specifying the device the function is defining, redefining, or deleting. The device name string must not have a colon as the last character, unless a drive letter is being defined, redefined, or deleted. For example, drive C would be the string &quot;C:&quot;. In no case is a trailing backslash (&quot;\&quot;) allowed.</param>
-            /// <param name="targetpath">A pointer to a path string that will implement this device. The string is an MS-DOS path string unless the DDD_RAW_TARGET_PATH flag is specified, in which case this string is a path string.</param>
-            /// <returns>True on success, false otherwise</returns>
+            /// <param name="flags">DefineDosDevice 函数的可控方面</param>
+            /// <param name="devicename">指定函数定义、重新定义或删除的 MS-DOS 设备名称字符串的指针。设备名称字符串的最后一个字符不能是冒号，除非定义、重新定义或删除的是驱动器字母。例如，驱动器 C 将是字符串 "C:"。在任何情况下都不允许尾随反斜杠 ("\")。</param>
+            /// <param name="targetpath">实现此设备的路径字符串的指针。字符串是 MS-DOS 路径字符串，除非指定了 DDD_RAW_TARGET_PATH 标志，在这种情况下，此字符串是路径字符串。</param>
+            /// <returns>成功时为 True，否则为 False</returns>
             [System.Runtime.InteropServices.DllImport("kernel32", CharSet = System.Runtime.InteropServices.CharSet.Auto, SetLastError = true)]
             public static extern bool DefineDosDevice(DDD_Flags flags, string devicename, string targetpath);
         }
 
         /// <summary>
-        /// The drive the path is mapped to
+        /// 映射到的驱动器。
         /// </summary>
         private string m_drive;
 
         /// <summary>
-        /// The path that is mapped to the drive
+        /// 映射到驱动器的路径。
         /// </summary>
         private readonly string m_targetPath;
 
         /// <summary>
-        /// A value indicating if the shell should be notified of changes
+        /// 指示是否应通知 shell 更改的值。
         /// </summary>
         private readonly bool m_shellBroadcast;
 
         /// <summary>
-        /// Gets the drive that this mapping represents
+        /// 获取此映射代表的驱动器。
         /// </summary>
         public string Drive
-        { get { return m_drive; } }
+        {
+            get { return m_drive; }
+        }
 
         /// <summary>
-        /// Creates a new mapping, using default settings
+        /// 使用默认设置创建新映射的构造函数。
         /// </summary>
-        /// <param name="path">The path to map</param>
+        /// <param name="path">要映射的路径</param>
         public DefineDosDevice(string path)
             : this(path, null, false)
         {
         }
 
         /// <summary>
-        /// Creates a new mapping
+        /// 创建新映射的构造函数。
         /// </summary>
-        /// <param name="path">The path to map</param>
-        /// <param name="drive">The drive to map to, use null to get a free drive letter</param>
-        /// <param name="notifyShell">True to notify the shell of the change, false otherwise</param>
+        /// <param name="path">要映射的路径</param>
+        /// <param name="drive">要映射到的驱动器，使用 null 获取一个空闲的驱动器字母</param>
+        /// <param name="notifyShell">True 表示通知 shell 更改，False 表示不通知</param>
         public DefineDosDevice(string path, string drive, bool notifyShell)
         {
             if (string.IsNullOrEmpty(drive))
@@ -102,7 +104,7 @@
                 }
 
                 if (drives.Count == 0)
-                    throw new IOException("No drive letters available");
+                    throw new IOException("没有可用的驱动器字母");
                 drive = drives[0].ToString() + ':';
             }
 
@@ -110,7 +112,7 @@
                 drive = drive.Substring(0, drive.Length - 1);
 
             if (!drive.EndsWith(":", StringComparison.Ordinal))
-                throw new ArgumentException("The drive specification must end with a colon.", nameof(drive));
+                throw new ArgumentException("驱动器规范必须以冒号结尾。", nameof(drive));
 
             Win32API.DDD_Flags flags = 0;
             if (!notifyShell)
@@ -125,7 +127,7 @@
         }
 
         /// <summary>
-        /// Disposes all resources held
+        /// 释放所有资源。
         /// </summary>
         public void Dispose()
         {
@@ -133,9 +135,9 @@
         }
 
         /// <summary>
-        /// Disposes all resources
+        /// 释放所有资源。
         /// </summary>
-        /// <param name="disposing">True if called from Disposing, false otherwise</param>
+        /// <param name="disposing">如果从 Dispose 方法调用，则为 True；否则为 False</param>
         protected void Dispose(bool disposing)
         {
             if (m_drive != null)
@@ -152,7 +154,7 @@
         }
 
         /// <summary>
-        /// Destroys the object and releases all held resources
+        /// 析构函数，用于释放资源。
         /// </summary>
         ~DefineDosDevice()
         {

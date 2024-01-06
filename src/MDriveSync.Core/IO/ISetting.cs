@@ -1,22 +1,22 @@
 ﻿namespace MDriveSync.Core.IO
 {
     /// <summary>
-    /// A single setting
+    /// 代表一个单一的设置项。
     /// </summary>
     public interface ISetting
     {
         /// <summary>
-        /// The filter expression
+        /// 过滤表达式。
         /// </summary>
         string Filter { get; }
 
         /// <summary>
-        /// The setting option
+        /// 设置选项的名称。
         /// </summary>
         string Name { get; set; }
 
         /// <summary>
-        /// The setting value
+        /// 设置的值。
         /// </summary>
         string Value { get; set; }
     }

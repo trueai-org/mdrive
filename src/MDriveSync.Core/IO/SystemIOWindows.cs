@@ -2,15 +2,17 @@
 using System.Security;
 using System.Security.AccessControl;
 
-using AlphaFS = Alphaleonis.Win32.Filesystem;
-
 namespace MDriveSync.Core.IO
 {
+    /// <summary>
+    /// 提供Windows系统IO操作的结构体。
+    /// </summary>
     public struct SystemIOWindows : ISystemIO
     {
-        // Based on the constant names used in
+        // 基于以下网址中的常量名称：
         // https://github.com/dotnet/runtime/blob/v5.0.12/src/libraries/Common/src/System/IO/PathInternal.Windows.cs
         private const string ExtendedDevicePathPrefix = @"\\?\";
+
         private const string UncPathPrefix = @"\\";
         private const string AltUncPathPrefix = @"//";
         private const string UncExtendedPathPrefix = @"\\?\UNC\";
@@ -18,16 +20,14 @@ namespace MDriveSync.Core.IO
         private static readonly string DIRSEP = Util.DirectorySeparatorString;
 
         /// <summary>
-        /// Prefix path with one of the extended device path prefixes
-        /// (@"\\?\" or @"\\?\UNC\") but only if it's a fully qualified
-        /// path with no relative components (i.e., with no "." or ".."
-        /// as part of the path).
+        /// 为路径添加扩展设备路径前缀（@"\\?\" 或 @"\\?\UNC\"），但仅当它是一个完全限定的
+        /// 路径且没有相对组件（即路径中没有"." 或 ".."）时。
         /// </summary>
         public static string AddExtendedDevicePathPrefix(string path)
         {
             if (IsPrefixedWithExtendedDevicePathPrefix(path))
             {
-                // For example: \\?\C:\Temp\foo.txt or \\?\UNC\example.com\share\foo.txt
+                // 例如：\\?\C:\Temp\foo.txt 或 \\?\UNC\example.com\share\foo.txt
                 return path;
             }
             else
@@ -35,28 +35,25 @@ namespace MDriveSync.Core.IO
                 var hasRelativePathComponents = HasRelativePathComponents(path);
                 if (IsPrefixedWithUncPathPrefix(path) && !hasRelativePathComponents)
                 {
-                    // For example: \\example.com\share\foo.txt or //example.com/share/foo.txt
+                    // 例如：\\example.com\share\foo.txt 或 //example.com/share/foo.txt
                     return UncExtendedPathPrefix + ConvertSlashes(path.Substring(UncPathPrefix.Length));
                 }
                 else if (DotNetRuntimePathWindows.IsPathFullyQualified(path) && !hasRelativePathComponents)
                 {
-                    // For example: C:\Temp\foo.txt or C:/Temp/foo.txt
+                    // 例如：C:\Temp\foo.txt 或 C:/Temp/foo.txt
                     return ExtendedDevicePathPrefix + ConvertSlashes(path);
                 }
                 else
                 {
-                    // A relative path or a fully qualified path with relative
-                    // path components so the extended device path prefixes
-                    // cannot be applied.
-                    //
-                    // For example: foo.txt or C:\Temp\..\foo.txt
+                    // 相对路径或带有相对路径组件的完全限定路径，因此不能应用扩展设备路径前缀。
+                    // 例如：foo.txt 或 C:\Temp\..\foo.txt
                     return path;
                 }
             }
         }
-        
+
         /// <summary>
-        /// Returns true if prefixed with @"\\" or @"//".
+        /// 如果路径以 @"\\" 或 @"//" 开头，则返回 true。
         /// </summary>
         private static bool IsPrefixedWithUncPathPrefix(string path)
         {
@@ -65,7 +62,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Returns true if prefixed with @"\\?\UNC\" or @"\\?\".
+        /// 如果路径以 @"\\?\UNC\" 或 @"\\?\" 开头，则返回 true。
         /// </summary>
         private static bool IsPrefixedWithExtendedDevicePathPrefix(string path)
         {
@@ -76,7 +73,7 @@ namespace MDriveSync.Core.IO
         private static string[] relativePathComponents = new[] { ".", ".." };
 
         /// <summary>
-        /// Returns true if <paramref name="path"/> contains relative path components; i.e., "." or "..".
+        /// 如果 <paramref name="path"/> 包含相对路径组件（"." 或 ".."），则返回 true。
         /// </summary>
         private static bool HasRelativePathComponents(string path)
         {
@@ -84,7 +81,7 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Returns a sequence representing the files and directories in <paramref name="path"/>.
+        /// 返回代表 <paramref name="path"/> 中的文件和目录的序列。
         /// </summary>
         private static IEnumerable<string> GetPathComponents(string path)
         {
@@ -100,20 +97,19 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Removes either of the extended device path prefixes
-        /// (@"\\?\" or @"\\?\UNC\") if <paramref name="path"/> is prefixed
-        /// with one of them.
+        /// 如果 <paramref name="path"/> 以扩展设备路径前缀（@"\\?\" 或 @"\\?\UNC\"）开头，
+        /// 则移除它。
         /// </summary>
         public static string RemoveExtendedDevicePathPrefix(string path)
         {
             if (path.StartsWith(UncExtendedPathPrefix, StringComparison.Ordinal))
             {
-                // @"\\?\UNC\example.com\share\file.txt" to @"\\example.com\share\file.txt"
+                // @"\\?\UNC\example.com\share\file.txt" 变为 @"\\example.com\share\file.txt"
                 return UncPathPrefix + path.Substring(UncExtendedPathPrefix.Length);
             }
             else if (path.StartsWith(ExtendedDevicePathPrefix, StringComparison.Ordinal))
             {
-                // @"\\?\C:\file.txt" to @"C:\file.txt"
+                // @"\\?\C:\file.txt" 变为 @"C:\file.txt"
                 return path.Substring(ExtendedDevicePathPrefix.Length);
             }
             else
@@ -123,9 +119,9 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Convert forward slashes to backslashes.
+        /// 将路径中的正斜杠转换为反斜杠。
         /// </summary>
-        /// <returns>Path with forward slashes replaced by backslashes.</returns>
+        /// <returns>替换了正斜杠的路径。</returns>
         private static string ConvertSlashes(string path)
         {
             return path.Replace("/", Util.DirectorySeparatorString);
@@ -133,8 +129,8 @@ namespace MDriveSync.Core.IO
 
         private class FileSystemAccess
         {
-            // Use JsonProperty Attribute to allow readonly fields to be set by deserializer
-            // https://github.com/duplicati/duplicati/issues/4028
+            // 使用JsonProperty属性允许反序列化器设置只读字段
+            // 参见：https://github.com/duplicati/duplicati/issues/4028
             [JsonProperty]
             public readonly FileSystemRights Rights;
 
@@ -227,7 +223,7 @@ namespace MDriveSync.Core.IO
 
         private void SetAccessControlFile(string path, FileSecurity rules)
         {
-           FileSetAccessControl(AddExtendedDevicePathPrefix(path), rules);
+            FileSetAccessControl(AddExtendedDevicePathPrefix(path), rules);
         }
 
         private void SetAccessControlDir(string path, DirectorySecurity rules)
@@ -235,18 +231,35 @@ namespace MDriveSync.Core.IO
             DirectorySetAccessControl(AddExtendedDevicePathPrefix(path), rules);
         }
 
+        /// <summary>
+        /// 设置目录的访问控制和安全策略。
+        /// </summary>
+        /// <param name="path">目录的路径。</param>
+        /// <param name="directorySecurity">目录的安全和访问策略。</param>
         [SecuritySafeCritical]
         public static void DirectorySetAccessControl(string path, DirectorySecurity directorySecurity)
         {
             if (directorySecurity == null)
             {
-                throw new ArgumentNullException("directorySecurity");
+                throw new ArgumentNullException(nameof(directorySecurity));
             }
 
-            //string fullPathInternal = Path.GetFullPathInternal(path);
-            //directorySecurity.Persist(fullPathInternal);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new ArgumentException("路径不能为空", nameof(path));
+            }
 
-            throw new NotImplementedException("不支持的策略");
+            string fullPath = Path.GetFullPath(path);
+
+            try
+            {
+                var directoryInfo = new DirectoryInfo(fullPath);
+                directoryInfo.SetAccessControl(directorySecurity);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("无法设置目录的访问控制。", ex);
+            }
         }
 
         public static DirectorySecurity DirectoryGetAccessControl(string path)
@@ -259,7 +272,6 @@ namespace MDriveSync.Core.IO
             return new DirectorySecurity(path, includeSections);
         }
 
-
         public static FileSecurity FileGetAccessControl(string path)
         {
             return FileGetAccessControl(path, AccessControlSections.Access | AccessControlSections.Owner | AccessControlSections.Group);
@@ -270,22 +282,39 @@ namespace MDriveSync.Core.IO
             return new FileSecurity(path, includeSections);
         }
 
+        /// <summary>
+        /// 设置文件的访问控制和安全策略。
+        /// </summary>
+        /// <param name="path">文件的路径。</param>
+        /// <param name="fileSecurity">文件的安全和访问策略。</param>
         [SecuritySafeCritical]
         public static void FileSetAccessControl(string path, FileSecurity fileSecurity)
         {
             if (fileSecurity == null)
             {
-                throw new ArgumentNullException("fileSecurity");
+                throw new ArgumentNullException(nameof(fileSecurity));
             }
 
-            //string fullPathInternal = Path.GetFullPathInternal(path);
-            //fileSecurity.Persist(fullPathInternal);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new ArgumentException("路径不能为空", nameof(path));
+            }
 
-            throw new NotImplementedException("不支持的策略");
+            string fullPath = Path.GetFullPath(path);
+
+            try
+            {
+                var fileInfo = new FileInfo(fullPath);
+                fileInfo.SetAccessControl(fileSecurity);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("无法设置文件的访问控制。", ex);
+            }
         }
 
-
         #region ISystemIO implementation
+
         public void DirectoryCreate(string path)
         {
             System.IO.Directory.CreateDirectory(AddExtendedDevicePathPrefix(path));
@@ -364,22 +393,38 @@ namespace MDriveSync.Core.IO
         }
 
         /// <summary>
-        /// Returns the symlink target if the entry is a symlink, and null otherwise
+        /// 如果条目是符号链接，则返回符号链接的目标，否则返回null
         /// </summary>
-        /// <param name="file">The file or folder to examine</param>
-        /// <returns>The symlink target</returns>
+        /// <param name="file">要检查的文件或文件夹</param>
+        /// <returns>符号链接的目标</returns>
         public string GetSymlinkTarget(string file)
         {
-            try
+            // 检查提供的路径是否存在
+            if (!File.Exists(file) && !Directory.Exists(file))
             {
-                return AlphaFS.File.GetLinkTargetInfo(AddExtendedDevicePathPrefix(file)).PrintName;
+                return null;
             }
-            catch (AlphaFS.NotAReparsePointException) { }
-            catch (AlphaFS.UnrecognizedReparsePointException) { }
 
-            // This path looks like it isn't actually a symlink
-            // (Note that some reparse points aren't actually symlinks -
-            // things like the OneDrive folder in the Windows 10 Fall Creator's Update for example)
+            // 获取文件或目录的信息
+            var fileInfo = new FileInfo(file);
+
+            if (fileInfo.Attributes.HasFlag(FileAttributes.ReparsePoint))
+            {
+                // 处理文件符号链接
+                if (fileInfo.Attributes.HasFlag(FileAttributes.Directory))
+                {
+                    // 对于目录，使用DirectoryInfo
+                    var dirInfo = new DirectoryInfo(file);
+                    return dirInfo.LinkTarget;
+                }
+                else
+                {
+                    // 对于文件，直接使用FileInfo
+                    return fileInfo.LinkTarget;
+                }
+            }
+
+            // 如果不是符号链接，则返回null
             return null;
         }
 
@@ -395,7 +440,7 @@ namespace MDriveSync.Core.IO
 
         public IEnumerable<string> EnumerateFiles(string path, string searchPattern, SearchOption searchOption)
         {
-            return System.IO.Directory.EnumerateFiles(AddExtendedDevicePathPrefix(path), searchPattern,  searchOption).Select(RemoveExtendedDevicePathPrefix);
+            return System.IO.Directory.EnumerateFiles(AddExtendedDevicePathPrefix(path), searchPattern, searchOption).Select(RemoveExtendedDevicePathPrefix);
         }
 
         public string PathGetFileName(string path)
@@ -638,30 +683,44 @@ namespace MDriveSync.Core.IO
             return Path.Combine(paths);
         }
 
-        public void CreateSymlink(string symlinkfile, string target, bool asDir)
+        /// <summary>
+        /// 创建一个符号链接。
+        /// </summary>
+        /// <param name="symlinkFile">符号链接文件的路径。</param>
+        /// <param name="target">符号链接指向的目标路径。</param>
+        /// <param name="asDir">如果创建的是指向目录的符号链接，则为true；如果是指向文件的符号链接，则为false。</param>
+        public void CreateSymlink(string symlinkFile, string target, bool asDir)
         {
-            if (FileExists(symlinkfile) || DirectoryExists(symlinkfile))
-                throw new System.IO.IOException(string.Format("File already exists: {0}", symlinkfile));
+            // 检查符号链接文件是否已存在
+            if (File.Exists(symlinkFile) || Directory.Exists(symlinkFile))
+                throw new IOException($"文件已存在: {symlinkFile}");
 
-            if (asDir)
+            try
             {
-                Alphaleonis.Win32.Filesystem.Directory.CreateSymbolicLink(AddExtendedDevicePathPrefix(symlinkfile), target, AlphaFS.PathFormat.LongFullPath);
+                if (asDir)
+                {
+                    // 创建指向目录的符号链接
+                    Directory.CreateSymbolicLink(symlinkFile, target);
+                }
+                else
+                {
+                    // 创建指向文件的符号链接
+                    File.CreateSymbolicLink(symlinkFile, target);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                Alphaleonis.Win32.Filesystem.File.CreateSymbolicLink(AddExtendedDevicePathPrefix(symlinkfile), target, AlphaFS.PathFormat.LongFullPath);
+                // 如果创建符号链接失败，抛出异常
+                throw new IOException($"无法创建符号链接，检查账户权限: {symlinkFile}", ex);
             }
 
-            //Sadly we do not get a notification if the creation fails :(
-            System.IO.FileAttributes attr = 0;
-            if ((!asDir && FileExists(symlinkfile)) || (asDir && DirectoryExists(symlinkfile)))
-                try { attr = GetFileAttributes(symlinkfile); }
-                catch { }
-
-            if ((attr & System.IO.FileAttributes.ReparsePoint) == 0)
-                throw new System.IO.IOException(string.Format("Unable to create symlink, check account permissions: {0}", symlinkfile));
+            // 验证符号链接是否成功创建
+            if (!((asDir && Directory.Exists(symlinkFile)) || (!asDir && File.Exists(symlinkFile))))
+            {
+                throw new IOException($"无法验证符号链接是否创建成功: {symlinkFile}");
+            }
         }
-        #endregion
+
+        #endregion ISystemIO implementation
     }
 }
-
