@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace MDriveSync.Core
 {
-    public static class Extensions
+    public static partial class Extensions
     {
         /// <summary>
         /// 移除路径首尾 ' ', '/', '\'
