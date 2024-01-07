@@ -65,6 +65,14 @@ docker run --name mdrive -d --restart=always \
  -e READ_ONLY=true \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 
+
+# 快速启动示例2
+docker run --name mdrive -d --restart=always \
+ -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
+ -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -p 18080:8080 trueaiorg/m-drive-sync-client
+
 # 确保目录存在
 # 确保映射/挂载了备份目录
 # 创建云盘存储目录

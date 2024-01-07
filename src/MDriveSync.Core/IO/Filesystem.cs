@@ -44,9 +44,18 @@
 
             path = SpecialFolders.ExpandEnvironmentVariables(path);
 
-            if (Platform.IsClientPosix && !path.StartsWith("/", StringComparison.Ordinal))
+            // 如果是 linux
+            if (Platform.IsClientPosix)
             {
-                throw new LogicException("The path parameter must start with a forward-slash");
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    path = "/";
+                }
+
+                if (!path.StartsWith("/", StringComparison.Ordinal))
+                {
+                    throw new LogicException("The path parameter must start with a forward-slash");
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(command))
