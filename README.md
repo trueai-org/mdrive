@@ -44,6 +44,8 @@ Supports a variety of algorithms for synchronization and backup.
 - 支持云盘管理和在线下载文件。
 - 支持作业暂停、恢复、禁用、取消、删除等。
 - 支持队列，保证作业的高可用，避免多任务卡顿以及抢占资源问题。
+- 支持登录验证，下载验证。
+- 支持超时自动锁定（BETA）。
 - 支持在线上传（BETA）。
 - 多模块支持，支持 Duplicati、Kopia 模块，直接进行加密（BETA）。
 - 支持还原云盘文件（BETA）。
