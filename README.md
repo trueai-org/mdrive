@@ -1,6 +1,6 @@
 # MDriveSync
 
-多平台、模块化、安全的云盘同步工具备份，支持百度网盘、阿里云盘等，集成 Duplicati、Kopia 等多种模块，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
+多平台、模块化、安全的云盘同步工具备份，支持百度网盘、阿里云盘、多账号等，集成 Duplicati、Kopia 等多种模块，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
 
 提供 Docker 版、Duplicati 版、Kopia 版、Windows 服务版、Windows 版、手机版、网页版、Linux版、Mac 版等多平台版本。
 
@@ -19,11 +19,20 @@ Supports a variety of algorithms for synchronization and backup.
 
 ## 安装与使用
 
+### 预览
+
+在线预览
+
+![首页](/docs/screenshots/home.jpg)
+![作业](/docs/screenshots/job.gif)
+
 ### Docker 版
 
 https://hub.docker.com/r/trueaiorg/m-drive-sync-client
 
 ```
+# 提示：可以不用映射 appsettings.Client.json
+
 # 确保目录存在
 # 确保映射/挂载了备份目录
 # 创建云盘存储目录
