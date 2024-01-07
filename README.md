@@ -49,7 +49,13 @@ Supports a variety of algorithms for synchronization and backup.
 
 ### 预览
 
-在线预览
+> 在线预览
+
+<http://43.129.20.214:18080>
+账号：admin
+密码：123456
+
+> 截图
 
 ![首页](/docs/screenshots/home.jpg)
 ![作业](/docs/screenshots/job.gif)
@@ -59,6 +65,9 @@ Supports a variety of algorithms for synchronization and backup.
 https://hub.docker.com/r/trueaiorg/m-drive-sync-client
 
 ```
+# 拉取镜像
+docker pull trueaiorg/m-drive-sync-client
+
 # 快速启动并开启只读模式
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
@@ -71,6 +80,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
  -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -e READ_ONLY=true \
  -p 18080:8080 trueaiorg/m-drive-sync-client
 
 # 确保目录存在
@@ -115,8 +125,7 @@ vi appsettings.Client.json
 # 确保配置具有可写配置权限 appsettings.Client.json
 chmod 666 appsettings.Client.json
 
-# 拉取镜像
-docker pull trueaiorg/m-drive-sync-client
+
 
 # 快速启动示例，并挂载 /data 目录到容器 /data 只读模式，并映射端口 8080
 docker run --name mdrive -d --restart=always \
