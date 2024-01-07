@@ -21,7 +21,8 @@ Supports a variety of algorithms for synchronization and backup.
 
 - 不限速，阿里云盘官方接口支持，上传下载均不限速。
 - 多线程支持，多线程上传、下载、同步，充分利用带宽。
-- 定时作业，定时同步、还原、被封等。
+- 定时作业，定时同步、还原、备份等。
+- 在线文件管理。
 - 免费
 - 开源
 - 跨平台，支持 Windows、Linux、Unix、Mac、Android、Docker 等平台。
