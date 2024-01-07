@@ -199,6 +199,17 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 获取文价夹/路径下拉列表
+        /// </summary>
+        /// <returns></returns>
+        [HttpPost("paths")]
+        public Result<List<TreeNode>> GetPaths([FromBody] TreeNodePathRequest request)
+        {
+            var data = Filesystem.TreeNodes(request.Path);
+            return Result.Ok(data);
+        }
+
+        /// <summary>
         /// 文件下载
         /// 直接流式传输的方法是一种高效处理大文件下载的方式。
         /// 这种方法通过直接将原始响应流传输到客户端，避免了将文件内容完全加载到服务器内存中。这样做既减少了内存消耗，也提高了处理大文件的效率。
@@ -307,16 +318,5 @@ namespace MDriveSync.Client.API.Controllers
 
         //    return new FileStreamResult(stream, "application/octet-stream");
         //}
-
-        /// <summary>
-        /// 获取文价夹/路径下拉列表
-        /// </summary>
-        /// <returns></returns>
-        [HttpPost("paths")]
-        public Result<List<TreeNode>> GetPaths([FromBody] TreeNodePathRequest request)
-        {
-            var data = Filesystem.TreeNodes(request.Path);
-            return Result.Ok(data);
-        }
     }
 }

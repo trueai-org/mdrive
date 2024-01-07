@@ -17,6 +17,34 @@ Supports a variety of algorithms for synchronization and backup.
 
 > More versions, stay tuned!
 
+## 特性
+
+- 不限速，官方接口支持，上传下载均不限速。
+- 多线程支持，多线程上传、下载、同步。
+- 免费
+- 开源
+- 跨平台，支持 Windows、Linux、Unix、Mac、Android、Docker 等平台。
+- 快速校验，多种算法支持 sha1、sha256、md5
+- 安全，加密
+- 多账号支持，多阿里云盘账号支持
+- 多作业计划支持，可以配置多个同步时间点。
+- 多种同步方式：镜像、备份、双向
+- 极速，采用安全极速的差异算法，极速实现单向或双向同步。
+- 多模块支持，支持 Duplicati、Kopia 模块，直接进行加密（BETA）。
+- 支持秒传
+- 支持还原云盘文件（BETA）。
+- 支持过滤本地文件/文件夹，丰富的校验规则。
+- 高性能，采用 .NET8 最新技术，极致的性能体现。
+- WebUI 可视化配置
+- WebUI 前后端分离，保证了后台服务的高可用。
+- 支持只读模式，只读模式启动服务，则不可以编辑配置。
+- 支持自定义端口。
+- 支持回收站功能，支持删除文件/夹到回收站。
+- WebUI 支持多主题，支持黑色模式。
+- 支持在线上传（BETA）。
+- 支持云盘管理和在线下载文件。
+- 支持作业暂停、恢复、禁用、取消、删除等。
+
 ## 安装与使用
 
 ### 预览
@@ -31,7 +59,11 @@ Supports a variety of algorithms for synchronization and backup.
 https://hub.docker.com/r/trueaiorg/m-drive-sync-client
 
 ```
-# 提示：可以不用映射 appsettings.Client.json
+# 快速启动并开启只读模式
+docker run --name mdrive -d --restart=always \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -e READ_ONLY=true \
+ -p 8080:8080 trueaiorg/m-drive-sync-client
 
 # 确保目录存在
 # 确保映射/挂载了备份目录
@@ -119,6 +151,12 @@ docker run --name mdrive -d --restart=always \
 - [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
 - [阿里云盘小白羊版(暂停维护)](https://github.com/liupan1890/aliyunpan) https://github.com/liupan1890/aliyunpan
 - [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
+
+
+## WEB UI 管理后台配置
+
+- 只读模式：WebUI 下如果开启只读模式，则允许编辑和修改，只能查看，默认 `ReadOnly: false`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e READ_ONLY=true`。
+- 基础认证：WebUI 账号和密码，如果开启则打开网站管理后台时需要输入账号和密码，默认启用 `BasicAuth`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 ` -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456`。
 
 ## 高级配置
 
@@ -378,3 +416,4 @@ docker run --name mdrive -d --restart=always \
 ## 推广
 
 - TODO
+

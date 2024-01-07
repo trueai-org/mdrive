@@ -2,6 +2,7 @@ using MDriveSync.Core;
 using MDriveSync.Core.BaseAuth;
 using MDriveSync.Core.Dashboard;
 using MDriveSync.Core.Filters;
+using MDriveSync.Core.Middlewares;
 using Microsoft.AspNetCore.Mvc;
 using Quartz.Logging;
 using Serilog;
@@ -163,6 +164,20 @@ namespace MDriveSync.Client.API
                     //{
                     //    appBuilder.UseMiddleware<AspNetCoreDashboardMiddleware>(options);
                     //});
+                }
+
+                // 从配置或环境变量中获取是否开启只读模式
+                var isReadOnlyMode = builder.Configuration.GetSection("ReadOnly").Get<bool?>();
+                if (isReadOnlyMode != true)
+                {
+                    if (bool.TryParse(Environment.GetEnvironmentVariable("READ_ONLY"), out var ro) && ro)
+                    {
+                        isReadOnlyMode = ro;
+                    }
+                }
+                if (isReadOnlyMode == true)
+                {
+                    app.UseMiddleware<ReadOnlyMiddleware>(isReadOnlyMode);
                 }
 
                 app.MapControllers();
