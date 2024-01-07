@@ -52,8 +52,8 @@ Supports a variety of algorithms for synchronization and backup.
 > 在线预览
 
 <http://43.129.20.214:18080>
-账号：admin
-密码：123456
+
+账号：admin，密码：123456
 
 > 截图
 
