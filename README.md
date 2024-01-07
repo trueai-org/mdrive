@@ -19,8 +19,9 @@ Supports a variety of algorithms for synchronization and backup.
 
 ## 特性
 
-- 不限速，官方接口支持，上传下载均不限速。
-- 多线程支持，多线程上传、下载、同步。
+- 不限速，阿里云盘官方接口支持，上传下载均不限速。
+- 多线程支持，多线程上传、下载、同步，充分利用带宽。
+- 定时作业，定时同步、还原、被封等。
 - 免费
 - 开源
 - 跨平台，支持 Windows、Linux、Unix、Mac、Android、Docker 等平台。
@@ -30,20 +31,21 @@ Supports a variety of algorithms for synchronization and backup.
 - 多作业计划支持，可以配置多个同步时间点。
 - 多种同步方式：镜像、备份、双向
 - 极速，采用安全极速的差异算法，极速实现单向或双向同步。
-- 多模块支持，支持 Duplicati、Kopia 模块，直接进行加密（BETA）。
 - 支持秒传
-- 支持还原云盘文件（BETA）。
 - 支持过滤本地文件/文件夹，丰富的校验规则。
-- 高性能，采用 .NET8 最新技术，极致的性能体现。
+- 高性能，采用 .NET8 最新技术，极致的性能体现，低内存、高性能、跨平台。
 - WebUI 可视化配置
 - WebUI 前后端分离，保证了后台服务的高可用。
 - 支持只读模式，只读模式启动服务，则不可以编辑配置。
 - 支持自定义端口。
 - 支持回收站功能，支持删除文件/夹到回收站。
 - WebUI 支持多主题，支持黑色模式。
-- 支持在线上传（BETA）。
 - 支持云盘管理和在线下载文件。
 - 支持作业暂停、恢复、禁用、取消、删除等。
+- 支持队列，保证作业的高可用，避免多任务卡顿以及抢占资源问题。
+- 支持在线上传（BETA）。
+- 多模块支持，支持 Duplicati、Kopia 模块，直接进行加密（BETA）。
+- 支持还原云盘文件（BETA）。
 
 ## 安装与使用
 
@@ -124,8 +126,6 @@ vi appsettings.Client.json
 
 # 确保配置具有可写配置权限 appsettings.Client.json
 chmod 666 appsettings.Client.json
-
-
 
 # 快速启动示例，并挂载 /data 目录到容器 /data 只读模式，并映射端口 8080
 docker run --name mdrive -d --restart=always \
@@ -332,16 +332,14 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
-- WebUI 版本
-- 队列执行、加锁执行、并行任务只有一个
 - 还原下载
-- 未初始化点击报错 BUG
 - 分块上传、分块下载、超大文件支持
-- 只读模式，使用只读模式则通过 WEBUI 不可编辑
 - 锁定模式，超时多少时间自动推出 UI
 - Windows 客户端 UI/WPF 版本
 - MacUI 版本
-- 移动端（IOS、Andorid）版本
+- 移动端打包
+- Winwods 安装包
+- WPF 安装包
 - Kopia 模式、插件开发
 - 百度云盘集成
 - 本地模式集成
@@ -350,8 +348,9 @@ docker run --name mdrive -d --restart=always \
 - 上传增加文件的本地时间
 - WebDAV、磁盘挂载
 - 多版本、多备份、版本还原
-- WebUI 增加下次作业时间，上次统计，日志查询等
-- WEB UI 增加主题，欢迎（可关闭），公告，官网、关于
+- WebUI 增加下次作业时间
+- WebUI 增加公告
+- WebUI 增加上次执行结果
 
 ## 发布
 
@@ -432,5 +431,9 @@ docker run --name mdrive -d --restart=always \
 
 ## 推广
 
-- TODO
+- 推广返现
+- 购买阿里云盘会员返现
 
+## 赞助
+
+- 感谢！
