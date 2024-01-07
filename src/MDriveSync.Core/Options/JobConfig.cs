@@ -149,5 +149,10 @@
         /// 文件夹数量
         /// </summary>
         public int FolderCount { get; set; }
+
+        /// <summary>
+        /// 作业消息
+        /// </summary>
+        public string Message { get; set; }
     }
 }

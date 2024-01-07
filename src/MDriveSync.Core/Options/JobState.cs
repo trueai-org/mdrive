@@ -120,5 +120,12 @@ namespace MDriveSync.Core
         /// </summary>
         [Description("删除")]
         Deleted = 101,
+
+        /// <summary>
+        /// 继续（仅用于指令）。
+        /// 表示作业从暂停恢复继续，例如：同步暂停回复继续，还原暂停回复继续。
+        /// </summary>
+        [Description("继续")]
+        Continue = 102,
     }
 }

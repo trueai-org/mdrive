@@ -81,6 +81,11 @@ namespace MDriveSync.Core
         ///// </summary>
         //private readonly AsyncLock _createFolderLock = new();
 
+        // 用于控制任务暂停和继续的对象
+        private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true);
+        // 暂停时的作业状态
+        private JobState _pauseJobState;
+
         private readonly ILogger _log;
 
         private readonly IMemoryCache _cache;
@@ -188,7 +193,23 @@ namespace MDriveSync.Core
         /// 作业状态
         /// </summary>
         public JobState CurrentState { get; private set; }
+
         public JobConfig CurrrentJob => _jobConfig;
+
+        /// <summary>
+        /// 进度总数
+        /// </summary>
+        public int ProcessCount = 0;
+
+        /// <summary>
+        /// 当前进度
+        /// </summary>
+        public int ProcessCurrent = 0;
+
+        /// <summary>
+        /// 当前进度消息
+        /// </summary>
+        public string ProcessMessage = string.Empty;
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
@@ -217,6 +238,7 @@ namespace MDriveSync.Core
             // 非禁用状态时，创建默认为 none 状态
             if (jobConfig.State != JobState.Disabled)
             {
+                jobConfig.State = JobState.None;
                 CurrentState = JobState.None;
             }
             else
@@ -224,7 +246,6 @@ namespace MDriveSync.Core
                 CurrentState = JobState.Disabled;
             }
         }
-
 
         /// <summary>
         /// 定期检查
@@ -254,7 +275,7 @@ namespace MDriveSync.Core
                     case JobState.Starting:
                         {
                             // 启动中
-                            await StartJob();
+                            StartJob();
                         }
                         break;
 
@@ -262,7 +283,7 @@ namespace MDriveSync.Core
                         {
                             // 初始化作业调度
                             // 检查作业调度
-                            await InitJobScheduling();
+                            InitJobScheduling();
                         }
                         break;
 
@@ -297,6 +318,8 @@ namespace MDriveSync.Core
 
                     case JobState.Completed:
                         {
+                            // 完成的作业恢复到空闲
+                            ChangeState(JobState.Idle);
                         }
                         break;
 
@@ -307,6 +330,8 @@ namespace MDriveSync.Core
 
                     case JobState.Error:
                         {
+                            // 错误的作业恢复到空闲
+                            ChangeState(JobState.Idle);
                         }
                         break;
 
@@ -317,6 +342,8 @@ namespace MDriveSync.Core
 
                     case JobState.Cancelled:
                         {
+                            // 取消的作业恢复到空闲
+                            ChangeState(JobState.Idle);
                         }
                         break;
 
@@ -340,7 +367,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 初始化作业
         /// </summary>
-        public async Task InitJobScheduling()
+        public void InitJobScheduling()
         {
             // 开始计算业务
             // 计算下一次执行备份等计划作业
@@ -359,9 +386,9 @@ namespace MDriveSync.Core
                     if (!_schedulers.TryGetValue(exp, out var sch) || sch == null)
                     {
                         // 创建备份计划
-                        var scheduler = new QuartzCronScheduler(exp, async () =>
+                        var scheduler = new QuartzCronScheduler(exp, () =>
                         {
-                            await StartSync();
+                            StartSync();
                         });
                         scheduler.Start();
                         _schedulers[exp] = scheduler;
@@ -369,7 +396,7 @@ namespace MDriveSync.Core
                         // 如果立即执行的
                         if (_jobConfig.IsTemporary)
                         {
-                            await StartSync();
+                            StartSync();
                         }
                     }
                 }
@@ -381,7 +408,7 @@ namespace MDriveSync.Core
                 {
                     if (!isTemporaryIsEnd)
                     {
-                        await StartSync();
+                        StartSync();
                         isTemporaryIsEnd = true;
                     }
                 }
@@ -394,80 +421,89 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private async Task Initialize()
         {
-            ChangeState(JobState.Initializing);
-
-            _log.LogInformation("作业初始化");
-
-            var sw = new Stopwatch();
-            sw.Start();
-
-            var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-
-            _log.LogInformation($"Linux: {isLinux}");
-
-            // 格式化路径
-            _localRestorePath = _jobConfig.Restore.TrimPath();
-            if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
+            var isLock = await AsyncLocalLock.TryLockAsync("init_job_lock", TimeSpan.FromSeconds(60), async () =>
             {
-                _localRestorePath = $"/{_localRestorePath}";
-            }
+                ChangeState(JobState.Initializing);
 
-            _driveSavePath = _jobConfig.Target.TrimPrefix();
+                _log.LogInformation("作业初始化");
 
-            // 格式化备份目录
-            var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
-            _jobConfig.Sources.Clear();
-            foreach (var item in sources)
+                var sw = new Stopwatch();
+                sw.Start();
+
+                var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+
+                _log.LogInformation($"Linux: {isLinux}");
+
+                // 格式化路径
+                _localRestorePath = _jobConfig.Restore.TrimPath();
+                if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
+                {
+                    _localRestorePath = $"/{_localRestorePath}";
+                }
+
+                _driveSavePath = _jobConfig.Target.TrimPrefix();
+
+                // 格式化备份目录
+                var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
+                _jobConfig.Sources.Clear();
+                foreach (var item in sources)
+                {
+                    var path = item.TrimPath();
+                    if (isLinux && !string.IsNullOrWhiteSpace(path))
+                    {
+                        // Linux
+                        path = $"/{path}";
+                        var dir = new DirectoryInfo(path);
+                        if (!dir.Exists)
+                        {
+                            dir.Create();
+                        }
+                        _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
+                    }
+                    else
+                    {
+                        // Windows
+                        var dir = new DirectoryInfo(path);
+                        if (!dir.Exists)
+                        {
+                            dir.Create();
+                        }
+                        _jobConfig.Sources.Add(dir.FullName);
+                    }
+                }
+
+                _localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
+
+                // 获取云盘信息
+                AliyunDriveInitInfo();
+
+                // 空间信息
+                await AliyunDriveInitSpaceInfo();
+
+                // VIP 信息
+                await AliyunDriveInitVipInfo();
+
+                // 保存配置
+                _driveConfig.Save();
+
+                sw.Stop();
+                _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
+            });
+
+
+            // 如果获取到锁则开始作业
+            if (isLock)
             {
-                var path = item.TrimPath();
-                if (isLinux && !string.IsNullOrWhiteSpace(path))
-                {
-                    // Linux
-                    path = $"/{path}";
-                    var dir = new DirectoryInfo(path);
-                    if (!dir.Exists)
-                    {
-                        dir.Create();
-                    }
-                    _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
-                }
-                else
-                {
-                    // Windows
-                    var dir = new DirectoryInfo(path);
-                    if (!dir.Exists)
-                    {
-                        dir.Create();
-                    }
-                    _jobConfig.Sources.Add(dir.FullName);
-                }
+                // 开始作业
+                StartJob();
             }
-
-            _localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
-
-            // 获取云盘信息
-            AliyunDriveInitInfo();
-
-            // 空间信息
-            await AliyunDriveInitSpaceInfo();
-
-            // VIP 信息
-            await AliyunDriveInitVipInfo();
-
-            // 保存配置
-            _driveConfig.Save();
-
-            sw.Stop();
-            _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
-
-            await StartJob();
         }
 
         /// <summary>
         /// 启动后台作业、启动缓存、启动监听等
         /// </summary>
         /// <returns></returns>
-        public async Task StartJob()
+        public void StartJob()
         {
             ChangeState(JobState.Starting);
 
@@ -524,7 +560,7 @@ namespace MDriveSync.Core
             // 启动完成，处于空闲
             ChangeState(JobState.Idle);
 
-            await InitJobScheduling();
+            InitJobScheduling();
         }
 
         /// <summary>
@@ -579,7 +615,12 @@ namespace MDriveSync.Core
         {
             CurrentState = newState;
 
-            // 触发状态改变事件 (如果有)
+            // 触发状态改变事件
+            // 还原数据
+
+            ProcessMessage = string.Empty;
+            ProcessCount = 0;
+            ProcessCurrent = 0;
         }
 
         // 其他任务相关的异步方法...
@@ -635,8 +676,63 @@ namespace MDriveSync.Core
         /// 开始同步
         /// </summary>
         /// <returns></returns>
-        public async Task StartSync()
+        public void StartSync()
         {
+            // 如果不是处于空闲状态，则终止
+            if (CurrentState != JobState.Idle
+                && CurrentState != JobState.Queued
+                && CurrentState != JobState.Cancelled
+                && CurrentState != JobState.Error)
+            {
+                return;
+            }
+
+            // 加入队列
+            _log.LogInformation("任务 {@0} 加入队列", _jobConfig.Name);
+
+            ChangeState(JobState.Queued);
+
+            // 添加到全局队列
+            GlobalJob.Instance.AddOrRestartJob(_jobConfig.Id, async (cancellationToken) =>
+            {
+                try
+                {
+
+                    _log.LogInformation("开始同步 {@0}", _jobConfig.Name);
+
+                    //ChangeState(JobState.BackingUp);
+
+                    //await Task.Delay(20000, cancellationToken);
+
+                    // 实现文件作业逻辑
+                    await StartSyncJob(cancellationToken);
+
+                    //ChangeState(JobState.Idle);
+
+                    _log.LogInformation("完成同步 {@0}", _jobConfig.Name);
+                }
+                catch (OperationCanceledException)
+                {
+                    _log.LogInformation("任务 {@0} 取消", _jobConfig.Name);
+
+                    ChangeState(JobState.Cancelled);
+                }
+                catch (Exception ex)
+                {
+                    _log.LogError(ex, "任务 {@0} 错误", _jobConfig.Name);
+
+                    ChangeState(JobState.Error);
+                }
+            });
+        }
+
+        public async Task StartSyncJob(CancellationToken cancellationToken)
+        {
+            if (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+
             // 备份中 | 校验中 跳过
             if (CurrentState == JobState.BackingUp || CurrentState == JobState.Verifying)
             {
@@ -644,7 +740,10 @@ namespace MDriveSync.Core
             }
 
             // 如果不是处于空闲状态，则终止
-            if (CurrentState != JobState.Idle)
+            if (CurrentState != JobState.Idle
+                && CurrentState != JobState.Queued
+                && CurrentState != JobState.Cancelled
+                && CurrentState != JobState.Error)
             {
                 return;
             }
@@ -653,6 +752,9 @@ namespace MDriveSync.Core
 
             // 备份中
             ChangeState(JobState.BackingUp);
+
+            // 恢复继续
+            _pauseEvent.Set();
 
             var sw = new Stopwatch();
             sw.Start();
@@ -692,7 +794,7 @@ namespace MDriveSync.Core
                 sw.Restart();
                 _log.LogInformation("开始执行同步");
 
-                await SyncFiles();
+                await SyncFiles(cancellationToken);
 
                 sw.Stop();
                 _log.LogInformation($"同步作业完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -717,23 +819,32 @@ namespace MDriveSync.Core
         /// 同步本地文件到云盘
         /// </summary>
         /// <returns></returns>
-        private async Task SyncFiles()
+        private async Task SyncFiles(CancellationToken token)
         {
             ScanLocalFiles();
 
             var now = DateTime.Now;
 
-            var processorCount = GetUploadThreadCount();
-            var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
+            var processCount = GetUploadThreadCount();
+            var options = new ParallelOptions() { MaxDegreeOfParallelism = processCount };
 
             var process = 0;
             var total = _localFolders.Count;
+
+            ProcessCurrent = 0;
+            processCount = total;
+            ProcessMessage = string.Empty;
 
             // 并行创建文件夹
             await Parallel.ForEachAsync(_localFolders, options, async (item, cancellationToken) =>
             {
                 try
                 {
+                    // 在关键点添加暂停点
+                    _pauseEvent.Wait();
+                    cancellationToken = token;
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     // 计算存储目录
                     var saveParentPath = $"{_driveSavePath}/{item.Key}".TrimPath();
 
@@ -761,6 +872,10 @@ namespace MDriveSync.Core
                         saveParentFileId = _driveFolders[saveParentPath].FileId;
                     }
                 }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     _log.LogError(ex, $"文件上传处理异常 {item.Value.FullPath}");
@@ -768,6 +883,10 @@ namespace MDriveSync.Core
                 finally
                 {
                     Interlocked.Increment(ref process);
+
+                    ProcessCurrent = process;
+                    ProcessMessage = $"同步文件夹中 {process}/{total}";
+
                     _log.LogInformation($"同步文件夹中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
                 }
             });
@@ -777,12 +896,25 @@ namespace MDriveSync.Core
             process = 0;
             total = _localFiles.Count;
 
+
+            ProcessCurrent = 0;
+            processCount = total;
+
             // 并行上传
             await Parallel.ForEachAsync(_localFiles, options, async (item, cancellationToken) =>
             {
                 try
                 {
+                    // 在关键点添加暂停点
+                    _pauseEvent.Wait();
+                    cancellationToken = token;
+                    cancellationToken.ThrowIfCancellationRequested();
+
                     await AliyunDriveUploadFile(item.Value);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {
@@ -791,9 +923,13 @@ namespace MDriveSync.Core
                 finally
                 {
                     Interlocked.Increment(ref process);
+                    ProcessCurrent = process;
+                    ProcessMessage = $"同步文件中 {process}/{total}";
                     _log.LogInformation($"同步文件中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
                 }
             });
+
+            ProcessMessage = string.Empty;
 
             _log.LogInformation($"同步文件完成，总文件数：{_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
         }
@@ -1137,27 +1273,74 @@ namespace MDriveSync.Core
         /// <param name="state"></param>
         public void JobStateChange(JobState state)
         {
-            // TODO
-
             if (state == JobState.Cancelled)
             {
                 // 取消作业
-                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
+                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring, JobState.Paused };
                 if (!allowJobStates.Contains(CurrentState))
                 {
                     throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法取消作业");
                 }
 
+                if (CurrentState == JobState.Queued)
+                {
+                    // 如果处于队列中
+                    GlobalJob.Instance.CancelJob(_jobConfig.Id);
+
+                    // 变更为空闲
+                    ChangeState(JobState.Idle);
+                }
+                else
+                {
+                    // 如果处于备份中、暂停中、还原中、扫描中取消，则调用取消任务
+                    GlobalJob.Instance.CancelJob(_jobConfig.Id);
+
+                    // 需要先恢复作业
+                    _pauseEvent.Set();
+
+                    // 切换任务处于取消中
+                    ChangeState(JobState.Cancelling);
+                }
             }
-            else if (state == JobState.Paused)
+            else if (state == JobState.BackingUp)
             {
-                // 暂停作业
-                var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring };
+                // 执行作业，加入到队列
+                var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled };
                 if (!allowJobStates.Contains(CurrentState))
                 {
                     throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法暂停作业");
                 }
 
+                // 开始执行，加入到队列
+                StartSync();
+            }
+            else if (state == JobState.Paused)
+            {
+                // 暂停作业
+                var allowJobStates = new[] { JobState.BackingUp, JobState.Restoring };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，无法暂停作业");
+                }
+
+                // 暂停执行
+                _pauseEvent.Reset();
+                _pauseJobState = CurrentState;
+
+                // 切换状态
+                ChangeState(JobState.Paused);
+            }
+            else if (state == JobState.Continue)
+            {
+                // 仅用于暂停
+                if (CurrentState == JobState.Paused)
+                {
+                    // 恢复继续
+                    _pauseEvent.Set();
+
+                    // 切换原有状态
+                    ChangeState(_pauseJobState);
+                }
             }
             else if (state == JobState.Disabled)
             {

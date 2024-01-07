@@ -41,6 +41,27 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 获取作业
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet("jobs")]
+        public Result<List<JobConfig>> GetJobs()
+        {
+            var data = _timedHostedService.Jobs().Values
+                .ToList()
+                .Select(c =>
+                {
+                    var j = c.CurrrentJob.GetClone();
+                    j.State = c.CurrentState;
+                    j.Metadata ??= new();
+                    j.Metadata.Message = c.ProcessMessage;
+
+                    return j;
+                }).ToList();
+            return Result.Ok(data);
+        }
+
+        /// <summary>
         /// 获取云盘文件文件夹
         /// </summary>
         /// <param name="jobId"></param>
