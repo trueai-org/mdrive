@@ -748,6 +748,10 @@ namespace MDriveSync.Core
                 return;
             }
 
+
+            var swAll = new Stopwatch();
+            swAll.Start();
+
             _log.LogInformation($"同步作业开始：{DateTime.Now:G}");
 
             // 备份中
@@ -813,6 +817,10 @@ namespace MDriveSync.Core
 
             sw.Stop();
             _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
+
+            swAll.Stop();
+
+            ProcessMessage = $"执行完成，总用时 {swAll.ElapsedMilliseconds / 1000} 秒";
         }
 
         /// <summary>
@@ -1389,6 +1397,8 @@ namespace MDriveSync.Core
         /// </summary>
         private void ScanLocalFiles()
         {
+            ProcessMessage = "正在扫描本地文件";
+
             var now = DateTime.Now;
 
             // 序列化回 JSON
@@ -1469,6 +1479,8 @@ namespace MDriveSync.Core
 
                                 return lf;
                             });
+
+                            ProcessMessage = $"正在扫描本地文件 {_localFiles.Count}";
                         }
                     }
                     catch (UnauthorizedAccessException ex)
@@ -2014,6 +2026,8 @@ namespace MDriveSync.Core
         {
             try
             {
+                ProcessMessage = "正在加载云盘文件";
+
                 var allItems = new List<AliyunDriveFileItem>();
                 var marker = "";
                 do
