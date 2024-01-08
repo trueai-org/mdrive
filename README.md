@@ -335,7 +335,9 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
-- 还原下载
+- 还原到本地，选择文件/文件夹还原
+- WebDAV 挂载
+- 多版本、快照、加密
 - 分块上传、分块下载、超大文件支持
 - 锁定模式，超时多少时间自动推出 UI
 - Windows 客户端 UI/WPF 版本
