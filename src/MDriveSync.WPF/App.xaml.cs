@@ -52,7 +52,7 @@ namespace MDriveSync.WPF
                     var configuration = builder
                     .SetBasePath(AppContext.BaseDirectory)
                     .AddJsonFile($"appsettings.json", optional: true, reloadOnChange: true)
-                    .AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true)
+                    //.AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true)
                     .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
                     .Build();
 
@@ -85,8 +85,8 @@ namespace MDriveSync.WPF
                 })
                 .ConfigureServices((context, services) =>
                 {
-                    // 注册服务
-                    services.Configure<ClientOptions>(context.Configuration.GetSection("Client"));
+                    //// 注册服务
+                    //services.Configure<ClientOptions>(context.Configuration.GetSection("Client"));
 
                     // 注册后台服务
                     //services.AddHostedService<TimedHostedService>();

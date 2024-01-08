@@ -1,7 +1,7 @@
-﻿using MDriveSync.Core.ViewModels;
+﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
 namespace MDriveSync.Core
@@ -15,7 +15,9 @@ namespace MDriveSync.Core
         //private readonly IServiceScopeFactory _serviceScopeFactory;
 
         private readonly ILogger _logger;
-        private readonly IOptionsMonitor<ClientOptions> _clientOptions;
+        //private readonly IOptionsMonitor<ClientOptions> _clientOptions;
+
+        private readonly LiteRepository<AliyunDriveConfig, string> _driveDb = DriveDb.Instacne;
 
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
         private readonly ConcurrentDictionary<string, Job> _jobs = new();
@@ -23,11 +25,12 @@ namespace MDriveSync.Core
         private Timer _timer;
 
         public TimedHostedService(
-            ILogger<TimedHostedService> logger,
-            IOptionsMonitor<ClientOptions> clientOptions)
+            ILogger<TimedHostedService> logger
+            //IOptionsMonitor<ClientOptions> clientOptions
+            )
         {
             _logger = logger;
-            _clientOptions = clientOptions;
+            //_clientOptions = clientOptions;
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -68,7 +71,7 @@ namespace MDriveSync.Core
             {
                 _logger.LogInformation("开始例行检查");
 
-                var ds = _clientOptions.CurrentValue.AliyunDrives.ToList();
+                var ds = _driveDb.GetAll();
                 foreach (var ad in ds)
                 {
                     var jobs = ad.Jobs.ToList();
@@ -116,9 +119,10 @@ namespace MDriveSync.Core
         /// <param name="driveId"></param>
         /// <param name="cfg"></param>
         /// <exception cref="LogicException"></exception>
-        public void JobDelete(string driveId, JobConfig cfg)
+        public void JobAdd(string driveId, JobConfig cfg)
         {
-            var drive = _clientOptions.CurrentValue.AliyunDrives.Where(c => c.Id == driveId).FirstOrDefault();
+            var drives = _driveDb.GetAll();
+            var drive = drives.Where(c => c.Id == driveId).FirstOrDefault();
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");
@@ -159,7 +163,7 @@ namespace MDriveSync.Core
         {
             var jobs = Jobs();
 
-            var ds = _clientOptions.CurrentValue.AliyunDrives.ToList();
+            var ds = _driveDb.GetAll();
             foreach (var kvp in ds)
             {
                 var js = kvp.Jobs.ToList();
@@ -208,7 +212,7 @@ namespace MDriveSync.Core
                 throw new LogicParamException();
             }
 
-            var drive = _clientOptions.CurrentValue.AliyunDrives.FirstOrDefault(c => c.Id == driveId);
+            var drive = _driveDb.Get(driveId);
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");
@@ -225,7 +229,7 @@ namespace MDriveSync.Core
         /// </summary>
         public void DriveDelete(string driveId)
         {
-            var drive = _clientOptions.CurrentValue.AliyunDrives.FirstOrDefault(c => c.Id == driveId);
+            var drive = _driveDb.Get(driveId);
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");

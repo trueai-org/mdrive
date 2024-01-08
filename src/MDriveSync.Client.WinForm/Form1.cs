@@ -71,7 +71,7 @@ namespace MDriveSync.Client.WinForm
                     var configuration = builder
                     .SetBasePath(AppContext.BaseDirectory)
                     .AddJsonFile($"appsettings.json", optional: true, reloadOnChange: true)
-                    .AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true)
+                    //.AddJsonFile($"{ClientSettings.ClientSettingsPath}", optional: true, reloadOnChange: true)
                     .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true)
                     .Build();
 
@@ -104,8 +104,8 @@ namespace MDriveSync.Client.WinForm
                 })
                 .ConfigureServices((context, services) =>
                 {
-                    // 注册服务
-                    services.Configure<ClientOptions>(context.Configuration.GetSection("Client"));
+                    //// 注册服务
+                    //services.Configure<ClientOptions>(context.Configuration.GetSection("Client"));
 
                     // 注册后台服务
                     //services.AddHostedService<TimedHostedService>();
@@ -148,96 +148,96 @@ namespace MDriveSync.Client.WinForm
         /// </summary>
         private void ReloadStatus()
         {
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            //判断
-            {
-                //后面换成接口查询，每分钟查询
-                if (string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken))
-                {
-                    lbLogin.Text = "登陆状态：未登陆";
-                }
-                else
-                {
-                    lbLogin.Text = "登陆状态：已登陆";
-                }
-                lbLogin.Refresh();
-            }
-            {
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            ////判断
+            //{
+            //    //后面换成接口查询，每分钟查询
+            //    if (string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken))
+            //    {
+            //        lbLogin.Text = "登陆状态：未登陆";
+            //    }
+            //    else
+            //    {
+            //        lbLogin.Text = "登陆状态：已登陆";
+            //    }
+            //    lbLogin.Refresh();
+            //}
+            //{
 
-                if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?.Count() > 0)
-                {
-                    lbPlan.Text = $"备份计划：{aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?[0].ToString()}";
-                }
-                else
-                {
-                    lbPlan.Text = "备份计划：未设置";
-                }
-                lbPlan.Refresh();
-            }
-            {
+            //    if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?.Count() > 0)
+            //    {
+            //        lbPlan.Text = $"备份计划：{aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?[0].ToString()}";
+            //    }
+            //    else
+            //    {
+            //        lbPlan.Text = "备份计划：未设置";
+            //    }
+            //    lbPlan.Refresh();
+            //}
+            //{
 
-                if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?.Count() > 0)
-                {
-                    //本地目录：未配置
-                    lbLocal.Text = $"本地目录：{aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?[0].ToString()}";
-                }
-                else
-                {
-                    lbLocal.Text = "本地目录：未配置";
-                }
-                lbLocal.Refresh();
-            }
-            {
+            //    if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?.Count() > 0)
+            //    {
+            //        //本地目录：未配置
+            //        lbLocal.Text = $"本地目录：{aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?[0].ToString()}";
+            //    }
+            //    else
+            //    {
+            //        lbLocal.Text = "本地目录：未配置";
+            //    }
+            //    lbLocal.Refresh();
+            //}
+            //{
 
-                if (!string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target))
-                {
-                    //本地目录：未配置
-                    lbCloud.Text = $"云盘目录：{aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target.ToString()}";
-                }
-                else
-                {
-                    lbCloud.Text = "云盘目录：未配置";
-                }
-                lbCloud.Refresh();
-            }
+            //    if (!string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target))
+            //    {
+            //        //本地目录：未配置
+            //        lbCloud.Text = $"云盘目录：{aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target.ToString()}";
+            //    }
+            //    else
+            //    {
+            //        lbCloud.Text = "云盘目录：未配置";
+            //    }
+            //    lbCloud.Refresh();
+            //}
         }
 
         private void LoadValue()
         {
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
 
-            {
-                if (!string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken))
-                {
-                    manualTokenForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken.ToString());
-                }
+            //{
+            //    if (!string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken))
+            //    {
+            //        manualTokenForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken.ToString());
+            //    }
 
-            }
-            {
-                if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?.Count() > 0)
-                {
-                    planForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?[0].ToString());
-                }
-            }
-            {
+            //}
+            //{
+            //    if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?.Count() > 0)
+            //    {
+            //        planForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?[0].ToString());
+            //    }
+            //}
+            //{
 
-                if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?.Count() > 0)
-                {
+            //    if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?.Count() > 0)
+            //    {
 
-                    localDirectoryForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?[0].ToString());
-                }
+            //        localDirectoryForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?[0].ToString());
+            //    }
 
-            }
-            {
+            //}
+            //{
 
-                if (!string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target))
-                {
-                    cloudDirectoryForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target);
-                }
+            //    if (!string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target))
+            //    {
+            //        cloudDirectoryForm.LoadValue(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target);
+            //    }
 
-            }
+            //}
         }
 
         private async void btnGetToken_Click(object sender, EventArgs e)
@@ -288,36 +288,36 @@ namespace MDriveSync.Client.WinForm
         /// </summary>
         private bool CheckConfig()
         {
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            {
-                if (string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken))
-                {
-                    MessageBox.Show(this, "请先登陆");
-                    return false;
-                }
-            }
-            {
-                if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?.Count() == 0)
-                {
-                    MessageBox.Show(this, "请先填写备份计划");
-                    return false;
-                }
-            }
-            {
-                if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?.Count() == 0)
-                {
-                    MessageBox.Show(this, "请先填写本地目录");
-                    return false;
-                }
-            }
-            {
-                if (string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target))
-                {
-                    MessageBox.Show(this, "请先填写云盘目录");
-                    return false;
-                }
-            }
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //{
+            //    if (string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].RefreshToken))
+            //    {
+            //        MessageBox.Show(this, "请先登陆");
+            //        return false;
+            //    }
+            //}
+            //{
+            //    if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Schedules?.Count() == 0)
+            //    {
+            //        MessageBox.Show(this, "请先填写备份计划");
+            //        return false;
+            //    }
+            //}
+            //{
+            //    if (aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Sources?.Count() == 0)
+            //    {
+            //        MessageBox.Show(this, "请先填写本地目录");
+            //        return false;
+            //    }
+            //}
+            //{
+            //    if (string.IsNullOrWhiteSpace(aliyunDriveConfig?.Client?.AliyunDrives?[0].Jobs?[0].Target))
+            //    {
+            //        MessageBox.Show(this, "请先填写云盘目录");
+            //        return false;
+            //    }
+            //}
             return true;
         }
 
@@ -409,69 +409,69 @@ namespace MDriveSync.Client.WinForm
 
         private void savePlan(object sender, string text)
         {
-            // 将文本保存到主窗体的字段中
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            aliyunDriveConfig.Client.AliyunDrives[0].Jobs[0].Schedules = new List<string>() { text };
-            saveConfig(aliyunDriveConfig);
-            panel1.Visible = false;
-            ReloadStatus();
+            //// 将文本保存到主窗体的字段中
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //aliyunDriveConfig.Client.AliyunDrives[0].Jobs[0].Schedules = new List<string>() { text };
+            //saveConfig(aliyunDriveConfig);
+            //panel1.Visible = false;
+            //ReloadStatus();
         }
 
 
         private void saveLocalDirectory(object sender, string text)
         {
-            // 将文本保存到主窗体的字段中
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            aliyunDriveConfig.Client.AliyunDrives[0].Jobs[0].Sources = new List<string>() { text };
-            saveConfig(aliyunDriveConfig);
-            panel1.Visible = false;
-            ReloadStatus();
+            //// 将文本保存到主窗体的字段中
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //aliyunDriveConfig.Client.AliyunDrives[0].Jobs[0].Sources = new List<string>() { text };
+            //saveConfig(aliyunDriveConfig);
+            //panel1.Visible = false;
+            //ReloadStatus();
         }
 
         private void saveCloudlDirectory(object sender, string text)
         {
-            // 将文本保存到主窗体的字段中
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            aliyunDriveConfig.Client.AliyunDrives[0].Jobs[0].Target = text;
-            saveConfig(aliyunDriveConfig);
-            panel1.Visible = false;
-            ReloadStatus();
+            //// 将文本保存到主窗体的字段中
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //aliyunDriveConfig.Client.AliyunDrives[0].Jobs[0].Target = text;
+            //saveConfig(aliyunDriveConfig);
+            //panel1.Visible = false;
+            //ReloadStatus();
         }
 
         private void saveManualToken(object sender, string text)
         {
-            // 将文本保存到主窗体的字段中
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            aliyunDriveConfig.Client.AliyunDrives[0].RefreshToken = text;
-            saveConfig(aliyunDriveConfig);
-            panel1.Visible = false;
-            ReloadStatus();
+            //// 将文本保存到主窗体的字段中
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //aliyunDriveConfig.Client.AliyunDrives[0].RefreshToken = text;
+            //saveConfig(aliyunDriveConfig);
+            //panel1.Visible = false;
+            //ReloadStatus();
         }
 
 
 
         private void saveToken(object sender, string text)
         {
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
-            aliyunDriveConfig.Client.AliyunDrives[0].RefreshToken = text;
-            saveConfig(aliyunDriveConfig);
-            panel1.Visible = false;
-            ReloadStatus();
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonConvert.DeserializeObject<ClientSettings>(jsonString);
+            //aliyunDriveConfig.Client.AliyunDrives[0].RefreshToken = text;
+            //saveConfig(aliyunDriveConfig);
+            //panel1.Visible = false;
+            //ReloadStatus();
         }
 
 
 
-        private void saveConfig(ClientSettings settings)
-        {
-            string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
-            File.WriteAllText(ClientSettings.ClientSettingsPath, json);
+        //private void saveConfig(ClientSettings settings)
+        //{
+        //    //string json = JsonConvert.SerializeObject(settings, Formatting.Indented);
+        //    //File.WriteAllText(ClientSettings.ClientSettingsPath, json);
 
-        }
+        //}
 
         private void btnLocalDirectory_Click(object sender, EventArgs e)
         {

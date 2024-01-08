@@ -1,9 +1,12 @@
-﻿namespace MDriveSync.Core
+﻿using MDriveSync.Core.DB;
+using ServiceStack.DataAnnotations;
+
+namespace MDriveSync.Core
 {
     /// <summary>
     /// 本地文件信息
     /// </summary>
-    public class LocalFileInfo
+    public class LocalFileInfo : IBaseKey<string>
     {
         /// <summary>
         /// 本地完整路径
@@ -14,6 +17,7 @@
         /// 相对路径
         /// 不包含 / 前缀
         /// </summary>
+        [PrimaryKey]
         public string Key { get; set; }
 
         /// <summary>

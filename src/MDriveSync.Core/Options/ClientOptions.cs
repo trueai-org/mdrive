@@ -1,40 +1,38 @@
-﻿using System.Text;
-using System.Text.Encodings.Web;
-using System.Text.Json;
+﻿using MDriveSync.Core.DB;
 
 namespace MDriveSync.Core
 {
-    /// <summary>
-    /// 客户端备份配置项文件
-    /// </summary>
-    public class ClientSettings
-    {
-        /// <summary>
-        /// 客户端配置项
-        /// </summary>
-        public const string ClientSettingsPath = "appsettings.Client.json";
+    ///// <summary>
+    ///// 客户端备份配置项文件
+    ///// </summary>
+    //public class ClientSettings
+    //{
+    //    /// <summary>
+    //    /// 客户端配置项
+    //    /// </summary>
+    //    public const string ClientSettingsPath = "appsettings.Client.json";
 
-        /// <summary>
-        ///
-        /// </summary>
-        public ClientOptions Client { get; set; }
-    }
+    //    /// <summary>
+    //    ///
+    //    /// </summary>
+    //    public ClientOptions Client { get; set; }
+    //}
 
-    /// <summary>
-    /// 客户端备份配置项
-    /// </summary>
-    public class ClientOptions
-    {
-        /// <summary>
-        /// 阿里云盘作业配置
-        /// </summary>
-        public List<AliyunDriveConfig> AliyunDrives { get; set; } = new List<AliyunDriveConfig>();
-    }
+    ///// <summary>
+    ///// 客户端备份配置项
+    ///// </summary>
+    //public class ClientOptions
+    //{
+    //    /// <summary>
+    //    /// 阿里云盘作业配置
+    //    /// </summary>
+    //    public List<AliyunDriveConfig> AliyunDrives { get; set; } = new List<AliyunDriveConfig>();
+    //}
 
     /// <summary>
     ///
     /// </summary>
-    public class AliyunDriveConfig
+    public class AliyunDriveConfig : IBaseId<string>
     {
         /// <summary>
         /// 云盘唯一标识
@@ -81,46 +79,63 @@ namespace MDriveSync.Core
         /// </summary>
         public void Save(bool isRemove = false)
         {
-            // 读取 JSON 文件
-            var jsonString = string.Empty;
-            if (File.Exists(ClientSettings.ClientSettingsPath))
+            if (isRemove)
             {
-                jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            }
-
-            var aliyunDriveConfig = string.IsNullOrWhiteSpace(jsonString) ? null
-                : JsonSerializer.Deserialize<ClientSettings>(jsonString);
-            aliyunDriveConfig ??= new ClientSettings();
-            aliyunDriveConfig.Client ??= new ClientOptions();
-
-            // 移除重新添加
-            var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
-            if (current >= 0)
-            {
-                aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
-
-                if (!isRemove)
-                {
-                    aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
-                }
+                DriveDb.Instacne.Delete(Id);
             }
             else
             {
-                if (!isRemove)
+                var current = DriveDb.Instacne.Get(Id);
+                if (current != null)
                 {
-                    aliyunDriveConfig.Client.AliyunDrives.Add(this);
+                    current = this;
+                    DriveDb.Instacne.Update(current);
+                }
+                else
+                {
+                    DriveDb.Instacne.Add(this);
                 }
             }
 
-            // 序列化回 JSON
-            var updatedJsonString = JsonSerializer.Serialize(aliyunDriveConfig, new JsonSerializerOptions
-            {
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                WriteIndented = true
-            });
+            //// 读取 JSON 文件
+            //var jsonString = string.Empty;
+            //if (File.Exists(ClientSettings.ClientSettingsPath))
+            //{
+            //    jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //}
 
-            // 写入文件
-            File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
+            //var aliyunDriveConfig = string.IsNullOrWhiteSpace(jsonString) ? null
+            //    : JsonSerializer.Deserialize<ClientSettings>(jsonString);
+            //aliyunDriveConfig ??= new ClientSettings();
+            //aliyunDriveConfig.Client ??= new ClientOptions();
+
+            //var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
+            //if (current >= 0)
+            //{
+            //    aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
+
+            //    if (!isRemove)
+            //    {
+            //        aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
+            //    }
+            //}
+            //else
+            //{
+            //    if (!isRemove)
+            //    {
+            //        aliyunDriveConfig.Client.AliyunDrives.Add(this);
+            //    }
+            //}
+
+            //// 序列化回 JSON
+            //var updatedJsonString = JsonSerializer.Serialize(aliyunDriveConfig, new JsonSerializerOptions
+            //{
+            //    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            //    WriteIndented = true
+            //});
+
+            //// 写入文件
+            //File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
         }
 
         /// <summary>
@@ -128,50 +143,77 @@ namespace MDriveSync.Core
         /// </summary>
         public void SaveJob(JobConfig jobConfig, bool isRemove = false)
         {
-            // 读取 JSON 文件
-            var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
-            var aliyunDriveConfig = JsonSerializer.Deserialize<ClientSettings>(jsonString);
-
-            // 移除重新添加
-            var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
-            if (current >= 0)
+            if (jobConfig == null)
             {
-                aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
-                aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
-            }
-            else
-            {
-                aliyunDriveConfig.Client.AliyunDrives.Add(this);
+                return;
             }
 
-            // 保存作业
-            var currentJob = Jobs.FindIndex(x => x.Id == jobConfig.Id);
-            if (currentJob >= 0)
+            var current = DriveDb.Instacne.Get(Id);
+            if (current != null)
             {
-                Jobs.RemoveAt(currentJob);
-
-                if (!isRemove && jobConfig != null)
+                if (isRemove)
                 {
-                    Jobs.Insert(currentJob, jobConfig);
+                    current.Jobs.RemoveAll(c => c.Id == jobConfig.Id);
                 }
-            }
-            else
-            {
-                if (!isRemove && jobConfig != null)
+
+                // 保存作业
+                var currentJob = Jobs.FirstOrDefault(x => x.Id == jobConfig.Id);
+                if (currentJob != null)
+                {
+                    currentJob = jobConfig;
+                }
+                else
                 {
                     Jobs.Add(jobConfig);
                 }
+
+                DriveDb.Instacne.Update(current);
             }
 
-            // 序列化回 JSON
-            var updatedJsonString = JsonSerializer.Serialize(aliyunDriveConfig, new JsonSerializerOptions
-            {
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                WriteIndented = true
-            });
+            //// 读取 JSON 文件
+            //var jsonString = File.ReadAllText(ClientSettings.ClientSettingsPath);
+            //var aliyunDriveConfig = JsonSerializer.Deserialize<ClientSettings>(jsonString);
 
-            // 写入文件
-            File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
+            //// 移除重新添加
+            //var current = aliyunDriveConfig.Client.AliyunDrives.FindIndex(x => x.Id == Id);
+            //if (current >= 0)
+            //{
+            //    aliyunDriveConfig.Client.AliyunDrives.RemoveAt(current);
+            //    aliyunDriveConfig.Client.AliyunDrives.Insert(current, this);
+            //}
+            //else
+            //{
+            //    aliyunDriveConfig.Client.AliyunDrives.Add(this);
+            //}
+
+            //// 保存作业
+            //var currentJob = Jobs.FindIndex(x => x.Id == jobConfig.Id);
+            //if (currentJob >= 0)
+            //{
+            //    Jobs.RemoveAt(currentJob);
+
+            //    if (!isRemove && jobConfig != null)
+            //    {
+            //        Jobs.Insert(currentJob, jobConfig);
+            //    }
+            //}
+            //else
+            //{
+            //    if (!isRemove && jobConfig != null)
+            //    {
+            //        Jobs.Add(jobConfig);
+            //    }
+            //}
+
+            //// 序列化回 JSON
+            //var updatedJsonString = JsonSerializer.Serialize(aliyunDriveConfig, new JsonSerializerOptions
+            //{
+            //    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            //    WriteIndented = true
+            //});
+
+            //// 写入文件
+            //File.WriteAllText(ClientSettings.ClientSettingsPath, updatedJsonString, Encoding.UTF8);
         }
     }
 

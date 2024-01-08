@@ -13,6 +13,7 @@ using System.Text;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using MDriveSync.Core.DB;
 
 namespace MDriveSync.Core
 {
@@ -61,6 +62,14 @@ namespace MDriveSync.Core
     /// </summary>
     public class Job : IDisposable
     {
+        /// <summary>
+        /// 缓存数据库
+        /// </summary>
+        private readonly SqliteRepository<LocalFileInfo, string> _cacheDb;
+
+        //private readonly SqliteRepository<LocalFileInfo, string> _logDb = new("log.db", true);
+
+
         /// <summary>
         /// 本地文件锁
         /// </summary>
@@ -174,10 +183,10 @@ namespace MDriveSync.Core
         /// </summary>
         private bool _isLoadLocalFiles;
 
-        /// <summary>
-        /// 本地缓存文件名称
-        /// </summary>
-        private string _localFileCacheName;
+        ///// <summary>
+        ///// 本地缓存文件名称
+        ///// </summary>
+        //private string _localFileCacheName;
 
         /// <summary>
         /// 本地文件监听
@@ -213,6 +222,8 @@ namespace MDriveSync.Core
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
+            _cacheDb = new($"cache_{jobConfig.Id}.db", true);
+
             _log = log;
 
             // 本地缓存
@@ -472,7 +483,7 @@ namespace MDriveSync.Core
                     }
                 }
 
-                _localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
+                //_localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
 
                 // 获取云盘信息
                 AliyunDriveInitInfo();
@@ -573,24 +584,45 @@ namespace MDriveSync.Core
             if (!_isLoadLocalFiles)
                 return;
 
-            lock (_localLock)
+            var caches = _cacheDb.GetAll();
+
+            // 比较文件，变化的则更新到数据库
+            var list = _localFiles.Values.ToList();
+            foreach (var file in list)
             {
-                var dir = Path.GetDirectoryName(_localFileCacheName);
-                if (!Directory.Exists(dir))
+                var f = caches.FirstOrDefault(c => c.Key == file.Key);
+                if (f == null)
                 {
-                    Directory.CreateDirectory(dir);
+                    _cacheDb.Add(file);
+                }
+                else
+                {
+                    // 更新前判断每个字段是否一致，如果一致则不需要更新
+                    if (!_cacheDb.AreObjectsEqual(f, file))
+                    {
+                        _cacheDb.Update(file);
+                    }
                 }
             }
 
-            // 序列化回 JSON
-            var updatedJsonString = JsonSerializer.Serialize(_localFiles, new JsonSerializerOptions
-            {
-                Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-                WriteIndented = true
-            });
+            //lock (_localLock)
+            //{
+            //    var dir = Path.GetDirectoryName(_localFileCacheName);
+            //    if (!Directory.Exists(dir))
+            //    {
+            //        Directory.CreateDirectory(dir);
+            //    }
+            //}
 
-            // 写入文件
-            File.WriteAllText(_localFileCacheName, updatedJsonString, Encoding.UTF8);
+            //// 序列化回 JSON
+            //var updatedJsonString = JsonSerializer.Serialize(_localFiles, new JsonSerializerOptions
+            //{
+            //    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            //    WriteIndented = true
+            //});
+
+            //// 写入文件
+            //File.WriteAllText(_localFileCacheName, updatedJsonString, Encoding.UTF8);
         }
 
         public void Pause()
@@ -1401,17 +1433,24 @@ namespace MDriveSync.Core
 
             var now = DateTime.Now;
 
-            // 序列化回 JSON
-            var oldLocalFiles = new ConcurrentDictionary<string, LocalFileInfo>();
-            if (File.Exists(_localFileCacheName))
+            // 读取本地缓存文件
+            var oldLocalFiles = new Dictionary<string, LocalFileInfo>();
+            var oldLocalFileList = _cacheDb.GetAll();
+            if (oldLocalFileList.Count > 0)
             {
-                var localJson = File.ReadAllText(_localFileCacheName, Encoding.UTF8);
-                if (!string.IsNullOrWhiteSpace(localJson))
-                {
-                    // 从本地缓存中加载
-                    oldLocalFiles = JsonSerializer.Deserialize<ConcurrentDictionary<string, LocalFileInfo>>(localJson);
-                }
+                oldLocalFiles = oldLocalFileList.ToDictionary(c => c.Key, c => c);
             }
+
+            // 序列化回 JSON
+            //if (File.Exists(_localFileCacheName))
+            //{
+            //    var localJson = File.ReadAllText(_localFileCacheName, Encoding.UTF8);
+            //    if (!string.IsNullOrWhiteSpace(localJson))
+            //    {
+            //        // 从本地缓存中加载
+            //        oldLocalFiles = JsonSerializer.Deserialize<ConcurrentDictionary<string, LocalFileInfo>>(localJson);
+            //    }
+            //}
 
             var processorCount = GetUploadThreadCount();
             var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };

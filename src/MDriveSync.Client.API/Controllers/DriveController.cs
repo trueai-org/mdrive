@@ -171,7 +171,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("job/{driveId}")]
         public Result JobAdd(string driveId, [FromBody] JobConfig cfg)
         {
-            _timedHostedService.JobDelete(driveId, cfg);
+            _timedHostedService.JobAdd(driveId, cfg);
             return Result.Ok();
         }
 
