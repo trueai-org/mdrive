@@ -41,6 +41,30 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 挂载磁盘
+        /// </summary>
+        /// <param name="mountRequest"></param>
+        /// <returns></returns>
+        [HttpPost("mount")]
+        public Result DriveMount([FromBody] MountRequest mountRequest)
+        {
+            _timedHostedService.DriveMount(mountRequest.MountPoint);
+            return Result.Ok();
+        }
+
+        /// <summary>
+        /// 挂载磁盘 - 卸载
+        /// </summary>
+        /// <param name="mountRequest"></param>
+        /// <returns></returns>
+        [HttpPost("unmount")]
+        public Result DriveUnmount([FromBody] MountRequest mountRequest)
+        {
+            _timedHostedService.DriveUnmount(mountRequest.MountPoint);
+            return Result.Ok();
+        }
+
+        /// <summary>
         /// 获取作业
         /// </summary>
         /// <returns></returns>

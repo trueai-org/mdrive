@@ -125,6 +125,18 @@
         public int DownloadThread { get; set; } = 0;
 
         /// <summary>
+        /// 挂载点
+        /// 空的驱动器盘符
+        /// 指定挂载点
+        /// </summary>
+        public string MountPoint { get; set; }
+
+        /// <summary>
+        /// 启动时挂载磁盘
+        /// </summary>
+        public bool MountOnStartup { get; set; }
+
+        /// <summary>
         /// 作业元信息（文件大小、数量、执行结果）
         /// </summary>
         public JobMetadata Metadata { get; set; }

@@ -1,12 +1,9 @@
-﻿using DokanNet;
-using DokanNet.Logging;
-using MDriveSync.Core.DB;
+﻿using MDriveSync.Core.DB;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
-using ILogger = Microsoft.Extensions.Logging.ILogger;
 
 namespace MDriveSync.Core
 {
@@ -250,45 +247,44 @@ namespace MDriveSync.Core
             drive.Save(true);
         }
 
-        public async Task DriveMount(string mountPoint)
+        public void DriveMount(string mountPoint)
         {
-            try
-            {
+            var cloudDrive = new MountDrive(mountPoint);
+            cloudDrive.Mount();
+            _cloudDrives.TryAdd(mountPoint, cloudDrive);
 
-                var dokanLogger = new ConsoleLogger("[Dokan] ");
-                var cloudDrive = new MountDrive(mountPoint);
-                await cloudDrive.MountAsync();
+            //try
+            //{
+            //var dokanLogger = new ConsoleLogger("[Dokan] ");
 
-                _cloudDrives.TryAdd(mountPoint, cloudDrive);
+            //// 创建 Dokan 实例
+            //var dokan = new Dokan(dokanLogger);
 
-                //// 创建 Dokan 实例
-                //var dokan = new Dokan(dokanLogger);
+            //// 使用 DokanInstanceBuilder 创建 Dokan 实例
+            //var dokanInstanceBuilder = new DokanInstanceBuilder(dokan)
+            //    .ConfigureOptions(options =>
+            //    {
+            //        options.Options = DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
+            //        options.MountPoint = mountPoint;
+            //    });
 
-                //// 使用 DokanInstanceBuilder 创建 Dokan 实例
-                //var dokanInstanceBuilder = new DokanInstanceBuilder(dokan)
-                //    .ConfigureOptions(options =>
-                //    {
-                //        options.Options = DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
-                //        options.MountPoint = mountPoint;
-                //    });
+            //using (var dokanInstance = dokanInstanceBuilder.Build(cloudDrive))
+            //{
+            //    //Console.CancelKeyPress += (object sender, ConsoleCancelEventArgs e) =>
+            //    //{
+            //    //    e.Cancel = true;
+            //    //    //Dokan.RemoveMountPoint(mountPoint);
+            //    //};
 
-                //using (var dokanInstance = dokanInstanceBuilder.Build(cloudDrive))
-                //{
-                //    //Console.CancelKeyPress += (object sender, ConsoleCancelEventArgs e) =>
-                //    //{
-                //    //    e.Cancel = true;
-                //    //    //Dokan.RemoveMountPoint(mountPoint);
-                //    //};
+            //    await dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
+            //}
 
-                //    await dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
-                //}
-
-                //Console.WriteLine("云盘已卸载。");
-            }
-            catch (DokanException ex)
-            {
-                Console.WriteLine("发生错误: " + ex.Message);
-            }
+            //Console.WriteLine("云盘已卸载。");
+            //}
+            //catch (DokanException ex)
+            //{
+            //    Console.WriteLine("发生错误: " + ex.Message);
+            //}
         }
 
         public void DriveUnmount(string mountPoint)

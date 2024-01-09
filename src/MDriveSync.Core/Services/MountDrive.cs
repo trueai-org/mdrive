@@ -6,10 +6,11 @@ using FileAccess = DokanNet.FileAccess;
 namespace MDriveSync.Core.Services
 {
     // 实现Dokan的IDokanOperations接口
-    public class MountDrive : IDokanOperations
+    public class MountDrive : IDokanOperations, IDisposable
     {
         private readonly string _mountPoint;
         private DokanInstance _dokanInstance;
+        private Task _mountTask;
 
         public MountDrive(string mountPoint)
         {
@@ -207,9 +208,7 @@ namespace MDriveSync.Core.Services
 
         // 其他方法...
 
-
-
-        public async Task MountAsync()
+        public void Mount()
         {
             var dokanLogger = new ConsoleLogger("[Dokan] ");
             var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
@@ -221,8 +220,21 @@ namespace MDriveSync.Core.Services
 
             _dokanInstance = dokanInstanceBuilder.Build(this);
 
-            // 运行 Dokan 实例在新的任务中
-            await Task.Run(async () =>
+            //// 我的意思在这里管理 task // TODO
+            //// 运行 Dokan 实例在新的任务中
+            //await Task.Run(async () =>
+            //{
+            //    try
+            //    {
+            //        await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
+            //    }
+            //    catch (DokanException ex)
+            //    {
+            //        // 处理 Dokan 相关的异常
+            //    }
+            //});
+
+            _mountTask = Task.Run(async () =>
             {
                 try
                 {
@@ -231,8 +243,14 @@ namespace MDriveSync.Core.Services
                 catch (DokanException ex)
                 {
                     // 处理 Dokan 相关的异常
+                    dokanLogger.Error(ex.Message);
                 }
             });
+
+            if (_mountTask != null && _mountTask.Status == TaskStatus.Created)
+            {
+                _mountTask.Start();
+            }
         }
 
         public void Unmount()
@@ -244,10 +262,29 @@ namespace MDriveSync.Core.Services
 
                 // TODO
                 //Dokan.RemoveMountPoint(_mountPoint);
-
-
-                _dokanInstance.Dispose();
             }
+
+            _dokanInstance?.Dispose();
+        }
+
+        public TaskStatus GetMountTaskStatus()
+        {
+            return _mountTask?.Status ?? TaskStatus.Canceled;
+        }
+
+        public void Dispose()
+        {
+            // 卸载 Dokan 文件系统
+            if (_dokanInstance != null)
+            {
+                //Dokan.RemoveMountPoint(_mountPoint);
+
+                // TODO
+                //Dokan.RemoveMountPoint(_mountPoint);
+            }
+
+            _dokanInstance?.Dispose();
+            _mountTask?.Dispose();
         }
     }
 }

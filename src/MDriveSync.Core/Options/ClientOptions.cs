@@ -65,6 +65,18 @@ namespace MDriveSync.Core
         public int ExpiresIn { get; set; } = 7200;
 
         /// <summary>
+        /// 挂载点
+        /// 空的驱动器盘符
+        /// 指定挂载点
+        /// </summary>
+        public string MountPoint { get; set; }
+
+        /// <summary>
+        /// 启动时挂载磁盘
+        /// </summary>
+        public bool MountOnStartup { get; set; }
+
+        /// <summary>
         /// 阿里云盘元信息（用户信息、云盘信息、VIP 信息）
         /// </summary>
         public AliyunDriveMetadata Metadata { get; set; }
