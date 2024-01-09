@@ -590,7 +590,7 @@ namespace MDriveSync.Core
             var addList = new ConcurrentBag<LocalFileInfo>();
 
             // 不需要并行比较
-            // 但单程，每秒可处理 3000万+
+            // 单线程，每秒可处理 3000万+
             foreach (var file in list)
             {
                 var f = caches.FirstOrDefault(c => c.Key == file.Key);
