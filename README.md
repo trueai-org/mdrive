@@ -361,6 +361,7 @@ docker run --name mdrive -d --restart=always \
 - WebUI 增加公告
 - WebUI 增加上次执行结果
 - 支持从配置文件中自动读取并更新配置、支持导出配置、支持导入配置。
+- 配置加密、作业加密
 
 ## 发布
 
