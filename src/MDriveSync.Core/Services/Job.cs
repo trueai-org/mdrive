@@ -61,9 +61,9 @@ namespace MDriveSync.Core
     public class Job : IDisposable
     {
         /// <summary>
-        /// 缓存数据库
+        /// 本地文件列表缓存
         /// </summary>
-        private readonly SqliteRepository<LocalFileInfo, string> _cacheDb;
+        private readonly SqliteRepository<LocalFileInfo, string> _localFilesCache;
 
         //private readonly SqliteRepository<LocalFileInfo, string> _logDb = new("log.db", true);
 
@@ -181,11 +181,6 @@ namespace MDriveSync.Core
         /// </summary>
         private bool _isLoadLocalFiles;
 
-        ///// <summary>
-        ///// 本地缓存文件名称
-        ///// </summary>
-        //private string _localFileCacheName;
-
         /// <summary>
         /// 本地文件监听
         /// </summary>
@@ -220,7 +215,7 @@ namespace MDriveSync.Core
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
-            _cacheDb = new($"cache_{jobConfig.Id}.db", true);
+            _localFilesCache = new($"cache_{jobConfig.Id}.db", true);
 
             _log = log;
 
@@ -481,8 +476,6 @@ namespace MDriveSync.Core
                     }
                 }
 
-                //_localFileCacheName = Path.Combine(".cache", $"local_files_cache_{_jobConfig.Id}.txt");
-
                 // 获取云盘信息
                 AliyunDriveInitInfo();
 
@@ -581,17 +574,18 @@ namespace MDriveSync.Core
             if (!_isLoadLocalFiles)
                 return;
 
-            var caches = _cacheDb.GetAll();
+            var caches = _localFilesCache.GetAll();
 
             // 比较文件，变化的则更新到数据库
-            var list = _localFiles.Values.ToList();
+            var fs = _localFiles.Values.ToList();
+            var fsKeys = _localFiles.Keys.ToList();
 
             var updatedList = new ConcurrentBag<LocalFileInfo>();
             var addList = new ConcurrentBag<LocalFileInfo>();
 
             // 不需要并行比较
-            // 单线程，每秒可处理 3000万+
-            foreach (var file in list)
+            // 单线程，每秒可处理 3600万+
+            foreach (var file in fs)
             {
                 var f = caches.FirstOrDefault(c => c.Key == file.Key);
                 if (f == null)
@@ -601,53 +595,32 @@ namespace MDriveSync.Core
                 else
                 {
                     // 更新前判断每个字段是否一致，如果一致则不需要更新
-                    if (!_cacheDb.FastAreObjectsEqual(f, file))
+                    if (!_localFilesCache.FastAreObjectsEqual(f, file))
                     {
-                        //_log.LogInformation("文件变更 {@0}, {@1}", file, f);
-                        //_cacheDb.Update(file);
-
                         updatedList.Add(file);
                     }
-
-                    //// 说明字段有变更
-                    //if (f.UpdateId != file.UpdateId)
-                    //{
-                    //    _log.LogWarning("文件变更 {@0}, {@1}", file, f);
-                    //    _cacheDb.Update(file);
-                    //}
                 }
+
+                // 移除
+                fsKeys.Remove(file.Key);
             }
 
             if (addList.Count > 0)
             {
-                _log.LogInformation("持久化本地文件缓存，新增：{@0}", addList.Count);
-                _cacheDb.AddRange(addList);
+                _localFilesCache.AddRange(addList);
             }
 
             if (updatedList.Count > 0)
             {
-                _log.LogInformation("持久化本地文件缓存，更新：{@0}", updatedList.Count);
-                _cacheDb.UpdateRange(updatedList);
+                _localFilesCache.UpdateRange(updatedList);
             }
 
-            //lock (_localLock)
-            //{
-            //    var dir = Path.GetDirectoryName(_localFileCacheName);
-            //    if (!Directory.Exists(dir))
-            //    {
-            //        Directory.CreateDirectory(dir);
-            //    }
-            //}
+            if (fsKeys.Count > 0)
+            {
+                _localFilesCache.DeleteRange(fsKeys);
+            }
 
-            //// 序列化回 JSON
-            //var updatedJsonString = JsonSerializer.Serialize(_localFiles, new JsonSerializerOptions
-            //{
-            //    Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
-            //    WriteIndented = true
-            //});
-
-            //// 写入文件
-            //File.WriteAllText(_localFileCacheName, updatedJsonString, Encoding.UTF8);
+            _log.LogInformation("持久化本地文件缓存，新增：{@0}，更新：{@1}，删除：{@2}", addList.Count, updatedList.Count, fsKeys.Count);
         }
 
         public void Pause()
@@ -1457,25 +1430,17 @@ namespace MDriveSync.Core
 
             // 读取本地缓存文件
             var oldLocalFiles = new Dictionary<string, LocalFileInfo>();
-            var oldLocalFileList = _cacheDb.GetAll();
+            var oldLocalFileList = _localFilesCache.GetAll();
             if (oldLocalFileList.Count > 0)
             {
                 oldLocalFiles = oldLocalFileList.ToDictionary(c => c.Key, c => c);
             }
 
-            // 序列化回 JSON
-            //if (File.Exists(_localFileCacheName))
-            //{
-            //    var localJson = File.ReadAllText(_localFileCacheName, Encoding.UTF8);
-            //    if (!string.IsNullOrWhiteSpace(localJson))
-            //    {
-            //        // 从本地缓存中加载
-            //        oldLocalFiles = JsonSerializer.Deserialize<ConcurrentDictionary<string, LocalFileInfo>>(localJson);
-            //    }
-            //}
-
             var processorCount = GetUploadThreadCount();
             var options = new ParallelOptions() { MaxDegreeOfParallelism = processorCount };
+
+            // 当前本地文件 key
+            var localFileKeys = new ConcurrentDictionary<string, bool>(_localFiles.Keys.ToDictionary(c => c, v => true));
 
             // 循环多个目录处理
             foreach (var backupRootPath in _jobConfig.Sources)
@@ -1541,6 +1506,8 @@ namespace MDriveSync.Core
                                 return lf;
                             });
 
+                            localFileKeys.TryRemove(lf.Key, out _);
+
                             ProcessMessage = $"正在扫描本地文件 {_localFiles.Count}";
                         }
                     }
@@ -1554,6 +1521,12 @@ namespace MDriveSync.Core
                         throw;
                     }
                 }
+            }
+
+            // 如果本地文件不存在了
+            foreach (var item in localFileKeys)
+            {
+                _localFiles.TryRemove(item.Key, out _);
             }
 
             // 持久化本地文件

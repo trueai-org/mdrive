@@ -338,6 +338,7 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
+- 启用后，如果是默认状态，可以手动点击初始化
 - 还原到本地，选择文件/文件夹还原
 - 本地挂载
 - WebDAV 挂载
