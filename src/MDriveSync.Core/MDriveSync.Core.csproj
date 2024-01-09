@@ -12,6 +12,7 @@
 	<ItemGroup>
 		<PackageReference Include="AlphaVSS" Version="2.0.3" />
 		<PackageReference Include="DokanNet" Version="2.1.0" />
+		<PackageReference Include="FastMember" Version="1.5.0" />
 		
 		<!--<PackageReference Include="Fody" Version="6.8.0">
 		  <PrivateAssets>all</PrivateAssets>

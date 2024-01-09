@@ -1,4 +1,5 @@
-﻿using MDriveSync.Core.Services;
+﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
@@ -9,11 +10,8 @@ using System.Data;
 using System.Diagnostics;
 using System.Net;
 using System.Runtime.InteropServices;
-using System.Text;
-using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using MDriveSync.Core.DB;
 
 namespace MDriveSync.Core
 {
@@ -69,7 +67,6 @@ namespace MDriveSync.Core
 
         //private readonly SqliteRepository<LocalFileInfo, string> _logDb = new("log.db", true);
 
-
         /// <summary>
         /// 本地文件锁
         /// </summary>
@@ -92,6 +89,7 @@ namespace MDriveSync.Core
 
         // 用于控制任务暂停和继续的对象
         private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true);
+
         // 暂停时的作业状态
         private JobState _pauseJobState;
 
@@ -501,7 +499,6 @@ namespace MDriveSync.Core
                 _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
             });
 
-
             // 如果获取到锁则开始作业
             if (isLock)
             {
@@ -588,32 +585,49 @@ namespace MDriveSync.Core
 
             // 比较文件，变化的则更新到数据库
             var list = _localFiles.Values.ToList();
+
+            var updatedList = new ConcurrentBag<LocalFileInfo>();
+            var addList = new ConcurrentBag<LocalFileInfo>();
+
+            // 不需要并行比较
+            // 但单程，每秒可处理 3000万+
             foreach (var file in list)
             {
                 var f = caches.FirstOrDefault(c => c.Key == file.Key);
                 if (f == null)
                 {
-                    _cacheDb.Add(file);
+                    addList.Add(file);
                 }
                 else
                 {
                     // 更新前判断每个字段是否一致，如果一致则不需要更新
-                    // TODO 这里需要改进性能
-                    if (!_cacheDb.AreObjectsEqual(f, file))
+                    if (!_cacheDb.FastAreObjectsEqual(f, file))
                     {
                         //_log.LogInformation("文件变更 {@0}, {@1}", file, f);
+                        //_cacheDb.Update(file);
 
-                        _cacheDb.Update(file);
+                        updatedList.Add(file);
                     }
 
                     //// 说明字段有变更
                     //if (f.UpdateId != file.UpdateId)
                     //{
                     //    _log.LogWarning("文件变更 {@0}, {@1}", file, f);
-
                     //    _cacheDb.Update(file);
                     //}
                 }
+            }
+
+            if (addList.Count > 0)
+            {
+                _log.LogInformation("持久化本地文件缓存，新增：{@0}", addList.Count);
+                _cacheDb.AddRange(addList);
+            }
+
+            if (updatedList.Count > 0)
+            {
+                _log.LogInformation("持久化本地文件缓存，更新：{@0}", updatedList.Count);
+                _cacheDb.UpdateRange(updatedList);
             }
 
             //lock (_localLock)
@@ -740,7 +754,6 @@ namespace MDriveSync.Core
             {
                 try
                 {
-
                     _log.LogInformation("开始同步 {@0}", _jobConfig.Name);
 
                     //ChangeState(JobState.BackingUp);
@@ -790,7 +803,6 @@ namespace MDriveSync.Core
             {
                 return;
             }
-
 
             var swAll = new Stopwatch();
             swAll.Start();
@@ -946,7 +958,6 @@ namespace MDriveSync.Core
             now = DateTime.Now;
             process = 0;
             total = _localFiles.Count;
-
 
             ProcessCurrent = 0;
             processCount = total;

@@ -1,4 +1,5 @@
-﻿using ServiceStack.OrmLite;
+﻿using FastMember;
+using ServiceStack.OrmLite;
 using System.Runtime.Caching;
 
 namespace MDriveSync.Core.DB
@@ -31,6 +32,9 @@ namespace MDriveSync.Core.DB
         private readonly string _cacheKey = typeof(T).Name;
         private readonly bool? _useCache;
 
+        private readonly TypeAccessor _accessor = TypeAccessor.Create(typeof(T));
+        private readonly MemberSet _members;
+
         /// <summary>
         /// 创建 sqlite
         /// </summary>
@@ -39,6 +43,7 @@ namespace MDriveSync.Core.DB
         public SqliteRepository(string dbName, bool? noCache = null)
         {
             _useCache = noCache;
+            _members = _accessor.GetMembers();
 
             var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "db", dbName);
             lock (_lock)
@@ -96,6 +101,40 @@ namespace MDriveSync.Core.DB
                     if (items != null)
                     {
                         items.AddRange(batch);
+                        UpdateCache(items);
+                    }
+                }
+            }
+        }
+
+        // 批量更新，每批次最多更新1000条记录
+        public void UpdateRange(IEnumerable<T> entities)
+        {
+            const int batchSize = 1000;
+            using var db = _dbFactory.Open();
+
+            // 分批处理实体
+            var entityList = entities.ToList();
+            for (int i = 0; i < entityList.Count; i += batchSize)
+            {
+                var batch = entityList.Skip(i).Take(batchSize).ToList();
+                db.UpdateAll(batch);
+
+                // 更新缓存
+                if (_useCache == true)
+                {
+                    var items = GetCachedDataOrNull();
+                    if (items != null)
+                    {
+                        foreach (var entity in batch)
+                        {
+                            var itemToUpdate = items.FirstOrDefault(item => item.Key.Equals(entity.Key));
+                            if (itemToUpdate != null)
+                            {
+                                items.Remove(itemToUpdate);
+                            }
+                            items.Add(entity);
+                        }
                         UpdateCache(items);
                     }
                 }
@@ -214,6 +253,9 @@ namespace MDriveSync.Core.DB
         /// <returns></returns>
         public bool AreObjectsEqual(T obj1, T obj2)
         {
+            if (ReferenceEquals(obj1, obj2))
+                return true;
+
             if (obj1 == null || obj2 == null)
                 return false;
 
@@ -228,6 +270,32 @@ namespace MDriveSync.Core.DB
 
                 if (!Equals(val1, val2))
                     return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 快速比较
+        /// 比反射更快
+        /// </summary>
+        /// <param name="obj1"></param>
+        /// <param name="obj2"></param>
+        /// <returns></returns>
+        public bool FastAreObjectsEqual(T obj1, T obj2)
+        {
+            if (ReferenceEquals(obj1, obj2))
+                return true;
+
+            if (obj1 == null || obj2 == null)
+                return false;
+
+            foreach (var member in _members)
+            {
+                if (!Equals(_accessor[obj1, member.Name], _accessor[obj2, member.Name]))
+                {
+                    return false;
+                }
             }
 
             return true;
