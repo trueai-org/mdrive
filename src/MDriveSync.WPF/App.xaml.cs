@@ -85,8 +85,8 @@ namespace MDriveSync.WPF
                 })
                 .ConfigureServices((context, services) =>
                 {
-                    //// 注册服务
-                    //services.Configure<ClientOptions>(context.Configuration.GetSection("Client"));
+                    // 注册服务
+                    services.Configure<ClientOptions>(context.Configuration.GetSection("Client"));
 
                     // 注册后台服务
                     //services.AddHostedService<TimedHostedService>();

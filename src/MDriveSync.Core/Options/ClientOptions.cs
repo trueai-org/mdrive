@@ -18,16 +18,16 @@ namespace MDriveSync.Core
     //    public ClientOptions Client { get; set; }
     //}
 
-    ///// <summary>
-    ///// 客户端备份配置项
-    ///// </summary>
-    //public class ClientOptions
-    //{
-    //    /// <summary>
-    //    /// 阿里云盘作业配置
-    //    /// </summary>
-    //    public List<AliyunDriveConfig> AliyunDrives { get; set; } = new List<AliyunDriveConfig>();
-    //}
+    /// <summary>
+    /// 客户端备份配置项
+    /// </summary>
+    public class ClientOptions
+    {
+        /// <summary>
+        /// 阿里云盘作业配置
+        /// </summary>
+        public List<AliyunDriveConfig> AliyunDrives { get; set; } = new List<AliyunDriveConfig>();
+    }
 
     /// <summary>
     ///

@@ -3,6 +3,7 @@ using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
 namespace MDriveSync.Core
@@ -16,7 +17,7 @@ namespace MDriveSync.Core
         //private readonly IServiceScopeFactory _serviceScopeFactory;
 
         private readonly ILogger _logger;
-        //private readonly IOptionsMonitor<ClientOptions> _clientOptions;
+        private readonly IOptionsMonitor<ClientOptions> _clientOptions;
 
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
         private readonly ConcurrentDictionary<string, Job> _jobs = new();
@@ -25,17 +26,37 @@ namespace MDriveSync.Core
         private Timer _timer;
 
         public TimedHostedService(
-            ILogger<TimedHostedService> logger
-            //IOptionsMonitor<ClientOptions> clientOptions
-            )
+            ILogger<TimedHostedService> logger,
+            IOptionsMonitor<ClientOptions> clientOptions)
         {
             _logger = logger;
-            //_clientOptions = clientOptions;
+            _clientOptions = clientOptions;
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
         {
             stoppingToken.Register(() => _logger.LogDebug($"例行检查服务已停止"));
+
+            // 启动时，如果有配置云盘，则新增到数据库
+            // 如果数据库已有，则跳过
+            if (_clientOptions?.CurrentValue?.AliyunDrives?.Count > 0)
+            {
+                var drives = DriveDb.Instacne.GetAll();
+                foreach (var cd in _clientOptions?.CurrentValue?.AliyunDrives)
+                {
+                    var f = drives.FirstOrDefault(x => x.Id == cd.Id);
+                    if (f == null)
+                    {
+                        DriveDb.Instacne.Add(cd);
+                    }
+
+                    //else
+                    //{
+                    //    f = cd;
+                    //    DriveDb.Instacne.Update(f);
+                    //}
+                }
+            }
 
             _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
             return Task.CompletedTask;

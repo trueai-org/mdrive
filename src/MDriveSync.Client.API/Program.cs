@@ -71,8 +71,8 @@ namespace MDriveSync.Client.API
                 // 使用 Serilog
                 builder.Host.UseSerilog();
 
-                //// 作业客户端配置
-                //builder.Services.Configure<ClientOptions>(builder.Configuration.GetSection("Client"));
+                // 作业客户端配置
+                builder.Services.Configure<ClientOptions>(builder.Configuration.GetSection("Client"));
 
                 // API 视图模型验证 400 错误处理
                 builder.Services.Configure<ApiBehaviorOptions>(options =>
