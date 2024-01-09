@@ -196,6 +196,9 @@ namespace MDriveSync.Core
         /// </summary>
         public JobState CurrentState { get; private set; }
 
+        /// <summary>
+        /// 当前作业
+        /// </summary>
         public JobConfig CurrrentJob => _jobConfig;
 
         /// <summary>
@@ -212,6 +215,11 @@ namespace MDriveSync.Core
         /// 当前进度消息
         /// </summary>
         public string ProcessMessage = string.Empty;
+
+        /// <summary>
+        /// 挂载云盘
+        /// </summary>
+        private MountDrive _mountDrive;
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
@@ -420,7 +428,6 @@ namespace MDriveSync.Core
             }
         }
 
-
         /// <summary>
         /// 启动后台作业、启动缓存、启动监听等
         /// </summary>
@@ -573,8 +580,6 @@ namespace MDriveSync.Core
             ProcessCount = 0;
             ProcessCurrent = 0;
         }
-
-        // 其他任务相关的异步方法...
 
         /// <summary>
         /// 获取当前有效的访问令牌
@@ -1219,6 +1224,8 @@ namespace MDriveSync.Core
             _jobConfig.RapidUpload = cfg.RapidUpload;
             _jobConfig.Mode = cfg.Mode;
             _jobConfig.Restore = cfg.Restore;
+            _jobConfig.MountOnStartup = cfg.MountOnStartup;
+            _jobConfig.MountPoint = cfg.MountPoint;
 
             _driveConfig.SaveJob(_jobConfig);
         }
@@ -1343,7 +1350,6 @@ namespace MDriveSync.Core
                 _jobConfig.State = state;
                 _driveConfig.SaveJob(_jobConfig);
             }
-
             else
             {
                 throw new LogicException("操作不支持");
@@ -3208,5 +3214,42 @@ namespace MDriveSync.Core
         }
 
         #endregion 文件监听事件
+
+        #region 磁盘挂载
+
+        /// <summary>
+        /// 挂载磁盘
+        /// </summary>
+        /// <param name="mountPoint"></param>
+        public void DriveMount(string mountPoint)
+        {
+            // 先释放
+            _mountDrive?.Dispose();
+
+            // 重新创建
+            _mountDrive = new MountDrive(mountPoint);
+            _mountDrive.Mount();
+        }
+
+        /// <summary>
+        /// 卸载磁盘
+        /// </summary>
+        /// <param name="mountPoint"></param>
+        public void DriveUnmount()
+        {
+            _mountDrive?.Unmount();
+            _mountDrive?.Dispose();
+            _mountDrive = null;
+        }
+
+        /// <summary>
+        /// 是否已挂载
+        /// </summary>
+        /// <returns></returns>
+        public bool DriveIsMount()
+        {
+            return _mountDrive != null;
+        }
+        #endregion
     }
 }

@@ -5,7 +5,9 @@ using FileAccess = DokanNet.FileAccess;
 
 namespace MDriveSync.Core.Services
 {
-    // 实现Dokan的IDokanOperations接口
+    /// <summary>
+    ///
+    /// </summary>
     public class MountDrive : IDokanOperations, IDisposable
     {
         private readonly string _mountPoint;
@@ -26,8 +28,6 @@ namespace MDriveSync.Core.Services
         {
             // 关闭文件操作
         }
-
-        // 其他必须实现的方法...
 
         // 例如，实现读文件操作
         public int ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)

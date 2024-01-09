@@ -45,22 +45,22 @@ namespace MDriveSync.Client.API.Controllers
         /// </summary>
         /// <param name="mountRequest"></param>
         /// <returns></returns>
-        [HttpPost("mount")]
-        public Result DriveMount([FromBody] MountRequest mountRequest)
+        [HttpPost("mount/{jobId}")]
+        public Result DriveMount(string jobId, [FromBody] MountRequest mountRequest)
         {
-            _timedHostedService.DriveMount(mountRequest.MountPoint);
+            _timedHostedService.DriveMount(jobId, mountRequest.MountPoint);
             return Result.Ok();
         }
 
         /// <summary>
         /// 挂载磁盘 - 卸载
         /// </summary>
-        /// <param name="mountRequest"></param>
+        /// <param name="jobId"></param>
         /// <returns></returns>
-        [HttpPost("unmount")]
-        public Result DriveUnmount([FromBody] MountRequest mountRequest)
+        [HttpPost("unmount/{jobId}")]
+        public Result DriveUnmount(string jobId)
         {
-            _timedHostedService.DriveUnmount(mountRequest.MountPoint);
+            _timedHostedService.DriveUnmount(jobId);
             return Result.Ok();
         }
 
@@ -79,7 +79,7 @@ namespace MDriveSync.Client.API.Controllers
                     j.State = c.CurrentState;
                     j.Metadata ??= new();
                     j.Metadata.Message = c.ProcessMessage;
-
+                    j.IsMount = c.DriveIsMount();
                     return j;
                 }).ToList();
             return Result.Ok(data);
@@ -230,6 +230,17 @@ namespace MDriveSync.Client.API.Controllers
         public Result<List<TreeNode>> GetPaths([FromBody] TreeNodePathRequest request)
         {
             var data = Filesystem.TreeNodes(request.Path);
+            return Result.Ok(data);
+        }
+
+        /// <summary>
+        /// 获取可用于挂载的磁盘盘符或挂载点
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet("points")]
+        public Result<List<string>> GetAvailableMountPoints()
+        {
+            var data = Filesystem.GetAvailableMountPoints().ToList();
             return Result.Ok(data);
         }
 

@@ -137,6 +137,11 @@
         public bool MountOnStartup { get; set; }
 
         /// <summary>
+        /// 是否已挂载
+        /// </summary>
+        public bool IsMount { get; set; }
+
+        /// <summary>
         /// 作业元信息（文件大小、数量、执行结果）
         /// </summary>
         public JobMetadata Metadata { get; set; }

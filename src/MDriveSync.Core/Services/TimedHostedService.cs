@@ -1,5 +1,4 @@
 ﻿using MDriveSync.Core.DB;
-using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -15,13 +14,12 @@ namespace MDriveSync.Core
     public class TimedHostedService : BackgroundService, IDisposable
     {
         //private readonly IServiceScopeFactory _serviceScopeFactory;
+        //private readonly ConcurrentDictionary<string, MountDrive> _cloudDrives = new();
 
         private readonly ILogger _logger;
-        private readonly IOptionsMonitor<ClientOptions> _clientOptions;
-
+        private readonly ClientOptions _clientOptions;
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
         private readonly ConcurrentDictionary<string, Job> _jobs = new();
-        private readonly ConcurrentDictionary<string, MountDrive> _cloudDrives = new();
 
         private Timer _timer;
 
@@ -30,7 +28,7 @@ namespace MDriveSync.Core
             IOptionsMonitor<ClientOptions> clientOptions)
         {
             _logger = logger;
-            _clientOptions = clientOptions;
+            _clientOptions = clientOptions?.CurrentValue;
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -39,10 +37,10 @@ namespace MDriveSync.Core
 
             // 启动时，如果有配置云盘，则新增到数据库
             // 如果数据库已有，则跳过
-            if (_clientOptions?.CurrentValue?.AliyunDrives?.Count > 0)
+            if (_clientOptions?.AliyunDrives?.Count > 0)
             {
                 var drives = DriveDb.Instacne.GetAll();
-                foreach (var cd in _clientOptions?.CurrentValue?.AliyunDrives)
+                foreach (var cd in _clientOptions?.AliyunDrives)
                 {
                     var f = drives.FirstOrDefault(x => x.Id == cd.Id);
                     if (f == null)
@@ -59,6 +57,7 @@ namespace MDriveSync.Core
             }
 
             _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
+
             return Task.CompletedTask;
         }
 
@@ -266,11 +265,21 @@ namespace MDriveSync.Core
             drive.Save(true);
         }
 
-        public void DriveMount(string mountPoint)
+        /// <summary>
+        /// 挂载磁盘
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="mountPoint"></param>
+        public void DriveMount(string jobId, string mountPoint)
         {
-            var cloudDrive = new MountDrive(mountPoint);
-            cloudDrive.Mount();
-            _cloudDrives.TryAdd(mountPoint, cloudDrive);
+            if (_jobs.TryGetValue(jobId, out var job) || job != null)
+            {
+                job.DriveMount(mountPoint);
+            }
+
+            //var cloudDrive = new MountDrive(mountPoint);
+            //cloudDrive.Mount();
+            //_cloudDrives.TryAdd(mountPoint, cloudDrive);
 
             //try
             //{
@@ -306,12 +315,21 @@ namespace MDriveSync.Core
             //}
         }
 
-        public void DriveUnmount(string mountPoint)
+        /// <summary>
+        /// 卸载磁盘挂载
+        /// </summary>
+        /// <param name="jobId"></param>
+        public void DriveUnmount(string jobId)
         {
-            if (_cloudDrives.TryRemove(mountPoint, out var mountDrive))
+            if (_jobs.TryGetValue(jobId, out var job) || job != null)
             {
-                mountDrive.Unmount();
+                job.DriveUnmount();
             }
+
+            //if (_cloudDrives.TryRemove(mountPoint, out var mountDrive))
+            //{
+            //    mountDrive.Unmount();
+            //}
         }
 
         //private void DoWork(object state)

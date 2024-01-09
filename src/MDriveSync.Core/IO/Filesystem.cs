@@ -1,10 +1,49 @@
-﻿namespace MDriveSync.Core.IO
+﻿using System.Runtime.InteropServices;
+
+namespace MDriveSync.Core.IO
 {
     /// <summary>
     /// 文件系统
     /// </summary>
     public class Filesystem
     {
+        /// <summary>
+        /// 获取可用于挂载的磁盘盘符或挂载点
+        /// </summary>
+        /// <returns>可用磁盘盘符或挂载点列表</returns>
+        public static IEnumerable<string> GetAvailableMountPoints()
+        {
+            if (!Platform.IsClientPosix || RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                return GetAvailableDriveLettersForWindows();
+            }
+            else
+            {
+                // 对于Unix-like系统，您可能需要其他方法来确定可用的挂载点
+                // 返回空即可
+                return new string[0];
+            }
+        }
+
+        private static IEnumerable<string> GetAvailableDriveLettersForWindows()
+        {
+            HashSet<char> usedDrives = new HashSet<char>(
+                DriveInfo.GetDrives()
+                    .Where(drive => drive.IsReady)
+                    .Select(drive => drive.Name[0]));
+
+            List<string> availableDrives = new List<string>();
+            for (char letter = 'A'; letter <= 'Z'; letter++)
+            {
+                if (!usedDrives.Contains(letter))
+                {
+                    availableDrives.Add(letter + ":\\");
+                }
+            }
+
+            return availableDrives;
+        }
+
         /// <summary>
         /// 获取文件列表
         /// </summary>
