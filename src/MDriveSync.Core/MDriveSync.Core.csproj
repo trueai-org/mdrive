@@ -11,6 +11,7 @@
 	
 	<ItemGroup>
 		<PackageReference Include="AlphaVSS" Version="2.0.3" />
+		<PackageReference Include="DokanNet" Version="2.1.0" />
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="Polly" Version="8.2.0" />
 		<PackageReference Include="RestSharp" Version="110.2.0" />
