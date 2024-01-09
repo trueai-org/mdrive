@@ -45,10 +45,13 @@ Supports a variety of algorithms for synchronization and backup.
 - 支持作业暂停、恢复、禁用、取消、删除等。
 - 支持队列，保证作业的高可用，避免多任务卡顿以及抢占资源问题。
 - 支持登录验证，下载验证。
-- 支持超时自动锁定（BETA）。
+- 支持超时自动锁定管理后台（BETA）。
 - 支持在线上传（BETA）。
 - 多模块支持，支持 Duplicati、Kopia 模块，直接进行加密（BETA）。
 - 支持还原云盘文件（BETA）。
+- 支持将云盘挂载到本地，像管理本地文件一样管理远程文件（BETA）。
+- 支持将备份目录挂载到本地（BETA）。
+- 支持快照，支持快照挂载（BETA）。
 
 ## 安装与使用
 
@@ -336,6 +339,7 @@ docker run --name mdrive -d --restart=always \
 ## 路线图
 
 - 还原到本地，选择文件/文件夹还原
+- 本地挂载
 - WebDAV 挂载
 - 多版本、快照、加密
 - 分块上传、分块下载、超大文件支持
@@ -343,7 +347,7 @@ docker run --name mdrive -d --restart=always \
 - Windows 客户端 UI/WPF 版本
 - MacUI 版本
 - 移动端打包
-- Winwods 安装包
+- Winwos 安装包
 - WPF 安装包
 - Kopia 模式、插件开发
 - 百度云盘集成
@@ -356,6 +360,7 @@ docker run --name mdrive -d --restart=always \
 - WebUI 增加下次作业时间
 - WebUI 增加公告
 - WebUI 增加上次执行结果
+- 支持从配置文件中自动读取并更新配置、支持导出配置、支持导入配置。
 
 ## 发布
 
