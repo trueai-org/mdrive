@@ -18,8 +18,6 @@ namespace MDriveSync.Core
         private readonly ILogger _logger;
         //private readonly IOptionsMonitor<ClientOptions> _clientOptions;
 
-        private readonly LiteRepository<AliyunDriveConfig, string> _driveDb = DriveDb.Instacne;
-
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
         private readonly ConcurrentDictionary<string, Job> _jobs = new();
         private readonly ConcurrentDictionary<string, MountDrive> _cloudDrives = new();
@@ -73,7 +71,7 @@ namespace MDriveSync.Core
             {
                 _logger.LogInformation("开始例行检查");
 
-                var ds = _driveDb.GetAll();
+                var ds = DriveDb.Instacne.GetAll();
                 foreach (var ad in ds)
                 {
                     var jobs = ad.Jobs.ToList();
@@ -123,7 +121,7 @@ namespace MDriveSync.Core
         /// <exception cref="LogicException"></exception>
         public void JobAdd(string driveId, JobConfig cfg)
         {
-            var drives = _driveDb.GetAll();
+            var drives = DriveDb.Instacne.GetAll();
             var drive = drives.Where(c => c.Id == driveId).FirstOrDefault();
             if (drive == null)
             {
@@ -165,7 +163,7 @@ namespace MDriveSync.Core
         {
             var jobs = Jobs();
 
-            var ds = _driveDb.GetAll();
+            var ds = DriveDb.Instacne.GetAll();
             foreach (var kvp in ds)
             {
                 var js = kvp.Jobs.ToList();
@@ -214,7 +212,7 @@ namespace MDriveSync.Core
                 throw new LogicParamException();
             }
 
-            var drive = _driveDb.Get(driveId);
+            var drive = DriveDb.Instacne.Get(driveId);
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");
@@ -231,7 +229,7 @@ namespace MDriveSync.Core
         /// </summary>
         public void DriveDelete(string driveId)
         {
-            var drive = _driveDb.Get(driveId);
+            var drive = DriveDb.Instacne.Get(driveId);
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");

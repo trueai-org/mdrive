@@ -272,7 +272,8 @@ namespace MDriveSync.Core
                     case JobState.None:
                         {
                             // 初始化
-                            await Initialize();
+                            AliyunDriveInitialize();
+                            StartJob();
                         }
                         break;
 
@@ -419,86 +420,6 @@ namespace MDriveSync.Core
             }
         }
 
-        /// <summary>
-        /// 初始化作业（路径、云盘信息等）
-        /// </summary>
-        /// <returns></returns>
-        private async Task Initialize()
-        {
-            var isLock = await AsyncLocalLock.TryLockAsync("init_job_lock", TimeSpan.FromSeconds(60), async () =>
-            {
-                ChangeState(JobState.Initializing);
-
-                _log.LogInformation("作业初始化");
-
-                var sw = new Stopwatch();
-                sw.Start();
-
-                var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-
-                _log.LogInformation($"Linux: {isLinux}");
-
-                // 格式化路径
-                _localRestorePath = _jobConfig.Restore.TrimPath();
-                if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
-                {
-                    _localRestorePath = $"/{_localRestorePath}";
-                }
-
-                _driveSavePath = _jobConfig.Target.TrimPrefix();
-
-                // 格式化备份目录
-                var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
-                _jobConfig.Sources.Clear();
-                foreach (var item in sources)
-                {
-                    var path = item.TrimPath();
-                    if (isLinux && !string.IsNullOrWhiteSpace(path))
-                    {
-                        // Linux
-                        path = $"/{path}";
-                        var dir = new DirectoryInfo(path);
-                        if (!dir.Exists)
-                        {
-                            dir.Create();
-                        }
-                        _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
-                    }
-                    else
-                    {
-                        // Windows
-                        var dir = new DirectoryInfo(path);
-                        if (!dir.Exists)
-                        {
-                            dir.Create();
-                        }
-                        _jobConfig.Sources.Add(dir.FullName);
-                    }
-                }
-
-                // 获取云盘信息
-                AliyunDriveInitInfo();
-
-                // 空间信息
-                await AliyunDriveInitSpaceInfo();
-
-                // VIP 信息
-                await AliyunDriveInitVipInfo();
-
-                // 保存配置
-                _driveConfig.Save();
-
-                sw.Stop();
-                _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
-            });
-
-            // 如果获取到锁则开始作业
-            if (isLock)
-            {
-                // 开始作业
-                StartJob();
-            }
-        }
 
         /// <summary>
         /// 启动后台作业、启动缓存、启动监听等
@@ -1308,7 +1229,18 @@ namespace MDriveSync.Core
         /// <param name="state"></param>
         public void JobStateChange(JobState state)
         {
-            if (state == JobState.Cancelled)
+            if (state == JobState.Initializing)
+            {
+                // 如果作业未启动，则可以初始化
+                var allowJobStates = new[] { JobState.Disabled, JobState.None, JobState.Completed, JobState.Cancelled, JobState.Error };
+                if (!allowJobStates.Contains(CurrentState))
+                {
+                    throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能初始化作业");
+                }
+
+                AliyunDriveInitialize();
+            }
+            else if (state == JobState.Cancelled)
             {
                 // 取消作业
                 var allowJobStates = new[] { JobState.Queued, JobState.Scanning, JobState.BackingUp, JobState.Restoring, JobState.Paused };
@@ -1411,6 +1343,7 @@ namespace MDriveSync.Core
                 _jobConfig.State = state;
                 _driveConfig.SaveJob(_jobConfig);
             }
+
             else
             {
                 throw new LogicException("操作不支持");
@@ -1418,6 +1351,27 @@ namespace MDriveSync.Core
         }
 
         #region 私有方法
+
+        /// <summary>
+        /// 写日志
+        /// </summary>
+        /// <param name="msg"></param>
+        private void LogInfo(string msg)
+        {
+            _log.LogInformation(msg);
+            ProcessMessage = msg;
+        }
+
+        /// <summary>
+        /// 写错误日志
+        /// </summary>
+        /// <param name="ex"></param>
+        /// <param name="msg"></param>
+        private void LogError(Exception ex, string msg)
+        {
+            _log.LogError(ex, msg);
+            ProcessMessage = msg;
+        }
 
         /// <summary>
         /// 扫描本地文件
@@ -1824,6 +1778,104 @@ namespace MDriveSync.Core
         #endregion 私有方法
 
         #region 阿里云盘
+
+        /// <summary>
+        /// 阿里云盘 - 初始化作业（路径、云盘信息等）
+        /// </summary>
+        /// <returns></returns>
+        private void AliyunDriveInitialize()
+        {
+            var isLock = LocalLock.TryLock("init_job_lock", TimeSpan.FromSeconds(60), () =>
+            {
+                var oldState = CurrentState;
+
+                try
+                {
+                    LogInfo("作业初始化中");
+
+                    ChangeState(JobState.Initializing);
+
+                    var sw = new Stopwatch();
+                    sw.Start();
+
+                    var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+
+                    _log.LogInformation($"Linux: {isLinux}");
+
+                    // 格式化路径
+                    _localRestorePath = _jobConfig.Restore.TrimPath();
+                    if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
+                    {
+                        _localRestorePath = $"/{_localRestorePath}";
+                    }
+
+                    _driveSavePath = _jobConfig.Target.TrimPrefix();
+
+                    // 格式化备份目录
+                    var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
+                    _jobConfig.Sources.Clear();
+                    foreach (var item in sources)
+                    {
+                        var path = item.TrimPath();
+                        if (isLinux && !string.IsNullOrWhiteSpace(path))
+                        {
+                            // Linux
+                            path = $"/{path}";
+                            var dir = new DirectoryInfo(path);
+                            if (!dir.Exists)
+                            {
+                                dir.Create();
+                            }
+                            _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
+                        }
+                        else
+                        {
+                            // Windows
+                            var dir = new DirectoryInfo(path);
+                            if (!dir.Exists)
+                            {
+                                dir.Create();
+                            }
+                            _jobConfig.Sources.Add(dir.FullName);
+                        }
+                    }
+
+                    // 获取云盘信息
+                    AliyunDriveInitInfo();
+
+                    // 空间信息
+                    AliyunDriveInitSpaceInfo();
+
+                    // VIP 信息
+                    AliyunDriveInitVipInfo();
+
+                    // 保存配置
+                    _driveConfig.Save();
+
+                    sw.Stop();
+                    _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
+
+                    ProcessMessage = "作业初始化完成";
+                }
+                finally
+                {
+                    // 初始化结束，还原状态
+                    ChangeState(oldState);
+                }
+            });
+
+            //// 如果获取到锁则开始作业
+            //if (isLock)
+            //{
+            //    // 开始作业
+            //    StartJob();
+            //}
+
+            if (!isLock)
+            {
+                throw new LogicException("其他作业正在初始化中，请稍后重试");
+            }
+        }
 
         /// <summary>
         /// 阿里云盘 - 文件校验
@@ -2852,12 +2904,12 @@ namespace MDriveSync.Core
         /// 阿里云盘 - 获取用户空间信息
         /// </summary>
         /// <returns></returns>
-        private async Task AliyunDriveInitSpaceInfo()
+        private void AliyunDriveInitSpaceInfo()
         {
             var request = new RestRequest("/adrive/v1.0/user/getSpaceInfo", Method.Post);
             request.AddHeader("Content-Type", "application/json");
             request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = await _apiClient.ExecuteAsync<AliyunDriveSpaceInfo>(request);
+            var response = _apiClient.Execute<AliyunDriveSpaceInfo>(request);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 _driveConfig.Metadata ??= new();
@@ -2870,12 +2922,12 @@ namespace MDriveSync.Core
         /// 阿里云盘 - 获取用户 VIP 信息
         /// </summary>
         /// <returns></returns>
-        private async Task AliyunDriveInitVipInfo()
+        private void AliyunDriveInitVipInfo()
         {
             var request = new RestRequest("/v1.0/user/getVipInfo", Method.Post);
             request.AddHeader("Content-Type", "application/json");
             request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = await _apiClient.ExecuteAsync<AliyunDriveVipInfo>(request);
+            var response = _apiClient.Execute<AliyunDriveVipInfo>(request);
             if (response.StatusCode == HttpStatusCode.OK)
             {
                 _driveConfig.Metadata ??= new();
