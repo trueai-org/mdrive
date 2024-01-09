@@ -575,10 +575,10 @@ namespace MDriveSync.Core
                 return;
 
             var caches = _localFilesCache.GetAll();
+            var cacheKeys = caches.Select(c => c.Key).ToList();
 
             // 比较文件，变化的则更新到数据库
             var fs = _localFiles.Values.ToList();
-            var fsKeys = _localFiles.Keys.ToList();
 
             var updatedList = new ConcurrentBag<LocalFileInfo>();
             var addList = new ConcurrentBag<LocalFileInfo>();
@@ -602,7 +602,7 @@ namespace MDriveSync.Core
                 }
 
                 // 移除
-                fsKeys.Remove(file.Key);
+                cacheKeys.Remove(file.Key);
             }
 
             if (addList.Count > 0)
@@ -615,12 +615,12 @@ namespace MDriveSync.Core
                 _localFilesCache.UpdateRange(updatedList);
             }
 
-            if (fsKeys.Count > 0)
+            if (cacheKeys.Count > 0)
             {
-                _localFilesCache.DeleteRange(fsKeys);
+                _localFilesCache.DeleteRange(cacheKeys);
             }
 
-            _log.LogInformation("持久化本地文件缓存，新增：{@0}，更新：{@1}，删除：{@2}", addList.Count, updatedList.Count, fsKeys.Count);
+            _log.LogInformation("持久化本地文件缓存，新增：{@0}，更新：{@1}，删除：{@2}", addList.Count, updatedList.Count, cacheKeys.Count);
         }
 
         public void Pause()
