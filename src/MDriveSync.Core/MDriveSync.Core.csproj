@@ -12,6 +12,13 @@
 	<ItemGroup>
 		<PackageReference Include="AlphaVSS" Version="2.0.3" />
 		<PackageReference Include="DokanNet" Version="2.1.0" />
+		
+		<!--<PackageReference Include="Fody" Version="6.8.0">
+		  <PrivateAssets>all</PrivateAssets>
+		  <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+		</PackageReference>
+		<PackageReference Include="PropertyChanged.Fody" Version="4.1.0" />-->
+		
 		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
 		<PackageReference Include="Polly" Version="8.2.0" />
 		<PackageReference Include="RestSharp" Version="110.2.0" />

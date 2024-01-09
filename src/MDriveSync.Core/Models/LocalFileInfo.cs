@@ -6,8 +6,22 @@ namespace MDriveSync.Core
     /// <summary>
     /// 本地文件信息
     /// </summary>
-    public class LocalFileInfo : IBaseKey<string>
+    public class LocalFileInfo : IBaseKey<string> // : INotifyPropertyChanged
     {
+        //public event PropertyChangedEventHandler PropertyChanged;
+
+        //protected void OnPropertyChanged(string propertyName = null)
+        //{
+        //    Console.WriteLine("值更新: " + propertyName);
+
+        //    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+
+        //    if (nameof(UpdateId) != propertyName)
+        //    {
+        //        UpdateId = Guid.NewGuid().ToString();
+        //    }
+        //}
+
         /// <summary>
         /// 本地完整路径
         /// </summary>
@@ -79,5 +93,12 @@ namespace MDriveSync.Core
         /// 云文件内容哈希
         /// </summary>
         public string AliyunContentHash { get; set; }
+
+        ///// <summary>
+        ///// 更新标识，如果字段有变更，则标识重新赋值
+        ///// 可以用于字段变更后，是否需要更新到数据库
+        ///// </summary>
+        //[Ignore]
+        //public string UpdateId { get; private set; }
     }
 }

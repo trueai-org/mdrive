@@ -598,10 +598,21 @@ namespace MDriveSync.Core
                 else
                 {
                     // 更新前判断每个字段是否一致，如果一致则不需要更新
+                    // TODO 这里需要改进性能
                     if (!_cacheDb.AreObjectsEqual(f, file))
                     {
+                        //_log.LogInformation("文件变更 {@0}, {@1}", file, f);
+
                         _cacheDb.Update(file);
                     }
+
+                    //// 说明字段有变更
+                    //if (f.UpdateId != file.UpdateId)
+                    //{
+                    //    _log.LogWarning("文件变更 {@0}, {@1}", file, f);
+
+                    //    _cacheDb.Update(file);
+                    //}
                 }
             }
 
