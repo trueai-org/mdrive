@@ -322,7 +322,10 @@ namespace MDriveSync.Core.Services
             var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
                 .ConfigureOptions(options =>
                 {
-                    options.Options = DokanOptions.NetworkDrive; // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
+                    // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
+
+                    options.Options = DokanOptions.NetworkDrive | DokanOptions.DebugMode | DokanOptions.StderrOutput;
+
                     options.MountPoint = _mountPoint;
                 });
 
