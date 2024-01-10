@@ -112,6 +112,11 @@ namespace MDriveSync.Core
         private readonly RestClient _apiClient;
 
         /// <summary>
+        /// 阿里云盘接口
+        /// </summary>
+        private readonly AliyunDriveApi _driveApi;
+
+        /// <summary>
         /// 文件上传请求
         /// </summary>
         private readonly HttpClient _uploadHttpClient;
@@ -231,7 +236,7 @@ namespace MDriveSync.Core
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
             _localFilesCache = new($"cache_{jobConfig.Id}.db", true);
-
+            _driveApi = new AliyunDriveApi();
             _log = log;
 
             // 本地缓存
@@ -749,7 +754,7 @@ namespace MDriveSync.Core
                 }
 
                 // 加载所有文件列表
-                await AliyunDriveSearchFiles(_driveId);
+                AliyunDriveSearchFiles(_driveId);
 
                 // 加载备份文件夹下的所有文件夹
                 //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
@@ -944,7 +949,7 @@ namespace MDriveSync.Core
                 _log.LogInformation("加载云盘存储文件列表...");
 
                 // 所有文件列表
-                await AliyunDriveSearchFiles(_driveId);
+                AliyunDriveSearchFiles(_driveId);
 
                 //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
 
@@ -1098,7 +1103,7 @@ namespace MDriveSync.Core
                     }
 
                     // 获取详情 url
-                    var data = await AliyunDriveGetDetail<AliyunDriveFileItem>(item.Value.FileId);
+                    var data = AliyunDriveGetDetail<AliyunDriveFileItem>(item.Value.FileId);
                     await AliyunDriveDownload(data.Url,
                                    item.Value.Name,
                                    item.Value.ContentHash,
@@ -1166,9 +1171,9 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="fileId"></param>
         /// <returns></returns>
-        public async Task<FilePathKeyResult> GetFileDetail(string fileId)
+        public FilePathKeyResult GetFileDetail(string fileId)
         {
-            var info = await AliyunDriveGetDetail<FilePathKeyResult>(fileId);
+            var info = AliyunDriveGetDetail<FilePathKeyResult>(fileId);
             if (info.IsFolder)
             {
                 var f = _driveFolders.Where(c => c.Value.FileId == fileId).FirstOrDefault();
@@ -1914,7 +1919,7 @@ namespace MDriveSync.Core
                             {
                                 if (_driveFiles.TryRemove(k, out var v))
                                 {
-                                    ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                                    _driveApi.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
                                 }
                             }
                         }
@@ -1931,7 +1936,7 @@ namespace MDriveSync.Core
                             var k = removeFolderKeys.First();
                             if (_driveFolders.TryRemove(k, out var v))
                             {
-                                ProviderApiHelper.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                                _driveApi.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
 
                                 // 如果删除父文件夹时，则移除所有的子文件夹
                                 removeFolderKeys.RemoveAll(c => c.StartsWith(k));
@@ -2030,11 +2035,11 @@ namespace MDriveSync.Core
                                                 finalFilePath = Path.Combine(savePath, newName);
 
                                                 // 如果本地和远程都不存在，说明可以重命名
-                                                var anyFile = await AliyunDriveFileExist(dinfo.ParentFileId, newName);
+                                                var anyFile = AliyunDriveFileExist(dinfo.ParentFileId, newName);
                                                 if (!File.Exists(finalFilePath) && !anyFile)
                                                 {
                                                     // 远程文件重命名
-                                                    var upData = ProviderApiHelper.FileUpdate(_driveId, dinfo.FileId, newName, AccessToken);
+                                                    var upData = _driveApi.FileUpdate(_driveId, dinfo.FileId, newName, AccessToken);
                                                     if (upData == null)
                                                     {
                                                         throw new Exception("文件重命名失败");
@@ -2053,28 +2058,8 @@ namespace MDriveSync.Core
                                     }
 
                                     // 获取详情 url
-                                    var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
-                                    request.AddHeader("Content-Type", "application/json");
-                                    request.AddHeader("Authorization", $"Bearer {AccessToken}");
-                                    object body = new
-                                    {
-                                        drive_id = _driveId,
-                                        file_id = dinfo.FileId
-                                    };
-                                    request.AddBody(body);
-                                    var response = await _apiClient.ExecuteAsync<AliyunDriveFileItem>(request);
-                                    if (response.StatusCode == HttpStatusCode.OK && !string.IsNullOrWhiteSpace(response.Data.Url))
-                                    {
-                                        await AliyunDriveDownload(response.Data.Url,
-                                            dinfo.Name,
-                                            dinfo.ContentHash,
-                                            savePath,
-                                            saveRootPath);
-                                    }
-                                    else
-                                    {
-                                        throw response.ErrorException;
-                                    }
+                                    var detail = _driveApi.GetDetail<AliyunDriveFileItem>(_driveId, dinfo.FileId, AccessToken);
+                                    await AliyunDriveDownload(detail.Url, dinfo.Name, dinfo.ContentHash, savePath, saveRootPath);
 
                                     // TODO
                                     // 如果是大文件，则通过下载链接下载文件
@@ -2121,7 +2106,7 @@ namespace MDriveSync.Core
         /// <param name="driveId"></param>
         /// <param name="limit"></param>
         /// <returns></returns>
-        private async Task AliyunDriveSearchFiles(string driveId, int limit = 100)
+        private void AliyunDriveSearchFiles(string driveId, int limit = 100)
         {
             try
             {
@@ -2131,30 +2116,13 @@ namespace MDriveSync.Core
                 var marker = "";
                 do
                 {
-                    var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
-                    request.AddHeader("Content-Type", "application/json");
-                    request.AddHeader("Authorization", $"Bearer {AccessToken}");
-                    var body = new
+                    var data = _driveApi.SearchAllFileList(_driveId, limit, marker, AccessToken);
+
+                    if (data?.Items.Count > 0)
                     {
-                        drive_id = driveId,
-                        limit = limit,
-                        marker = marker,
-                        query = ""
-                    };
-                    request.AddJsonBody(body);
-                    var response = await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
-                    if (response.StatusCode == HttpStatusCode.OK)
-                    {
-                        if (response.Data?.Items.Count > 0)
-                        {
-                            allItems.AddRange(response.Data?.Items);
-                        }
-                        marker = response.Data.NextMarker;
+                        allItems.AddRange(data.Items);
                     }
-                    else
-                    {
-                        throw response.ErrorException;
-                    }
+                    marker = data.NextMarker;
                 } while (!string.IsNullOrEmpty(marker));
 
                 // 先加载文件夹
@@ -2356,33 +2324,7 @@ namespace MDriveSync.Core
                     }
                 }
 
-                // v1 https://openapi.alipan.com/adrive/v1.0/openFile/create
-                // v2 https://api.aliyundrive.com/adrive/v2/file/createWithFolders
-                var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-                var body = new
-                {
-                    drive_id = _driveId,
-                    parent_file_id = parentId,
-                    name = name,
-                    type = "folder",
-                    check_name_mode = "refuse", // 同名不创建
-                };
-
-                request.AddBody(body);
-                var response = await AliyunDriveExecuteWithRetry<dynamic>(request);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw response.ErrorException ?? new Exception(response.Content ?? "创建文件夹失败");
-                }
-
-                //using var doc = JsonDocument.Parse(response.Content!);
-                //var root = doc.RootElement;
-                //return root.GetProperty("file_id").GetString()!;
-
-                var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(response.Content);
+                var data = _driveApi.CreateFolder(_driveId, parentId, name, AccessToken);
                 data.Name = data.FileName;
 
                 if (parentId == "root")
@@ -2482,34 +2424,21 @@ namespace MDriveSync.Core
                 else
                 {
                     // 删除同名文件
-                    ProviderApiHelper.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                    _driveApi.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
                     _driveFiles.TryRemove(saveFilePath, out _);
 
                     // 再次搜索确认是否有同名文件，有则删除
                     do
                     {
-                        var dupRequest = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
-                        dupRequest.AddHeader("Content-Type", "application/json");
-                        dupRequest.AddHeader("Authorization", $"Bearer {AccessToken}");
-                        object dupBody = new
+                        var delData = _driveApi.Exist(_driveId, saveParentFileId, name, AccessToken);
+                        if (delData?.Items?.Count > 0)
                         {
-                            drive_id = _driveId,
-                            query = $"parent_file_id='{saveParentFileId}' and type = 'file' and name = '{name}'"
-                        };
-                        dupRequest.AddBody(dupBody);
-                        var dupResponse = await _apiClient.ExecuteAsync<AliyunFileList>(dupRequest);
-                        if (dupResponse.StatusCode != HttpStatusCode.OK)
-                        {
-                            throw dupResponse.ErrorException ?? new Exception(dupResponse.Content ?? "查询云盘目录重复文件失败");
-                        }
-                        if (dupResponse.Data?.Items?.Count > 0)
-                        {
-                            foreach (var f in dupResponse.Data.Items)
+                            foreach (var f in delData.Items)
                             {
-                                var delRes = ProviderApiHelper.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                                var delRes = _driveApi.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
                                 if (delRes == null)
                                 {
-                                    _log.LogWarning($"远程文件已删除 {localFileInfo.Key}");
+                                    _log.LogInformation($"远程文件已删除 {localFileInfo.Key}");
                                 }
                             }
                         }
@@ -2679,24 +2608,8 @@ namespace MDriveSync.Core
                 throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
             }
 
-            var reqCom = new RestRequest("/adrive/v1.0/openFile/complete", Method.Post);
-            reqCom.AddHeader("Content-Type", "application/json");
-            reqCom.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var bodyCom = new
-            {
-                drive_id = _driveId,
-                file_id = file_id,
-                upload_id = upload_id,
-            };
-            reqCom.AddBody(bodyCom);
-            var resCom = await AliyunDriveExecuteWithRetry<dynamic>(reqCom);
-            if (resCom.StatusCode != HttpStatusCode.OK)
-            {
-                throw resCom.ErrorException ?? throw new Exception(resCom.Content ?? "上传标记完成失败");
-            }
-
             // 将文件添加到上传列表
-            var data = JsonSerializer.Deserialize<AliyunDriveFileItem>(resCom.Content);
+            var data = _driveApi.UploadComplete(_driveId, file_id, upload_id, AccessToken);
             if (data.ParentFileId == "root")
             {
                 // 当前目录在根路径
@@ -2739,8 +2652,7 @@ namespace MDriveSync.Core
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    var response = await AliyunDriveFetchFileList<dynamic>(driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type);
-                    var responseData = JsonSerializer.Deserialize<AliyunFileList>(response.Content);
+                    var responseData = _driveApi.FileList(driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type, AccessToken);
                     if (responseData.Items.Count > 0)
                     {
                         allItems.AddRange(responseData.Items.ToList());
@@ -2794,39 +2706,6 @@ namespace MDriveSync.Core
             {
                 throw;
             }
-        }
-
-        /// <summary>
-        /// 阿里云盘 - 获取文件列表
-        /// </summary>
-        /// <param name="driveId"></param>
-        /// <param name="parentFileId"></param>
-        /// <param name="limit"></param>
-        /// <param name="marker"></param>
-        /// <param name="orderBy"></param>
-        /// <param name="orderDirection"></param>
-        /// <param name="category"></param>
-        /// <param name="type"></param>
-        /// <returns></returns>
-        private async Task<RestResponse<T>> AliyunDriveFetchFileList<T>(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type)
-        {
-            var request = new RestRequest("/adrive/v1.0/openFile/list", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var body = new
-            {
-                drive_id = driveId,
-                parent_file_id = parentFileId,
-                limit,
-                marker,
-                order_by = orderBy,
-                order_direction = orderDirection,
-                category,
-                type
-            };
-            request.AddJsonBody(body);
-
-            return await AliyunDriveExecuteWithRetry<T>(request);
         }
 
         /// <summary>
@@ -2890,27 +2769,20 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private void AliyunDriveInitInfo()
         {
-            var request = new RestRequest("/adrive/v1.0/user/getDriveInfo", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = _apiClient.Execute<AliyunDriveInfo>(request);
-            if (response.StatusCode == System.Net.HttpStatusCode.OK)
+            var data = _driveApi.DriveInfo(AccessToken);
+
+            _driveId = data.DefaultDriveId;
+
+            if (_jobConfig.DefaultDrive == "backup" && string.IsNullOrWhiteSpace(data.BackupDriveId))
             {
-                var data = response.Data!;
-
-                _driveId = data.DefaultDriveId;
-
-                if (_jobConfig.DefaultDrive == "backup" && string.IsNullOrWhiteSpace(data.BackupDriveId))
-                {
-                    _driveId = data.BackupDriveId;
-                }
-                else if (_jobConfig.DefaultDrive == "resource" && !string.IsNullOrWhiteSpace(data.ResourceDriveId))
-                {
-                    _driveId = data.ResourceDriveId;
-                }
-
-                _driveConfig.Name = !string.IsNullOrWhiteSpace(data.NickName) ? data.NickName : data.Name;
+                _driveId = data.BackupDriveId;
             }
+            else if (_jobConfig.DefaultDrive == "resource" && !string.IsNullOrWhiteSpace(data.ResourceDriveId))
+            {
+                _driveId = data.ResourceDriveId;
+            }
+
+            _driveConfig.Name = !string.IsNullOrWhiteSpace(data.NickName) ? data.NickName : data.Name;
         }
 
         /// <summary>
@@ -2919,16 +2791,11 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private void AliyunDriveInitSpaceInfo()
         {
-            var request = new RestRequest("/adrive/v1.0/user/getSpaceInfo", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = _apiClient.Execute<AliyunDriveSpaceInfo>(request);
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                _driveConfig.Metadata ??= new();
-                _driveConfig.Metadata.UsedSize = response.Data?.PersonalSpaceInfo?.UsedSize;
-                _driveConfig.Metadata.TotalSize = response.Data?.PersonalSpaceInfo?.TotalSize;
-            }
+            var data = _driveApi.SpaceInfo(AccessToken);
+
+            _driveConfig.Metadata ??= new();
+            _driveConfig.Metadata.UsedSize = data?.PersonalSpaceInfo?.UsedSize;
+            _driveConfig.Metadata.TotalSize = data?.PersonalSpaceInfo?.TotalSize;
         }
 
         /// <summary>
@@ -2937,17 +2804,11 @@ namespace MDriveSync.Core
         /// <returns></returns>
         private void AliyunDriveInitVipInfo()
         {
-            var request = new RestRequest("/v1.0/user/getVipInfo", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            var response = _apiClient.Execute<AliyunDriveVipInfo>(request);
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                _driveConfig.Metadata ??= new();
-                _driveConfig.Metadata.Identity = response.Data?.Identity;
-                _driveConfig.Metadata.Level = response.Data?.Level;
-                _driveConfig.Metadata.Expire = response.Data?.ExpireDateTime;
-            }
+            var data = _driveApi.VipInfo(AccessToken);
+            _driveConfig.Metadata ??= new();
+            _driveConfig.Metadata.Identity = data?.Identity;
+            _driveConfig.Metadata.Level = data?.Level;
+            _driveConfig.Metadata.Expire = data?.ExpireDateTime;
         }
 
         /// <summary>
@@ -2964,27 +2825,8 @@ namespace MDriveSync.Core
             var searchParentFileId = "root";
             foreach (var subPath in saveRootSubPaths)
             {
-                var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-                object body = new
-                {
-                    drive_id = _driveId,
-                    query = $"parent_file_id='{searchParentFileId}' and type = 'folder' and name = '{subPath}'"
-                };
-                request.AddBody(body);
-                var response = await AliyunDriveExecuteWithRetry<AliyunFileList>(request);
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
-                }
-                if (response.Data == null)
-                {
-                    throw new Exception("云盘目录查询失败");
-                }
-
-                var okPath = response.Data.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
+                var subItem = _driveApi.GetSubFolders(_driveId, searchParentFileId, subPath, AccessToken);
+                var okPath = subItem.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
                 if (okPath == null)
                 {
                     // 未找到目录
@@ -3021,28 +2863,9 @@ namespace MDriveSync.Core
         /// <param name="type">folder | file</param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        private async Task<bool> AliyunDriveFileExist(string parentFileId, string name, string type = "file")
+        private bool AliyunDriveFileExist(string parentFileId, string name, string type = "file")
         {
-            var request = new RestRequest("/adrive/v1.0/openFile/search", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-            object body = new
-            {
-                drive_id = _driveId,
-                query = $"parent_file_id='{parentFileId}' and type = '{type}' and name = '{name}'"
-            };
-            request.AddBody(body);
-            var response = await _apiClient.ExecuteAsync<AliyunFileList>(request);
-            if (response.StatusCode != HttpStatusCode.OK)
-            {
-                throw response.ErrorException ?? new Exception(response.Content ?? "获取云盘目录失败");
-            }
-            if (response.Data?.Items?.Count > 0)
-            {
-                return true;
-            }
-            return false;
+            return _driveApi.Exist(_driveId, parentFileId, name, type)?.Items?.Count > 0;
         }
 
         /// <summary>
@@ -3050,27 +2873,9 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="fileId"></param>
         /// <returns></returns>
-        public async Task<T> AliyunDriveGetDetail<T>(string fileId) where T : AliyunDriveFileItem
+        public T AliyunDriveGetDetail<T>(string fileId) where T : AliyunDriveFileItem
         {
-            // 获取详情 url
-            var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            object body = new
-            {
-                drive_id = _driveId,
-                file_id = fileId
-            };
-            request.AddBody(body);
-            var response = await AliyunDriveExecuteWithRetry<T>(request);
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                return response.Data;
-            }
-            else
-            {
-                throw response.ErrorException;
-            }
+            return _driveApi.GetDetail<T>(_driveId, fileId, AccessToken);
         }
 
         /// <summary>
@@ -3078,34 +2883,24 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="fileId"></param>
         /// <returns></returns>
-        public async Task<AliyunDriveOpenFileGetDownloadUrlResponse> AliyunDriveGetDownloadUrl(string fileId)
+        public AliyunDriveOpenFileGetDownloadUrlResponse AliyunDriveGetDownloadUrl(string fileId, string hash = "")
         {
-            var data = await _cache.GetOrCreate($"download:{fileId}", async (c) =>
+            // 没有 hash 时从远程获取
+            if (string.IsNullOrWhiteSpace(hash))
             {
-                var request = new RestRequest("/adrive/v1.0/openFile/getDownloadUrl", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-                object body = new
-                {
-                    drive_id = _driveId,
-                    file_id = fileId,
-                    expire_sec = 14400
-                };
-                request.AddBody(body);
-                var response = await AliyunDriveExecuteWithRetry<AliyunDriveOpenFileGetDownloadUrlResponse>(request);
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    c.SetSlidingExpiration(TimeSpan.FromSeconds(600));
-                    c.SetAbsoluteExpiration(TimeSpan.FromSeconds(14400 - 600));
+                return _driveApi.GetDownloadUrl(_driveId, fileId, AccessToken);
+            }
 
-                    return response.Data;
-                }
-                else
-                {
-                    throw response.ErrorException;
-                }
+            // hash 不一样时，重新获取下载链接
+            return _cache.GetOrCreate($"download_{fileId}_{hash}", (c) =>
+            {
+                var res = _driveApi.GetDownloadUrl(_driveId, fileId, AccessToken);
+
+                c.SetSlidingExpiration(TimeSpan.FromSeconds(600));
+                c.SetAbsoluteExpiration(TimeSpan.FromSeconds(14400 - 600));
+
+                return res;
             });
-            return data;
         }
 
         #endregion 阿里云盘
@@ -3263,6 +3058,7 @@ namespace MDriveSync.Core
         {
             return _mountDrive != null;
         }
-        #endregion
+
+        #endregion 磁盘挂载
     }
 }

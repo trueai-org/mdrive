@@ -126,7 +126,7 @@ namespace MDriveSync.Core.Services
                             c.SetSlidingExpiration(TimeSpan.FromSeconds(60 * 5));
 
                             // 获取下载链接
-                            var url = _job.AliyunDriveGetDownloadUrl(f.FileId).GetAwaiter().GetResult()?.Url;
+                            var url = _job.AliyunDriveGetDownloadUrl(f.FileId, f.ContentHash)?.Url;
                             if (string.IsNullOrWhiteSpace(url))
                             {
                                 throw new Exception("获取下载链接失败");
@@ -165,7 +165,7 @@ namespace MDriveSync.Core.Services
                     if (!isCached)
                     {
                         // 获取下载链接
-                        var url = _job.AliyunDriveGetDownloadUrl(f.FileId).GetAwaiter().GetResult()?.Url;
+                        var url = _job.AliyunDriveGetDownloadUrl(f.FileId, f.ContentHash)?.Url;
                         if (string.IsNullOrWhiteSpace(url))
                         {
                             throw new Exception("获取下载链接失败");
@@ -201,7 +201,7 @@ namespace MDriveSync.Core.Services
                 fileInfo.FileName = fileName;
                 fileInfo.Attributes = FileAttributes.Directory; // 根目录是一个文件夹
                 fileInfo.CreationTime = DateTime.Now; // 可以设置为实际的创建时间
-                fileInfo.LastAccessTime = DateTime.Now; // 最后访问时间
+                fileInfo.LastAccessTime = null; // 最后访问时间
                 fileInfo.LastWriteTime = null; // 最后写入时间
                 fileInfo.Length = 0; // 对于目录，长度通常是0
 
@@ -248,7 +248,7 @@ namespace MDriveSync.Core.Services
                 Length = 0,
                 FileName = fileName,
                 CreationTime = DateTime.Now,
-                LastAccessTime = DateTime.Now,
+                LastAccessTime = null,
                 LastWriteTime = null,
                 Attributes = info.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
             };
@@ -591,6 +591,12 @@ namespace MDriveSync.Core.Services
 
         public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
         {
+            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
+            if (_driveFolders.TryGetValue(key, out var p) && p != null)
+            {
+                
+            }
+
             return NtStatus.Success;
         }
 

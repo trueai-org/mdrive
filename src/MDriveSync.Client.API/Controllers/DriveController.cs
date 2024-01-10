@@ -108,12 +108,12 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="fileId"></param>
         /// <returns></returns>
         [HttpGet("download/{jobId}/{fileId}")]
-        public async Task<AliyunDriveOpenFileGetDownloadUrlResponse> GetDownloadUrl(string jobId, string fileId)
+        public AliyunDriveOpenFileGetDownloadUrlResponse GetDownloadUrl(string jobId, string fileId)
         {
             var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
-                return await job.AliyunDriveGetDownloadUrl(fileId);
+                return job.AliyunDriveGetDownloadUrl(fileId);
             }
             return null;
         }
@@ -125,12 +125,12 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="fileId"></param>
         /// <returns></returns>
         [HttpGet("file/{jobId}/{fileId}")]
-        public async Task<FilePathKeyResult> GetDetail(string jobId, string fileId)
+        public FilePathKeyResult GetDetail(string jobId, string fileId)
         {
             var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
-                return await job.GetFileDetail(fileId);
+                return job.GetFileDetail(fileId);
             }
             return null;
         }
