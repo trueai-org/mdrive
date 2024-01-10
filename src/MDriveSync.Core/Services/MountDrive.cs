@@ -1,5 +1,6 @@
 ﻿using DokanNet;
 using DokanNet.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Security.AccessControl;
@@ -29,6 +30,8 @@ namespace MDriveSync.Core.Services
         /// 所有云盘文件
         /// </summary>
         public ConcurrentDictionary<string, AliyunDriveFileItem> _driveFiles;
+
+        private readonly MemoryCache _cache = new MemoryCache(new MemoryCacheOptions());
 
         /// <summary>
         /// 当前作业
@@ -111,12 +114,37 @@ namespace MDriveSync.Core.Services
             {
                 if (_driveFiles.TryGetValue(key, out var f) && f != null)
                 {
-                    // 获取下载链接
-                    var url = _job.AliyunDriveGetDownloadUrl(f.FileId).GetAwaiter().GetResult()?.Url;
-                    if (string.IsNullOrWhiteSpace(url))
+                    byte[] partialContent = [];
+
+                    // 小于 64KB 的资源请求直接使用缓存
+                    var isCached = false;
+                    if (buffer.Length <= 1024 * 64)
                     {
-                        throw new Exception("获取下载链接失败");
+                        partialContent = _cache.GetOrCreate($"{f.FileId}_{f.ContentHash}_{offset}_{buffer.Length}", c =>
+                        {
+                            c.SetSlidingExpiration(TimeSpan.FromSeconds(60 * 5));
+
+                            // 获取下载链接
+                            var url = _job.AliyunDriveGetDownloadUrl(f.FileId).GetAwaiter().GetResult()?.Url;
+                            if (string.IsNullOrWhiteSpace(url))
+                            {
+                                throw new Exception("获取下载链接失败");
+                            };
+                            // 使用 Range 请求下载文件的特定部分
+                            int endOffset = (int)offset + buffer.Length - 1;
+                            var content = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                            return content;
+                        });
+                        isCached = true;
+
+                        //Console.WriteLine($"{fileName}, cache, {offset}, {buffer.Length}");
                     }
+                    else
+                    {
+                        //Console.WriteLine($"{fileName}, nocache");
+                    }
+
+
 
                     // 从云盘中读取文件数据
 
@@ -133,8 +161,18 @@ namespace MDriveSync.Core.Services
                     //bytesRead = partialContent.Length;
 
                     // 使用 Range 请求下载文件的特定部分
-                    int endOffset = (int)offset + buffer.Length - 1;
-                    var partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                    if (!isCached)
+                    {
+                        // 获取下载链接
+                        var url = _job.AliyunDriveGetDownloadUrl(f.FileId).GetAwaiter().GetResult()?.Url;
+                        if (string.IsNullOrWhiteSpace(url))
+                        {
+                            throw new Exception("获取下载链接失败");
+                        }
+
+                        int endOffset = (int)offset + buffer.Length - 1;
+                        partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                    }
 
                     // 确保不会复制超出 buffer 大小的数据
                     int bytesToCopy = Math.Min(buffer.Length, partialContent.Length);
@@ -352,7 +390,7 @@ namespace MDriveSync.Core.Services
         {
             files = new List<FileInformation>();
 
-            var parentKey = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).TrimPath();
+            var parentKey = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
             if (_driveFolders.TryGetValue(parentKey, out var p) && p != null)
             {
                 // 加载文件夹

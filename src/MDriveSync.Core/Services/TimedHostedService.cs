@@ -92,6 +92,7 @@ namespace MDriveSync.Core
                 _logger.LogInformation("开始例行检查");
 
                 var ds = DriveDb.Instacne.GetAll();
+
                 foreach (var ad in ds)
                 {
                     var jobs = ad.Jobs.ToList();
