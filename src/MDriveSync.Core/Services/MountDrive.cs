@@ -1,8 +1,10 @@
 ﻿using DokanNet;
 using DokanNet.Logging;
+using System;
 using System.Collections.Concurrent;
+using System.Net.Http.Headers;
 using System.Security.AccessControl;
-
+using System.Security.Principal;
 using FileAccess = DokanNet.FileAccess;
 
 namespace MDriveSync.Core.Services
@@ -35,6 +37,24 @@ namespace MDriveSync.Core.Services
         /// </summary>
         public Job _job;
 
+        private readonly HttpClient _httpClient = new HttpClient();
+
+        private async Task<byte[]> ReadFileContentAsync(string url)
+        {
+            return await _httpClient.GetByteArrayAsync(url);
+        }
+
+        private async Task<byte[]> DownloadFileSegment(string url, int start, int end)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Range = new RangeHeaderValue(start, end);
+
+            var response = await _httpClient.SendAsync(request);
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadAsByteArrayAsync();
+        }
+
         public MountDrive(string mountPoint, Job job, ConcurrentDictionary<string, AliyunDriveFileItem> driveFolders, ConcurrentDictionary<string, AliyunDriveFileItem> driveFiles)
         {
             _mountPoint = mountPoint;
@@ -51,24 +71,6 @@ namespace MDriveSync.Core.Services
         public void CloseFile(string fileName, IDokanFileInfo info)
         {
             // 关闭文件操作
-        }
-
-        // 例如，实现读文件操作
-        public int ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
-        {
-            // 从云盘读取文件数据
-            bytesRead = 0;
-            //return DokanResult.Success;
-            return 1;
-        }
-
-        // 实现写文件操作
-        public int WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
-        {
-            // 向云盘写入文件数据
-            bytesWritten = 0;
-            //return DokanResult.Success;
-            return 1;
         }
 
         public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, IDokanFileInfo info)
@@ -111,10 +113,7 @@ namespace MDriveSync.Core.Services
             return DokanResult.Success;
         }
 
-        public NtStatus SetFileAttributes(
-            string fileName,
-            FileAttributes attributes,
-            IDokanFileInfo info)
+        public NtStatus SetFileAttributes(string fileName, FileAttributes attributes, IDokanFileInfo info)
         {
             // 设置文件属性。在这里，您可以根据需要添加逻辑以支持云盘文件属性的修改
             return DokanResult.Success;
@@ -122,21 +121,58 @@ namespace MDriveSync.Core.Services
 
         public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
         {
-            // 删除文件。在这里，您需要实现与云盘服务的文件删除逻辑
             return DokanResult.Success;
         }
 
-        NtStatus IDokanOperations.ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
+        public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
         {
-            //throw new NotImplementedException();
             bytesRead = 0;
 
-            return NtStatus.Success;
+            if (fileName == "\\")
+            {
+                return NtStatus.Success;
+            }
+
+            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
+            if (!_driveFiles.ContainsKey(key))
+            {
+                return DokanResult.FileNotFound;
+            }
+
+            try
+            {
+                if (_driveFiles.TryGetValue(key, out var f) && f != null)
+                {
+                    var url = f.Url;
+
+                    // 从云盘中读取文件数据
+
+                    //var fileContent = ReadFileContentAsync(url).GetAwaiter().GetResult();
+                    //int toRead = Math.Min(buffer.Length, fileContent.Length - (int)offset);
+                    //Array.Copy(fileContent, offset, buffer, 0, toRead);
+                    //bytesRead = toRead;
+
+                    // 使用 Range 请求下载文件的特定部分
+                    int endOffset = (int)offset + buffer.Length - 1;
+                    var partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+
+                    Array.Copy(partialContent, 0, buffer, 0, partialContent.Length);
+                    bytesRead = partialContent.Length;
+                }
+
+                return DokanResult.Success;
+            }
+            catch (Exception ex)
+            {
+                // 处理异常情况
+                return DokanResult.Error;
+            }
         }
 
-        NtStatus IDokanOperations.WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
+        public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
         {
-            throw new NotImplementedException();
+            bytesWritten = 0;
+            return NtStatus.Success;
         }
 
         public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
@@ -179,18 +215,6 @@ namespace MDriveSync.Core.Services
             return NtStatus.Success;
         }
 
-        public NtStatus FindFilesWithPattern(string fileName, string searchPattern, out IList<FileInformation> files, IDokanFileInfo info)
-        {
-            //throw new NotImplementedException();
-            files = new List<FileInformation>();
-            files.Add(new FileInformation()
-            {
-                FileName = fileName,
-            });
-
-            return NtStatus.Success;
-        }
-
         public NtStatus SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime, IDokanFileInfo info)
         {
             throw new NotImplementedException();
@@ -228,25 +252,42 @@ namespace MDriveSync.Core.Services
 
         public NtStatus GetFileSecurity(string fileName, out FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
         {
-            throw new NotImplementedException();
+            security = null;
+
+            // 如果您的文件系统不支持安全性和访问控制，您可以直接返回 NtStatus.NotImplemented
+            // return NtStatus.NotImplemented;
+
+            // 如果您想提供基本的安全性设置，您可以创建一个新的 FileSystemSecurity 对象
+            // 下面是为文件或目录创建一个基本的安全描述符的示例
+            if (info.IsDirectory)
+            {
+                security = new DirectorySecurity();
+            }
+            else
+            {
+                security = new FileSecurity();
+            }
+
+            if (fileName == "\\")
+            {
+                return NtStatus.Success;
+            }
+
+            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
+            if (_driveFiles.TryGetValue(key, out var f) && f != null)
+            {
+                // 设置安全性和访问控制
+                // 此处应根据您的需求和文件系统的特点设置安全性和访问控制列表（ACL）
+                // 例如，您可以设置允许所有用户读取文件的权限
+                //var everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+                //security.AddAccessRule(new FileSystemAccessRule(everyone., FileSystemRights.Read, AccessControlType.Allow));
+            }
+
+            return DokanResult.Success;
         }
 
         public NtStatus SetFileSecurity(string fileName, FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
         {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus Mounted(string mountPoint, IDokanFileInfo info)
-        {
-            //throw new NotImplementedException();
-
-            return NtStatus.Success;
-        }
-
-        public NtStatus Unmounted(IDokanFileInfo info)
-        {
-            //throw new NotImplementedException();
-
             return NtStatus.Success;
         }
 
@@ -343,6 +384,60 @@ namespace MDriveSync.Core.Services
         #region 已实现
 
         /// <summary>
+        /// 文件列表
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="searchPattern"></param>
+        /// <param name="files"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        public NtStatus FindFilesWithPattern(string fileName, string searchPattern, out IList<FileInformation> files, IDokanFileInfo info)
+        {
+            files = new List<FileInformation>();
+
+            var parentKey = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).TrimPath();
+            if (_driveFolders.TryGetValue(parentKey, out var p) && p != null)
+            {
+                // 加载文件夹
+                var dirs = _driveFolders.Values.Where(c => c.ParentFileId == p.FileId);
+                foreach (var d in dirs)
+                {
+                    files.Add(new FileInformation()
+                    {
+                        CreationTime = d.CreatedAt.Value.DateTime.ToLocalTime(),
+                        LastAccessTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                        LastWriteTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                        FileName = d.Name ?? d.FileName,
+                        Length = d.Size ?? 0,
+                        Attributes = FileAttributes.Directory,
+                    });
+                }
+
+                // 加载文件
+                var fs = _driveFiles.Values.Where(c => c.ParentFileId == p.FileId);
+                foreach (var file in fs)
+                {
+                    files.Add(new FileInformation()
+                    {
+                        CreationTime = file.CreatedAt.Value.DateTime.ToLocalTime(),
+                        LastAccessTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
+                        LastWriteTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
+                        FileName = file.Name ?? file.FileName,
+                        Length = file.Size ?? 0,
+                        Attributes = FileAttributes.Normal,
+                    });
+                }
+            }
+
+            // 根目录
+            if (fileName != "\\")
+            {
+            }
+
+            return NtStatus.Success;
+        }
+
+        /// <summary>
         /// 获取磁盘的空间信息
         /// </summary>
         /// <param name="freeBytesAvailable"></param>
@@ -395,5 +490,19 @@ namespace MDriveSync.Core.Services
         }
 
         #endregion 已实现
+
+        #region 无需实现
+
+        public NtStatus Mounted(string mountPoint, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus Unmounted(IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        #endregion 无需实现
     }
 }
