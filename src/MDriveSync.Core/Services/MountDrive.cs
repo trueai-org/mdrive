@@ -15,6 +15,7 @@ namespace MDriveSync.Core.Services
     {
         private Task _mountTask;
         private DokanInstance _dokanInstance;
+        private ManualResetEvent _mre = new ManualResetEvent(false);
 
         /// <summary>
         /// 云盘挂载点
@@ -201,7 +202,7 @@ namespace MDriveSync.Core.Services
                 fileInfo.Attributes = FileAttributes.Directory; // 根目录是一个文件夹
                 fileInfo.CreationTime = DateTime.Now; // 可以设置为实际的创建时间
                 fileInfo.LastAccessTime = DateTime.Now; // 最后访问时间
-                fileInfo.LastWriteTime = DateTime.Now; // 最后写入时间
+                fileInfo.LastWriteTime = null; // 最后写入时间
                 fileInfo.Length = 0; // 对于目录，长度通常是0
 
                 return DokanResult.Success;
@@ -248,7 +249,7 @@ namespace MDriveSync.Core.Services
                 FileName = fileName,
                 CreationTime = DateTime.Now,
                 LastAccessTime = DateTime.Now,
-                LastWriteTime = DateTime.Now,
+                LastWriteTime = null,
                 Attributes = info.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
             };
 
@@ -310,20 +311,29 @@ namespace MDriveSync.Core.Services
 
         #region 公共方法
 
+
+
         /// <summary>
         /// 挂载
         /// </summary>
-        public async void Mount()
+        public void Mount()
         {
             var dokanLogger = new ConsoleLogger("[Dokan] ");
             var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
                 .ConfigureOptions(options =>
                 {
-                    options.Options = DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
+                    options.Options = DokanOptions.NetworkDrive; // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
                     options.MountPoint = _mountPoint;
                 });
 
-            _dokanInstance = dokanInstanceBuilder.Build(this);
+            //_dokanInstance = dokanInstanceBuilder.Build(this);
+
+            _mountTask = new Task(() =>
+            {
+                using var dokanInstance = dokanInstanceBuilder.Build(this);
+                _mre.WaitOne();
+            });
+            _mountTask.Start();
 
             //// 我的意思在这里管理 task // TODO
             //// 运行 Dokan 实例在新的任务中
@@ -339,7 +349,7 @@ namespace MDriveSync.Core.Services
             //    }
             //});
 
-            await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
+            //await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
 
             //_mountTask = Task.Run(async () =>
             //{
@@ -370,7 +380,7 @@ namespace MDriveSync.Core.Services
             {
                 //Dokan.RemoveMountPoint(_mountPoint);
             }
-
+            _mre.Set();
             _dokanInstance?.Dispose();
         }
 
@@ -401,7 +411,7 @@ namespace MDriveSync.Core.Services
                     {
                         CreationTime = d.CreatedAt.Value.DateTime.ToLocalTime(),
                         LastAccessTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
-                        LastWriteTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                        LastWriteTime = null,
                         FileName = d.Name ?? d.FileName,
                         Length = d.Size ?? 0,
                         Attributes = FileAttributes.Directory,
@@ -478,7 +488,7 @@ namespace MDriveSync.Core.Services
 
             // 设置最大文件组件长度，这通常是文件系统中允许的最大文件名长度
             // 对于大多数现代文件系统，如NTFS，这个值通常是255
-            maximumComponentLength = 255;
+            maximumComponentLength = 256;
 
             // 返回操作成功的状态
             return DokanResult.Success;
