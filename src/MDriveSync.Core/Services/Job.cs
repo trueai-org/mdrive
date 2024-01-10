@@ -160,6 +160,11 @@ namespace MDriveSync.Core
         // 客户端信息
         private AliyunDriveConfig _driveConfig;
 
+        /// <summary>
+        /// 当前云盘
+        /// </summary>
+        public AliyunDriveConfig CurrrentDrive => _driveConfig;
+
         // 作业配置
         private JobConfig _jobConfig;
 
@@ -3223,11 +3228,11 @@ namespace MDriveSync.Core
         /// <param name="mountPoint"></param>
         public void DriveMount(string mountPoint)
         {
-            // 先释放
-            _mountDrive?.Dispose();
+            //// 先释放
+            //_mountDrive?.Unmount();
 
             // 重新创建
-            _mountDrive = new MountDrive(mountPoint);
+            _mountDrive = new MountDrive(mountPoint, this, _driveFolders, _driveFiles);
             _mountDrive.Mount();
         }
 
@@ -3238,7 +3243,6 @@ namespace MDriveSync.Core
         public void DriveUnmount()
         {
             _mountDrive?.Unmount();
-            _mountDrive?.Dispose();
             _mountDrive = null;
         }
 
