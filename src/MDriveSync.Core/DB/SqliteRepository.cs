@@ -28,7 +28,7 @@ namespace MDriveSync.Core.DB
         private static readonly object _lock = new object();
 
         private readonly OrmLiteConnectionFactory _dbFactory;
-        private readonly MemoryCache _cache = new MemoryCache(typeof(T).Name);
+        private readonly MemoryCache _cache = new(typeof(T).Name);
         private readonly string _cacheKey = typeof(T).Name;
         private readonly bool? _useCache;
 

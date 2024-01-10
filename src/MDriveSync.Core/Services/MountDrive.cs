@@ -1,10 +1,8 @@
 ﻿using DokanNet;
 using DokanNet.Logging;
-using System;
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Security.AccessControl;
-using System.Security.Principal;
 using FileAccess = DokanNet.FileAccess;
 
 namespace MDriveSync.Core.Services
@@ -63,16 +61,6 @@ namespace MDriveSync.Core.Services
             _driveFiles = driveFiles;
         }
 
-        public void Cleanup(string fileName, IDokanFileInfo info)
-        {
-            // 清理文件操作
-        }
-
-        public void CloseFile(string fileName, IDokanFileInfo info)
-        {
-            // 关闭文件操作
-        }
-
         public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, IDokanFileInfo info)
         {
             // 当fileName为"\"时，表示访问的是根目录
@@ -104,26 +92,6 @@ namespace MDriveSync.Core.Services
             //return DokanResult.Success;
         }
 
-        public NtStatus FindFiles(string fileName, out IList<FileInformation> files, IDokanFileInfo info)
-        {
-            // 列出文件夹内容。这里应根据云盘API获取文件列表
-            // 从云盘获取文件列表并填充到files中
-            files = new List<FileInformation>();
-
-            return DokanResult.Success;
-        }
-
-        public NtStatus SetFileAttributes(string fileName, FileAttributes attributes, IDokanFileInfo info)
-        {
-            // 设置文件属性。在这里，您可以根据需要添加逻辑以支持云盘文件属性的修改
-            return DokanResult.Success;
-        }
-
-        public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
-        {
-            return DokanResult.Success;
-        }
-
         public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
         {
             bytesRead = 0;
@@ -143,7 +111,12 @@ namespace MDriveSync.Core.Services
             {
                 if (_driveFiles.TryGetValue(key, out var f) && f != null)
                 {
-                    var url = f.Url;
+                    // 获取下载链接
+                    var url = _job.AliyunDriveGetDownloadUrl(f.FileId).GetAwaiter().GetResult()?.Url;
+                    if (string.IsNullOrWhiteSpace(url))
+                    {
+                        throw new Exception("获取下载链接失败");
+                    }
 
                     // 从云盘中读取文件数据
 
@@ -152,12 +125,21 @@ namespace MDriveSync.Core.Services
                     //Array.Copy(fileContent, offset, buffer, 0, toRead);
                     //bytesRead = toRead;
 
+                    //// 使用 Range 请求下载文件的特定部分
+                    //int endOffset = (int)offset + buffer.Length - 1;
+                    //var partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+
+                    //Array.Copy(partialContent, 0, buffer, 0, partialContent.Length);
+                    //bytesRead = partialContent.Length;
+
                     // 使用 Range 请求下载文件的特定部分
                     int endOffset = (int)offset + buffer.Length - 1;
                     var partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
 
-                    Array.Copy(partialContent, 0, buffer, 0, partialContent.Length);
-                    bytesRead = partialContent.Length;
+                    // 确保不会复制超出 buffer 大小的数据
+                    int bytesToCopy = Math.Min(buffer.Length, partialContent.Length);
+                    Array.Copy(partialContent, 0, buffer, 0, bytesToCopy);
+                    bytesRead = bytesToCopy;
                 }
 
                 return DokanResult.Success;
@@ -167,17 +149,6 @@ namespace MDriveSync.Core.Services
                 // 处理异常情况
                 return DokanResult.Error;
             }
-        }
-
-        public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
-        {
-            bytesWritten = 0;
-            return NtStatus.Success;
-        }
-
-        public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
         }
 
         public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, IDokanFileInfo info)
@@ -198,12 +169,41 @@ namespace MDriveSync.Core.Services
                 return DokanResult.Success;
             }
 
-            //// 对于非根目录的文件或目录，您需要根据实际情况填充fileInfo
-            //// 比如根据fileName在您的云盘中查找对应的文件或目录信息
+            // 对于非根目录的文件或目录，您需要根据实际情况填充fileInfo
+            // 比如根据fileName在您的云盘中查找对应的文件或目录信息
 
-            //return DokanResult.Error; // 如果文件或目录不存在，返回错误
+            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
 
-            //throw new NotImplementedException();
+            // info.IsDirectory 不准确，因此不适用
+            if (_driveFolders.TryGetValue(key, out var d) && d != null)
+            {
+                fileInfo = new FileInformation()
+                {
+                    CreationTime = d.CreatedAt.Value.DateTime.ToLocalTime(),
+                    LastAccessTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    LastWriteTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    FileName = d.Name ?? d.FileName,
+                    Length = d.Size ?? 0,
+                    Attributes = FileAttributes.Directory,
+                };
+                return NtStatus.Success;
+            }
+
+            if (_driveFiles.TryGetValue(key, out var file) && file != null)
+            {
+                fileInfo = new FileInformation()
+                {
+                    CreationTime = file.CreatedAt.Value.DateTime.ToLocalTime(),
+                    LastAccessTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    LastWriteTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    FileName = file.Name ?? file.FileName,
+                    Length = file.Size ?? 0,
+                    Attributes = FileAttributes.Normal,
+                };
+                return NtStatus.Success;
+            }
+
+
             fileInfo = new FileInformation()
             {
                 Length = 0,
@@ -211,43 +211,10 @@ namespace MDriveSync.Core.Services
                 CreationTime = DateTime.Now,
                 LastAccessTime = DateTime.Now,
                 LastWriteTime = DateTime.Now,
+                Attributes = info.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
             };
+
             return NtStatus.Success;
-        }
-
-        public NtStatus SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus MoveFile(string oldName, string newName, bool replace, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus SetEndOfFile(string fileName, long length, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus SetAllocationSize(string fileName, long length, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus LockFile(string fileName, long offset, long length, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
-        }
-
-        public NtStatus UnlockFile(string fileName, long offset, long length, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
         }
 
         public NtStatus GetFileSecurity(string fileName, out FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
@@ -284,16 +251,6 @@ namespace MDriveSync.Core.Services
             }
 
             return DokanResult.Success;
-        }
-
-        public NtStatus SetFileSecurity(string fileName, FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
-        {
-            return NtStatus.Success;
-        }
-
-        public NtStatus FindStreams(string fileName, out IList<FileInformation> streams, IDokanFileInfo info)
-        {
-            throw new NotImplementedException();
         }
 
         //public TaskStatus GetMountTaskStatus()
@@ -504,5 +461,98 @@ namespace MDriveSync.Core.Services
         }
 
         #endregion 无需实现
+
+        #region 暂不实现
+
+        public NtStatus SetEndOfFile(string fileName, long length, IDokanFileInfo info)
+        {
+            // 改变文件的大小。当文件被截断或扩展时，这个方法会被调用
+            return NtStatus.Success;
+        }
+
+        public NtStatus SetAllocationSize(string fileName, long length, IDokanFileInfo info)
+        {
+            // 用于预先分配文件空间。这不一定改变文件的大小，但它保留了文件可能需要的空间。
+            // 这个方法通常用于性能优化，因为它可以减少文件增长时所需的磁盘空间重新分配的次数。
+            return NtStatus.Success;
+        }
+
+        public NtStatus FindStreams(string fileName, out IList<FileInformation> streams, IDokanFileInfo info)
+        {
+            streams = new List<FileInformation>();
+
+            // 如果您的文件系统不支持备用数据流，可以直接返回 Success
+            // 这表示该文件没有备用数据流
+            return DokanResult.Success;
+        }
+
+        public NtStatus SetFileSecurity(string fileName, FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
+        {
+            bytesWritten = 0;
+            return NtStatus.Success;
+        }
+
+        public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus MoveFile(string oldName, string newName, bool replace, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus LockFile(string fileName, long offset, long length, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus UnlockFile(string fileName, long offset, long length, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus FindFiles(string fileName, out IList<FileInformation> files, IDokanFileInfo info)
+        {
+            files = new List<FileInformation>();
+            return DokanResult.Success;
+        }
+
+        public NtStatus SetFileAttributes(string fileName, FileAttributes attributes, IDokanFileInfo info)
+        {
+            return DokanResult.Success;
+        }
+
+        public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
+        {
+            return DokanResult.Success;
+        }
+
+        public NtStatus SetFileTime(string fileName, DateTime? creationTime, DateTime? lastAccessTime, DateTime? lastWriteTime, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public void Cleanup(string fileName, IDokanFileInfo info)
+        {
+            // 清理文件操作
+        }
+
+        public void CloseFile(string fileName, IDokanFileInfo info)
+        {
+            // 关闭文件操作
+        }
+
+        #endregion 暂不实现
     }
 }

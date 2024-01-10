@@ -65,6 +65,8 @@ namespace MDriveSync.Core
         /// </summary>
         private readonly SqliteRepository<LocalFileInfo, string> _localFilesCache;
 
+        //private readonly MemoryCache _memoryCache;
+
         //private readonly SqliteRepository<LocalFileInfo, string> _logDb = new("log.db", true);
 
         /// <summary>
@@ -3078,25 +3080,32 @@ namespace MDriveSync.Core
         /// <returns></returns>
         public async Task<AliyunDriveOpenFileGetDownloadUrlResponse> AliyunDriveGetDownloadUrl(string fileId)
         {
-            var request = new RestRequest("/adrive/v1.0/openFile/getDownloadUrl", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-            object body = new
+            var data = await _cache.GetOrCreate($"download:{fileId}", async (c) =>
             {
-                drive_id = _driveId,
-                file_id = fileId,
-                expire_sec = 14400
-            };
-            request.AddBody(body);
-            var response = await AliyunDriveExecuteWithRetry<AliyunDriveOpenFileGetDownloadUrlResponse>(request);
-            if (response.StatusCode == HttpStatusCode.OK)
-            {
-                return response.Data;
-            }
-            else
-            {
-                throw response.ErrorException;
-            }
+                var request = new RestRequest("/adrive/v1.0/openFile/getDownloadUrl", Method.Post);
+                request.AddHeader("Content-Type", "application/json");
+                request.AddHeader("Authorization", $"Bearer {AccessToken}");
+                object body = new
+                {
+                    drive_id = _driveId,
+                    file_id = fileId,
+                    expire_sec = 14400
+                };
+                request.AddBody(body);
+                var response = await AliyunDriveExecuteWithRetry<AliyunDriveOpenFileGetDownloadUrlResponse>(request);
+                if (response.StatusCode == HttpStatusCode.OK)
+                {
+                    c.SetSlidingExpiration(TimeSpan.FromSeconds(600));
+                    c.SetAbsoluteExpiration(TimeSpan.FromSeconds(14400 - 600));
+
+                    return response.Data;
+                }
+                else
+                {
+                    throw response.ErrorException;
+                }
+            });
+            return data;
         }
 
         #endregion 阿里云盘
