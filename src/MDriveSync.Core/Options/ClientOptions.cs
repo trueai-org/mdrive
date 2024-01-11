@@ -72,9 +72,27 @@ namespace MDriveSync.Core
         public string MountPoint { get; set; }
 
         /// <summary>
+        /// 自动挂载
         /// 启动时挂载磁盘
         /// </summary>
         public bool MountOnStartup { get; set; }
+
+        /// <summary>
+        /// 挂载的云盘路径
+        /// 可以单独挂在云盘的某个路径，或挂载整个云盘
+        /// </summary>
+        public string MountPath { get; set; }
+
+        /// <summary>
+        /// 是否以只读的方式挂载云盘
+        /// </summary>
+        public bool MountReadOnly { get; set; }
+
+        /// <summary>
+        /// 默认挂载的云盘（资源库、备份盘）
+        /// resource | backup
+        /// </summary>
+        public string MountDrive { get; set; } = "backup";
 
         /// <summary>
         /// 阿里云盘元信息（用户信息、云盘信息、VIP 信息）

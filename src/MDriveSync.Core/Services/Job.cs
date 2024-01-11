@@ -214,8 +214,10 @@ namespace MDriveSync.Core
             // 设置 45 分钟超时
             // 在 HttpClient 中，一旦发送了第一个请求，就不能再更改其配置属性，如超时时间 (Timeout)。
             // 这是因为 HttpClient 被设计为可重用的，它的属性设置在第一个请求发出之后就被固定下来。
-            _uploadHttpClient = new HttpClient();
-            _uploadHttpClient.Timeout = TimeSpan.FromMinutes(45);
+            _uploadHttpClient = new HttpClient
+            {
+                Timeout = TimeSpan.FromMinutes(45)
+            };
 
             // 非禁用状态时，创建默认为 none 状态
             if (jobConfig.State != JobState.Disabled)

@@ -1,9 +1,11 @@
 ﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.Diagnostics.Metrics;
 
 namespace MDriveSync.Core
 {
@@ -19,7 +21,12 @@ namespace MDriveSync.Core
         private readonly ILogger _logger;
         private readonly ClientOptions _clientOptions;
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
+
+        // 云盘作业
         private readonly ConcurrentDictionary<string, Job> _jobs = new();
+
+        // 云盘挂载
+        private readonly ConcurrentDictionary<string, AliyunDriveMounter> _mounter = new();
 
         private Timer _timer;
 
@@ -95,6 +102,16 @@ namespace MDriveSync.Core
 
                 foreach (var ad in ds)
                 {
+                    // 云盘挂载
+                    if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                    {
+                        mt = new AliyunDriveMounter(ad);
+                        _mounter[ad.Id] = mt;
+                        mt.AliyunDriveInitFiles();
+                        mt.Mount();
+                    }
+
+                    // 云盘作业
                     var jobs = ad.Jobs.ToList();
                     foreach (var cf in jobs)
                     {

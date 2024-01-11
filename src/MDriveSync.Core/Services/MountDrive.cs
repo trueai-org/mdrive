@@ -15,7 +15,7 @@ namespace MDriveSync.Core.Services
     {
         private Task _mountTask;
         private DokanInstance _dokanInstance;
-        private ManualResetEvent _mre = new ManualResetEvent(false);
+        private ManualResetEvent _mre = new(false);
 
         /// <summary>
         /// 云盘挂载点
@@ -39,7 +39,7 @@ namespace MDriveSync.Core.Services
         /// </summary>
         public Job _job;
 
-        private readonly HttpClient _httpClient = new HttpClient();
+        private readonly HttpClient _httpClient = new();
 
         private async Task<byte[]> ReadFileContentAsync(string url)
         {
