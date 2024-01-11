@@ -7,6 +7,7 @@ namespace MDriveSync.Core.Services
 {
     /// <summary>
     /// 阿里云盘 API
+    /// https://www.yuque.com/aliyundrive/zpfszx/ezlzok
     /// </summary>
     public class AliyunDriveApi
     {
@@ -17,17 +18,15 @@ namespace MDriveSync.Core.Services
 
         /// <summary>
         /// 设置列表每次请求之间的间隔为 250ms
+        /// 当触发限流时
         /// </summary>
-        private const int REQUEST_INTERVAL = 250;
+        public const int REQUEST_INTERVAL = 250;
 
         /// <summary>
         /// 接口请求
         /// </summary>
         private readonly RestClient _apiClient;
 
-        /// <summary>
-        ///
-        /// </summary>
         private readonly ILogger _log;
 
         public AliyunDriveApi()

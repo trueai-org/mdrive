@@ -16,63 +16,33 @@ using System.Text.RegularExpressions;
 namespace MDriveSync.Core
 {
     /// <summary>
-    /// https://www.yuque.com/aliyundrive/zpfszx/ezlzok
+    /// 作业管理
     ///
     /// TODO
     /// 文件监听变换时，移除 sha1 缓存，下次同步时重新计算
-    ///
-    /// TODO：
-    /// OK: 令牌自动刷新
-    /// job 管理
-    ///
-    /// 恢复到本地功能
-    /// 请求中如果令牌过期了，则自动刷新
-    /// 创建文件夹加锁执行
     /// 分块上传 50~100mb
     /// 快速对比本地文件与服务器文件差异
-    /// 集成 kopia + 云盘
     /// 开启文件监听，如果开启文件监听，如果文件发生变化时则重新计算完整 hash 并同步
-    /// 注意，针对快捷方式，可能会出现问题
     /// 排除文件/夹
     /// 增加存储到备份盘/资源库
     /// 首次备份时，计算全文 hash
     /// 由于加载列表限流，加载列表时，同时计算本地 hash
     ///
     ///
-    /// 恢复权限和时间
-    ///
-    /// =====
-    /// 客户端
-    /// WEB UI
-    ///
-    /// ===============
-    ///
-    /// 空文件、空文件夹也同步
-    ///
-    /// ======
-    /// 待定
-    ///
-    /// 注意，针对快捷方式，可能会出现问题
-    ///
-    /// TODO
-    /// 计划中的工作。
-    /// APP 启动时，通过接口获取欢迎语，检查版本等
     /// </summary>
     public class Job : IDisposable
     {
         /// <summary>
-        /// 本地文件列表缓存
-        /// </summary>
-        private readonly SqliteRepository<LocalFileInfo, string> _localFilesCache;
-
-        //private readonly MemoryCache _memoryCache;
-
-        //private readonly SqliteRepository<LocalFileInfo, string> _logDb = new("log.db", true);
-
-        /// <summary>
         /// 本地文件锁
         /// </summary>
-        private readonly object _localLock = new();
+        private static readonly object _localLock = new();
+
+        private readonly ILogger _log;
+
+        /// <summary>
+        /// 本地文件列表缓存
+        /// </summary>
+        private readonly SqliteRepository<LocalFileInfo, string> _localFileCache;
 
         /// <summary>
         /// 例行检查锁
@@ -80,31 +50,30 @@ namespace MDriveSync.Core
         private readonly SemaphoreSlim _maintenanceLock = new(1, 1);
 
         /// <summary>
-        /// 异步锁
+        /// 异步锁/资源锁
         /// </summary>
         private AsyncLockV2 _lock = new();
 
-        // 用于控制任务暂停和继续的对象
+        /// <summary>
+        /// 用于控制任务暂停和继续的对象
+        /// </summary>
         private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true);
 
-        // 暂停时的作业状态
+        /// <summary>
+        /// 暂停时的作业状态
+        /// </summary>
         private JobState _pauseJobState;
 
-        private readonly ILogger _log;
-
+        /// <summary>
+        /// 本地缓存
+        /// 令牌缓存、下载链接缓存等
+        /// </summary>
         private readonly IMemoryCache _cache;
 
+        /// <summary>
+        /// 令牌标识
+        /// </summary>
         private const string TOEKN_KEY = "TOKEN";
-
-        /// <summary>
-        /// 设置列表每次请求之间的间隔为 250ms
-        /// </summary>
-        private const int _listRequestInterval = 250;
-
-        /// <summary>
-        /// 接口请求
-        /// </summary>
-        private readonly RestClient _apiClient;
 
         /// <summary>
         /// 阿里云盘接口
@@ -230,19 +199,13 @@ namespace MDriveSync.Core
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
-            _localFilesCache = new($"cache_{jobConfig.Id}.db", true);
+            _localFileCache = new($"cache_{jobConfig.Id}.db", true);
             _driveApi = new AliyunDriveApi();
             _log = log;
 
             // 本地缓存
             _cache = new MemoryCache(new MemoryCacheOptions());
 
-            // 接口请求
-            var options = new RestClientOptions(ProviderApiHelper.ALIYUNDRIVE_API_HOST)
-            {
-                MaxTimeout = -1
-            };
-            _apiClient = new RestClient(options);
             _driveConfig = driveConfig;
             _jobConfig = jobConfig;
 
@@ -509,7 +472,7 @@ namespace MDriveSync.Core
             if (!_isLoadLocalFiles)
                 return;
 
-            var caches = _localFilesCache.GetAll();
+            var caches = _localFileCache.GetAll();
             var cacheKeys = caches.Select(c => c.Key).ToList();
 
             // 比较文件，变化的则更新到数据库
@@ -530,7 +493,7 @@ namespace MDriveSync.Core
                 else
                 {
                     // 更新前判断每个字段是否一致，如果一致则不需要更新
-                    if (!_localFilesCache.FastAreObjectsEqual(f, file))
+                    if (!_localFileCache.FastAreObjectsEqual(f, file))
                     {
                         updatedList.Add(file);
                     }
@@ -542,17 +505,17 @@ namespace MDriveSync.Core
 
             if (addList.Count > 0)
             {
-                _localFilesCache.AddRange(addList);
+                _localFileCache.AddRange(addList);
             }
 
             if (updatedList.Count > 0)
             {
-                _localFilesCache.UpdateRange(updatedList);
+                _localFileCache.UpdateRange(updatedList);
             }
 
             if (cacheKeys.Count > 0)
             {
-                _localFilesCache.DeleteRange(cacheKeys);
+                _localFileCache.DeleteRange(cacheKeys);
             }
 
             _log.LogInformation("持久化本地文件缓存，新增：{@0}，更新：{@1}，删除：{@2}", addList.Count, updatedList.Count, cacheKeys.Count);
@@ -1378,7 +1341,7 @@ namespace MDriveSync.Core
 
             // 读取本地缓存文件
             var oldLocalFiles = new Dictionary<string, LocalFileInfo>();
-            var oldLocalFileList = _localFilesCache.GetAll();
+            var oldLocalFileList = _localFileCache.GetAll();
             if (oldLocalFileList.Count > 0)
             {
                 oldLocalFiles = oldLocalFileList.ToDictionary(c => c.Key, c => c);
@@ -2638,8 +2601,8 @@ namespace MDriveSync.Core
                     sw.Stop();
 
                     // 等待 250ms 以遵守限流策略
-                    if (sw.ElapsedMilliseconds < _listRequestInterval)
-                        await Task.Delay((int)(_listRequestInterval - sw.ElapsedMilliseconds));
+                    if (sw.ElapsedMilliseconds < AliyunDriveApi.REQUEST_INTERVAL)
+                        await Task.Delay((int)(AliyunDriveApi.REQUEST_INTERVAL - sw.ElapsedMilliseconds));
                 } while (!string.IsNullOrEmpty(marker));
 
                 foreach (var item in allItems)
