@@ -102,13 +102,17 @@ namespace MDriveSync.Core
 
                 foreach (var ad in ds)
                 {
-                    // 云盘挂载
-                    if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                    // 云盘自动挂载
+                    if (ad.MountOnStartup)
                     {
-                        mt = new AliyunDriveMounter(ad);
-                        _mounter[ad.Id] = mt;
-                        mt.AliyunDriveInitFiles();
-                        mt.Mount();
+                        if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                        {
+                            mt = new AliyunDriveMounter(ad);
+                            mt.AliyunDriveInitFiles();
+                            mt.Mount();
+
+                            _mounter[ad.Id] = mt;
+                        }
                     }
 
                     // 云盘作业

@@ -199,10 +199,6 @@ namespace MDriveSync.Core.Services
                 // 保存云盘信息
                 _driveConfig.MountPath = _driveConfig.MountPath.TrimPath();
 
-                // TODO
-                _driveConfig.MountOnStartup = true;
-                _driveConfig.MountPoint = "K:\\";
-
                 _driveConfig.Save();
 
                 _log.Information("云盘挂载初始化完成");
