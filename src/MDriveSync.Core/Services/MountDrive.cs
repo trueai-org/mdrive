@@ -65,7 +65,25 @@ namespace MDriveSync.Core.Services
             _driveFiles = driveFiles;
         }
 
-        public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, IDokanFileInfo info)
+        /// <summary>
+        /// 创建文件/文件夹
+        /// </summary>
+        /// <param name="fileName">文件名</param>
+        /// <param name="access">访问权限</param>
+        /// <param name="share">共享模式</param>
+        /// <param name="mode">文件模式</param>
+        /// <param name="options">文件选项</param>
+        /// <param name="attributes">文件属性</param>
+        /// <param name="info">文件信息</param>
+        /// <returns>操作状态</returns>
+        public NtStatus CreateFile(
+            string fileName,
+            FileAccess access,
+            FileShare share,
+            FileMode mode,
+            FileOptions options,
+            FileAttributes attributes,
+            IDokanFileInfo info)
         {
             // 当fileName为"\"时，表示访问的是根目录
             if (fileName == "\\")
@@ -77,25 +95,65 @@ namespace MDriveSync.Core.Services
             }
 
             // 对于非根目录的文件或文件夹，根据mode处理不同的情况
+
+            // 根据文件名和模式确定操作类型
             switch (mode)
             {
                 case FileMode.CreateNew:
-                    // 处理新建文件的逻辑
+                    // 在这里实现创建新文件的逻辑
+                    {
+                        // 处理目录的创建或打开
+                        var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
+                        if (!_driveFiles.ContainsKey(key))
+                        {
+                            Console.WriteLine("创建文件夹 " + fileName);
+                        }
+                    }
+                    break;
+
+                case FileMode.Create:
+                    // 在这里实现创建文件的逻辑，如果文件存在则覆盖
                     break;
 
                 case FileMode.Open:
-                    // 处理打开文件的逻辑
+                    // 在这里实现打开文件的逻辑，如果文件不存在则失败
                     break;
-                    // 其他模式的处理...
+
+                case FileMode.OpenOrCreate:
+                    // 在这里实现打开文件的逻辑，如果文件不存在则创建
+                    break;
+
+                case FileMode.Truncate:
+                    // 在这里实现截断文件的逻辑
+                    break;
+
+                    // 其他模式的处理
             }
 
-            // 返回相应的状态码
-            return DokanResult.Success;
+            // 一些特殊的文件操作可能需要单独处理
+            if (info.IsDirectory)
+            {
+            }
+            else
+            {
+                // 处理文件的创建或打开
+            }
 
-            //// 创建或打开文件。在这里，您需要根据云盘的API添加逻辑
-            //return DokanResult.Success;
+            // 实现完成后，根据操作结果返回相应的状态
+            // 例如，如果操作成功，则返回 NtStatus.Success
+            // 如果遇到错误，则返回相应的错误状态，如 NtStatus.AccessDenied 或 NtStatus.ObjectNameNotFound 等
+            return NtStatus.Success;
         }
 
+        /// <summary>
+        /// 读文件
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="buffer"></param>
+        /// <param name="bytesRead"></param>
+        /// <param name="offset"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
         public NtStatus ReadFile(string fileName, byte[] buffer, out int bytesRead, long offset, IDokanFileInfo info)
         {
             bytesRead = 0;
@@ -145,8 +203,6 @@ namespace MDriveSync.Core.Services
                         //Console.WriteLine($"{fileName}, nocache");
                     }
 
-
-
                     // 从云盘中读取文件数据
 
                     //var fileContent = ReadFileContentAsync(url).GetAwaiter().GetResult();
@@ -190,108 +246,6 @@ namespace MDriveSync.Core.Services
             }
         }
 
-        public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, IDokanFileInfo info)
-        {
-            // 初始化fileInfo对象
-            fileInfo = new FileInformation();
-
-            if (fileName == "\\")
-            {
-                // 当访问的是根目录时
-                fileInfo.FileName = fileName;
-                fileInfo.Attributes = FileAttributes.Directory; // 根目录是一个文件夹
-                fileInfo.CreationTime = DateTime.Now; // 可以设置为实际的创建时间
-                fileInfo.LastAccessTime = null; // 最后访问时间
-                fileInfo.LastWriteTime = null; // 最后写入时间
-                fileInfo.Length = 0; // 对于目录，长度通常是0
-
-                return DokanResult.Success;
-            }
-
-            // 对于非根目录的文件或目录，您需要根据实际情况填充fileInfo
-            // 比如根据fileName在您的云盘中查找对应的文件或目录信息
-
-            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-
-            // info.IsDirectory 不准确，因此不适用
-            if (_driveFolders.TryGetValue(key, out var d) && d != null)
-            {
-                fileInfo = new FileInformation()
-                {
-                    CreationTime = d.CreatedAt.Value.DateTime.ToLocalTime(),
-                    LastAccessTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
-                    LastWriteTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
-                    FileName = d.Name ?? d.FileName,
-                    Length = d.Size ?? 0,
-                    Attributes = FileAttributes.Directory,
-                };
-                return NtStatus.Success;
-            }
-
-            if (_driveFiles.TryGetValue(key, out var file) && file != null)
-            {
-                fileInfo = new FileInformation()
-                {
-                    CreationTime = file.CreatedAt.Value.DateTime.ToLocalTime(),
-                    LastAccessTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
-                    LastWriteTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
-                    FileName = file.Name ?? file.FileName,
-                    Length = file.Size ?? 0,
-                    Attributes = FileAttributes.Normal,
-                };
-                return NtStatus.Success;
-            }
-
-
-            fileInfo = new FileInformation()
-            {
-                Length = 0,
-                FileName = fileName,
-                CreationTime = DateTime.Now,
-                LastAccessTime = null,
-                LastWriteTime = null,
-                Attributes = info.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
-            };
-
-            return NtStatus.Success;
-        }
-
-        public NtStatus GetFileSecurity(string fileName, out FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
-        {
-            security = null;
-
-            // 如果您的文件系统不支持安全性和访问控制，您可以直接返回 NtStatus.NotImplemented
-            // return NtStatus.NotImplemented;
-
-            // 如果您想提供基本的安全性设置，您可以创建一个新的 FileSystemSecurity 对象
-            // 下面是为文件或目录创建一个基本的安全描述符的示例
-            if (info.IsDirectory)
-            {
-                security = new DirectorySecurity();
-            }
-            else
-            {
-                security = new FileSecurity();
-            }
-
-            if (fileName == "\\")
-            {
-                return NtStatus.Success;
-            }
-
-            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-            if (_driveFiles.TryGetValue(key, out var f) && f != null)
-            {
-                // 设置安全性和访问控制
-                // 此处应根据您的需求和文件系统的特点设置安全性和访问控制列表（ACL）
-                // 例如，您可以设置允许所有用户读取文件的权限
-                //var everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
-                //security.AddAccessRule(new FileSystemAccessRule(everyone., FileSystemRights.Read, AccessControlType.Allow));
-            }
-
-            return DokanResult.Success;
-        }
-
         //public TaskStatus GetMountTaskStatus()
         //{
         //    return _mountTask?.Status ?? TaskStatus.Canceled;
@@ -310,8 +264,6 @@ namespace MDriveSync.Core.Services
         //}
 
         #region 公共方法
-
-
 
         /// <summary>
         /// 挂载
@@ -390,6 +342,122 @@ namespace MDriveSync.Core.Services
         #endregion 公共方法
 
         #region 已实现
+
+        /// <summary>
+        /// 文件安全策略
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="security"></param>
+        /// <param name="sections"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        public NtStatus GetFileSecurity(string fileName, out FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
+        {
+            security = null;
+
+            // 如果您的文件系统不支持安全性和访问控制，您可以直接返回 NtStatus.NotImplemented
+            // return NtStatus.NotImplemented;
+
+            // 如果您想提供基本的安全性设置，您可以创建一个新的 FileSystemSecurity 对象
+            // 下面是为文件或目录创建一个基本的安全描述符的示例
+
+            if (info.IsDirectory)
+            {
+                security = new DirectorySecurity();
+            }
+            else
+            {
+                security = new FileSecurity();
+            }
+
+            if (fileName == "\\")
+            {
+                return NtStatus.Success;
+            }
+
+            //var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
+            //if (_driveFiles.TryGetValue(key, out var f) && f != null)
+            //{
+            //    // 设置安全性和访问控制
+            //    // 此处应根据您的需求和文件系统的特点设置安全性和访问控制列表（ACL）
+            //    // 例如，您可以设置允许所有用户读取文件的权限
+            //    //var everyone = new SecurityIdentifier(WellKnownSidType.WorldSid, null);
+            //    //security.AddAccessRule(new FileSystemAccessRule(everyone., FileSystemRights.Read, AccessControlType.Allow));
+            //}
+
+            return DokanResult.Success;
+        }
+
+        /// <summary>
+        /// 获取文件信息
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="fileInfo"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
+        public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, IDokanFileInfo info)
+        {
+            fileInfo = new FileInformation() { FileName = fileName };
+
+            if (fileName == "\\")
+            {
+                // 当访问的是根目录时
+                fileInfo.FileName = fileName;
+                fileInfo.Attributes = FileAttributes.Directory; // 根目录是一个文件夹
+                fileInfo.CreationTime = DateTime.Now; // 可以设置为实际的创建时间
+                fileInfo.LastAccessTime = null; // 最后访问时间
+                fileInfo.LastWriteTime = null; // 最后写入时间
+                fileInfo.Length = 0; // 对于目录，长度通常是0
+
+                return DokanResult.Success;
+            }
+
+            // 对于非根目录的文件或目录，您需要根据实际情况填充fileInfo
+            // 比如根据fileName在您的云盘中查找对应的文件或目录信息
+
+            var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
+
+            // info.IsDirectory 不准确，因此不适用
+            if (_driveFolders.TryGetValue(key, out var d) && d != null)
+            {
+                fileInfo = new FileInformation()
+                {
+                    CreationTime = d.CreatedAt.Value.DateTime.ToLocalTime(),
+                    LastAccessTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    LastWriteTime = d.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    FileName = d.Name ?? d.FileName,
+                    Length = d.Size ?? 0,
+                    Attributes = FileAttributes.Directory,
+                };
+                return NtStatus.Success;
+            }
+
+            if (_driveFiles.TryGetValue(key, out var file) && file != null)
+            {
+                fileInfo = new FileInformation()
+                {
+                    CreationTime = file.CreatedAt.Value.DateTime.ToLocalTime(),
+                    LastAccessTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    LastWriteTime = file.UpdatedAt.Value.DateTime.ToLocalTime(),
+                    FileName = file.Name ?? file.FileName,
+                    Length = file.Size ?? 0,
+                    Attributes = FileAttributes.Normal,
+                };
+                return NtStatus.Success;
+            }
+
+            fileInfo = new FileInformation()
+            {
+                Length = 0,
+                FileName = fileName,
+                CreationTime = DateTime.Now,
+                LastAccessTime = null,
+                LastWriteTime = null,
+                Attributes = info.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
+            };
+
+            return NtStatus.Success;
+        }
 
         /// <summary>
         /// 文件列表
@@ -594,7 +662,6 @@ namespace MDriveSync.Core.Services
             var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
             if (_driveFolders.TryGetValue(key, out var p) && p != null)
             {
-                
             }
 
             return NtStatus.Success;

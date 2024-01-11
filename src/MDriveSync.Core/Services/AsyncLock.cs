@@ -51,6 +51,13 @@ namespace MDriveSync.Core.Services
             return new Releaser(() => Release(resource));
         }
 
+        public IDisposable Lock(string resource = "")
+        {
+            var semaphore = _semaphoreDictionary.GetOrAdd(resource, k => new SemaphoreSlim(1, 1));
+            semaphore.Wait();
+            return new Releaser(() => Release(resource));
+        }
+
         private void Release(string resource)
         {
             if (_semaphoreDictionary.TryGetValue(resource, out var semaphore))

@@ -84,11 +84,6 @@ namespace MDriveSync.Core
         /// </summary>
         private AsyncLockV2 _lock = new();
 
-        ///// <summary>
-        ///// 云盘文件夹创建锁
-        ///// </summary>
-        //private readonly AsyncLock _createFolderLock = new();
-
         // 用于控制任务暂停和继续的对象
         private ManualResetEventSlim _pauseEvent = new ManualResetEventSlim(true);
 
@@ -563,30 +558,11 @@ namespace MDriveSync.Core
             _log.LogInformation("持久化本地文件缓存，新增：{@0}，更新：{@1}，删除：{@2}", addList.Count, updatedList.Count, cacheKeys.Count);
         }
 
-        public void Pause()
-        {
-            // 暂停逻辑
-            ChangeState(JobState.Paused);
-        }
-
-        public void Resume()
-        {
-            // 恢复逻辑
-            // 需要根据实际情况确定恢复后的状态
-        }
-
-        public void Cancel()
-        {
-            // 取消逻辑
-            ChangeState(JobState.Cancelling);
-        }
-
         private void ChangeState(JobState newState)
         {
             CurrentState = newState;
 
             // 触发状态改变事件
-            // 还原数据
 
             ProcessMessage = string.Empty;
             ProcessCount = 0;
@@ -731,7 +707,7 @@ namespace MDriveSync.Core
 
             try
             {
-                await AliyunDriveInitBackupPath();
+                AliyunDriveInitBackupPath();
 
                 sw.Stop();
                 _log.LogInformation($"云盘存储根目录初始化完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -810,14 +786,13 @@ namespace MDriveSync.Core
             ProcessMessage = string.Empty;
 
             // 并行创建文件夹
-            await Parallel.ForEachAsync(_localFolders, options, async (item, cancellationToken) =>
+            Parallel.ForEach(_localFolders, options, (item) =>
             {
                 try
                 {
                     // 在关键点添加暂停点
                     _pauseEvent.Wait();
-                    cancellationToken = token;
-                    cancellationToken.ThrowIfCancellationRequested();
+                    token.ThrowIfCancellationRequested();
 
                     // 计算存储目录
                     var saveParentPath = $"{_driveSavePath}/{item.Key}".TrimPath();
@@ -834,7 +809,7 @@ namespace MDriveSync.Core
                             var savePathsParentFileId = "root";
                             foreach (var subPath in savePaths)
                             {
-                                savePathsParentFileId = await AliyunDriveCreateFolder(subPath, savePathsParentFileId);
+                                savePathsParentFileId = AliyunDriveCreateFolder(subPath, savePathsParentFileId);
                             }
                         }
 
@@ -880,8 +855,7 @@ namespace MDriveSync.Core
                 {
                     // 在关键点添加暂停点
                     _pauseEvent.Wait();
-                    cancellationToken = token;
-                    cancellationToken.ThrowIfCancellationRequested();
+                    token.ThrowIfCancellationRequested();
 
                     await AliyunDriveUploadFile(item.Value);
                 }
@@ -924,7 +898,7 @@ namespace MDriveSync.Core
                 var sw = new Stopwatch();
                 sw.Restart();
                 _log.LogInformation("计算云盘存储根目录...");
-                await AliyunDriveInitBackupPath();
+                AliyunDriveInitBackupPath();
                 sw.Stop();
                 _log.LogInformation($"计算云盘存储根目录完成. 用时 {sw.ElapsedMilliseconds}ms");
                 sw.Restart();
@@ -1318,6 +1292,8 @@ namespace MDriveSync.Core
             }
             else if (state == JobState.Continue)
             {
+                // Resume
+                // 作业恢复
                 // 仅用于暂停
                 if (CurrentState == JobState.Paused)
                 {
@@ -2296,10 +2272,10 @@ namespace MDriveSync.Core
         /// <param name="filePath"></param>
         /// <param name="parentId"></param>
         /// <returns></returns>
-        private async Task<string> AliyunDriveCreateFolder(string filePath, string parentId)
+        private string AliyunDriveCreateFolder(string filePath, string parentId)
         {
             // 同一级文件夹共用一个锁
-            using (await _lock.LockAsync($"create_folder_{parentId}"))
+            using (_lock.Lock($"create_folder_{parentId}"))
             {
                 var name = AliyunDriveHelper.EncodeFileName(filePath);
 
@@ -2388,7 +2364,7 @@ namespace MDriveSync.Core
                     var savePathsParentFileId = "root";
                     foreach (var subPath in savePaths)
                     {
-                        savePathsParentFileId = await AliyunDriveCreateFolder(subPath, savePathsParentFileId);
+                        savePathsParentFileId = AliyunDriveCreateFolder(subPath, savePathsParentFileId);
                     }
                 }
 
@@ -2526,7 +2502,7 @@ namespace MDriveSync.Core
                 }
             }
             request.AddBody(body);
-            var response = await AliyunDriveExecuteWithRetry<dynamic>(request);
+            var response = _driveApi.WithRetry<dynamic>(request);
 
             // 如果需要秒传，并且需要预处理时
             // System.Net.HttpStatusCode.Conflict 注意可能不是 409
@@ -2709,61 +2685,6 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 阿里云盘 - 执行重试请求
-        /// </summary>
-        /// <param name="request"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        private async Task<RestResponse<T>> AliyunDriveExecuteWithRetry<T>(RestRequest request)
-        {
-            const int maxRetries = 5;
-            int retries = 0;
-            while (true)
-            {
-                var response = await _apiClient.ExecuteAsync<T>(request);
-                if (response.StatusCode == HttpStatusCode.OK)
-                {
-                    return response;
-                }
-                else if (response.StatusCode == HttpStatusCode.TooManyRequests)
-                {
-                    retries++;
-
-                    // 其他API加一起有个10秒150次的限制。可以根据429和 x-retry - after 头部来判断等待重试的时间
-
-                    _log.LogWarning("触发限流，请求次数过多，重试第 {@0} 次： {@1}", retries, request.Resource);
-
-                    if (retries >= maxRetries)
-                    {
-                        throw new Exception("请求次数过多，已达到最大重试次数");
-                    }
-
-                    var waitTime = response.Headers.FirstOrDefault(x => x.Name == "x-retry-after")?.Value?.ToString();
-                    if (!string.IsNullOrWhiteSpace(waitTime) && int.TryParse(waitTime, out var waitValue) && waitValue > _listRequestInterval)
-                    {
-                        await Task.Delay(waitValue);
-                    }
-                    else
-                    {
-                        await Task.Delay(_listRequestInterval);
-                    }
-                }
-                else if ((response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
-                    && response.Content.Contains("PreHashMatched"))
-                {
-                    // 如果是秒传预处理的错误码，则直接返回
-                    return response;
-                }
-                else
-                {
-                    _log.LogError(response.ErrorException, $"请求失败：{request.Resource} {response.StatusCode} {response.Content}");
-
-                    throw response.ErrorException ?? new Exception($"请求失败：{response.StatusCode} {response.Content}");
-                }
-            }
-        }
-
-        /// <summary>
         /// 阿里云盘 - 获取用户 drive 信息
         /// </summary>
         /// <returns></returns>
@@ -2815,7 +2736,7 @@ namespace MDriveSync.Core
         /// 阿里云盘 - 初始化备份目录
         /// </summary>
         /// <returns></returns>
-        private async Task AliyunDriveInitBackupPath()
+        private void AliyunDriveInitBackupPath()
         {
             // 首先加载根目录结构
             // 并计算需要保存的目录
@@ -2830,7 +2751,7 @@ namespace MDriveSync.Core
                 if (okPath == null)
                 {
                     // 未找到目录
-                    searchParentFileId = await AliyunDriveCreateFolder(subPath, searchParentFileId);
+                    searchParentFileId = AliyunDriveCreateFolder(subPath, searchParentFileId);
                 }
                 else
                 {
