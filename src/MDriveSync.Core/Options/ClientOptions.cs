@@ -95,6 +95,11 @@ namespace MDriveSync.Core
         public string MountDrive { get; set; } = "backup";
 
         /// <summary>
+        /// 是否启用回收站，如果启用则删除文件时，保留到回收站
+        /// </summary>
+        public bool IsRecycleBin { get; set; } = false;
+
+        /// <summary>
         /// 阿里云盘元信息（用户信息、云盘信息、VIP 信息）
         /// </summary>
         public AliyunDriveMetadata Metadata { get; set; }

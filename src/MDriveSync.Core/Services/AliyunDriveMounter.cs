@@ -13,11 +13,16 @@ namespace MDriveSync.Core.Services
 {
     /// <summary>
     /// 阿里云盘挂载
+    ///
+    /// TODO：
+    /// 队列
+    /// 缓存
+    /// 自动刷新
     /// </summary>
     public class AliyunDriveMounter : IDokanOperations, IDisposable
     {
         private readonly ILogger _log;
-        private readonly object _lock = new object();
+        private readonly object _lock = new();
 
         /// <summary>
         /// 异步锁/资源锁
@@ -90,7 +95,6 @@ namespace MDriveSync.Core.Services
 
             AliyunDriveInitialize();
         }
-
 
         /// <summary>
         /// 下载文件
@@ -254,52 +258,6 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 初始化文件列表
-        /// </summary>
-        public void AliyunDriveInitFiles()
-        {
-            try
-            {
-                _log.Information("云盘挂载验证");
-
-                // 计算根目录的父级 parent id
-                // 首先加载根目录结构
-                // 并计算需要保存的目录
-                // 计算/创建备份文件夹
-                // 如果备份文件夹不存在
-                if (!string.IsNullOrWhiteSpace(_driveConfig.MountPath))
-                {
-                    var saveRootSubPaths = _driveConfig.MountPath.ToSubPaths();
-                    var searchParentFileId = "root";
-                    foreach (var subPath in saveRootSubPaths)
-                    {
-                        var subItem = _driveApi.GetSubFolders(_driveId, searchParentFileId, subPath, AccessToken);
-                        var okPath = subItem.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
-                        if (okPath == null)
-                        {
-                            // 未找到目录
-                            // 创建子目录
-                            var name = AliyunDriveHelper.EncodeFileName(subPath);
-                            var data = _driveApi.CreateFolder(_driveId, searchParentFileId, name, AccessToken);
-                            searchParentFileId = data.FileId;
-                        }
-                        else
-                        {
-                            searchParentFileId = okPath.FileId;
-                        }
-                    }
-                    _driveParentFileId = searchParentFileId;
-                }
-
-                AliyunDriveSearchFiles();
-            }
-            catch (Exception ex)
-            {
-                _log.Error(ex, "初始化文件列表异常");
-            }
-        }
-
-        /// <summary>
         /// 阿里云盘 - 搜索文件
         /// </summary>
         /// <param name="driveId"></param>
@@ -382,7 +340,7 @@ namespace MDriveSync.Core.Services
         /// </summary>
         /// <param name="fileId"></param>
         /// <returns></returns>
-        public AliyunDriveOpenFileGetDownloadUrlResponse AliyunDriveGetDownloadUrl(string fileId, string hash = "")
+        private AliyunDriveOpenFileGetDownloadUrlResponse AliyunDriveGetDownloadUrl(string fileId, string hash = "")
         {
             // 没有 hash 时从远程获取
             if (string.IsNullOrWhiteSpace(hash))
@@ -403,76 +361,10 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 阿里云盘 - 创建文件夹（同名不创建）
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <param name="parentId"></param>
-        /// <returns></returns>
-        private string AliyunDriveCreateFolder(string filePath, string parentId)
-        {
-            // 同一级文件夹共用一个锁
-            using (_lockV2.Lock($"create_folder_{parentId}"))
-            {
-                var name = AliyunDriveHelper.EncodeFileName(filePath);
-
-                // 判断是否需要创建文件夹
-                if (parentId == "root")
-                {
-                    // 如果是根目录
-                    var path = $"{name}".TrimPath();
-                    if (_driveFolders.ContainsKey(path))
-                    {
-                        return _driveFolders[path].FileId;
-                    }
-                }
-                else
-                {
-                    // 如果是子目录
-                    var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == parentId).First()!;
-                    var path = $"{parent.Key}/{name}".TrimPath();
-                    if (_driveFolders.ContainsKey(path))
-                    {
-                        return _driveFolders[path].FileId;
-                    }
-                }
-
-                //var data = new AliyunDriveFileItem()
-                //{
-                //    FileId = Guid.NewGuid().ToString(),
-                //    Type = "folder",
-                //    ParentFileId = parentId,
-                //    FileName = name,
-                //    Name = name,
-                //};
-
-                var data = _driveApi.CreateFolder(_driveId, parentId, name, AccessToken);
-                data.Name = data.FileName;
-
-                if (parentId == _driveParentFileId)
-                {
-                    // 当前目录在根路径
-                    // /{当前路径}/
-                    _driveFolders.TryAdd($"{data.Name}".TrimPath(), data);
-                }
-                else
-                {
-                    // 计算父级路径
-                    var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == parentId).First()!;
-                    var path = $"{parent.Key}/{data.Name}".TrimPath();
-
-                    // /{父级路径}/{当前路径}/
-                    _driveFolders.TryAdd(path, data);
-                }
-
-                return data.FileId;
-            }
-        }
-
-        /// <summary>
         /// 创建云盘文件夹路径
         /// </summary>
         /// <param name="pathKey">路径, 示例: temp/test1/test2 </param>
-        public void CreateFolders(string pathKey)
+        private void AliyunDriveCreateFolders(string pathKey)
         {
             var saveSubPaths = pathKey.ToSubPaths();
             var searchParentFileId = _driveParentFileId;
@@ -546,92 +438,218 @@ namespace MDriveSync.Core.Services
             }
         }
 
-        public void Dispose()
+        /// <summary>
+        /// 删除文件夹
+        /// </summary>
+        /// <param name="key"></param>
+        private void AliyunDriveDeleteFolder(string key)
         {
-            // 释放资源
+            if (_driveFolders.TryGetValue(key, out var folder))
+            {
+                var res = _driveApi.FileDelete(_driveId, folder.FileId, AccessToken, _driveConfig.IsRecycleBin);
+                if (!string.IsNullOrWhiteSpace(res?.FileId) || !string.IsNullOrWhiteSpace(res.AsyncTaskId))
+                {
+                    _driveFolders.TryRemove(key, out _);
+
+                    var fkeys = _driveFiles.Where(c => c.Value.FileId == folder.FileId).Select(c => c.Key).ToList();
+                    foreach (var fk in fkeys)
+                    {
+                        _driveFiles.TryRemove(fk, out _);
+                    }
+                }
+            }
         }
 
-        // ---------------------
+        /// <summary>
+        /// 删除文件
+        /// </summary>
+        /// <param name="key"></param>
+        private void AliyunDriveDeleteFile(string key)
+        {
+            if (_driveFiles.TryGetValue(key, out var folder))
+            {
+                var res = _driveApi.FileDelete(_driveId, folder.FileId, AccessToken, _driveConfig.IsRecycleBin);
+                if (!string.IsNullOrWhiteSpace(res?.FileId) || !string.IsNullOrWhiteSpace(res.AsyncTaskId))
+                {
+                    _driveFiles.TryRemove(key, out _);
+                }
+            }
+        }
 
-        ///// <summary>
-        ///// 创建文件/文件夹
-        ///// </summary>
-        ///// <param name="fileName">文件名</param>
-        ///// <param name="access">访问权限</param>
-        ///// <param name="share">共享模式</param>
-        ///// <param name="mode">文件模式</param>
-        ///// <param name="options">文件选项</param>
-        ///// <param name="attributes">文件属性</param>
-        ///// <param name="info">文件信息</param>
-        ///// <returns>操作状态</returns>
-        //public NtStatus CreateFile(
-        //    string fileName,
-        //    FileAccess access,
-        //    FileShare share,
-        //    FileMode mode,
-        //    FileOptions options,
-        //    FileAttributes attributes,
-        //    IDokanFileInfo info)
-        //{
-        //    // 当fileName为"\"时，表示访问的是根目录
-        //    if (fileName == "\\")
-        //    {
-        //        // 检查根目录的访问权限等
-        //        // 这里可以根据实际情况判断，比如是否允许访问根目录
-        //        // 如果允许访问，返回Success
-        //        return DokanResult.Success;
-        //    }
+        #region 公共方法
 
-        //    // 对于非根目录的文件或文件夹，根据mode处理不同的情况
+        /// <summary>
+        /// 初始化文件列表
+        /// </summary>
+        public void AliyunDriveInitFiles()
+        {
+            try
+            {
+                _log.Information("云盘挂载验证");
 
-        //    // 根据文件名和模式确定操作类型
-        //    switch (mode)
-        //    {
-        //        case FileMode.CreateNew:
-        //            // 在这里实现创建新文件的逻辑
-        //            {
-        //                // 处理目录的创建或打开
-        //                //var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-        //                //if (!_driveFiles.ContainsKey(key))
-        //                //{
-        //                //    Console.WriteLine("创建文件夹 " + fileName);
-        //                //}
-        //            }
-        //            break;
+                // 计算根目录的父级 parent id
+                // 首先加载根目录结构
+                // 并计算需要保存的目录
+                // 计算/创建备份文件夹
+                // 如果备份文件夹不存在
+                if (!string.IsNullOrWhiteSpace(_driveConfig.MountPath))
+                {
+                    var saveRootSubPaths = _driveConfig.MountPath.ToSubPaths();
+                    var searchParentFileId = "root";
+                    foreach (var subPath in saveRootSubPaths)
+                    {
+                        var subItem = _driveApi.GetSubFolders(_driveId, searchParentFileId, subPath, AccessToken);
+                        var okPath = subItem.Items.FirstOrDefault(x => x.Name == subPath && x.Type == "folder" && x.ParentFileId == searchParentFileId);
+                        if (okPath == null)
+                        {
+                            // 未找到目录
+                            // 创建子目录
+                            var name = AliyunDriveHelper.EncodeFileName(subPath);
+                            var data = _driveApi.CreateFolder(_driveId, searchParentFileId, name, AccessToken);
+                            searchParentFileId = data.FileId;
+                        }
+                        else
+                        {
+                            searchParentFileId = okPath.FileId;
+                        }
+                    }
+                    _driveParentFileId = searchParentFileId;
+                }
 
-        //        case FileMode.Create:
-        //            // 在这里实现创建文件的逻辑，如果文件存在则覆盖
-        //            break;
+                AliyunDriveSearchFiles();
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "初始化文件列表异常");
+            }
+        }
 
-        //        case FileMode.Open:
-        //            // 在这里实现打开文件的逻辑，如果文件不存在则失败
-        //            break;
+        /// <summary>
+        /// 挂载
+        /// </summary>
+        public void Mount()
+        {
+            var dokanLogger = new ConsoleLogger("[Dokan] ");
+            var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
+                .ConfigureOptions(options =>
+                {
+                    // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI | DokanOptions.NetworkDrive;
 
-        //        case FileMode.OpenOrCreate:
-        //            // 在这里实现打开文件的逻辑，如果文件不存在则创建
-        //            break;
+                    options.Options = DokanOptions.FixedDrive | DokanOptions.DebugMode | DokanOptions.StderrOutput;
+                    options.MountPoint = _driveConfig.MountPoint;
+                });
 
-        //        case FileMode.Truncate:
-        //            // 在这里实现截断文件的逻辑
-        //            break;
+            _mountTask = new Task(() =>
+            {
+                using var dokanInstance = dokanInstanceBuilder.Build(this);
+                _dokanInstance = dokanInstance;
+                // await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
+                _mre.WaitOne();
+            });
 
-        //            // 其他模式的处理
-        //    }
+            _mountTask.Start();
+        }
 
-        //    // 一些特殊的文件操作可能需要单独处理
-        //    if (info.IsDirectory)
-        //    {
-        //    }
-        //    else
-        //    {
-        //        // 处理文件的创建或打开
-        //    }
+        /// <summary>
+        /// 卸载
+        /// </summary>
+        public void Unmount()
+        {
+            // 卸载 Dokan 文件系统
+            if (_dokanInstance != null)
+            {
+                //Dokan.RemoveMountPoint(_mountPoint);
+            }
+            _mre.Set();
+            _dokanInstance?.Dispose();
+        }
 
-        //    // 实现完成后，根据操作结果返回相应的状态
-        //    // 例如，如果操作成功，则返回 NtStatus.Success
-        //    // 如果遇到错误，则返回相应的错误状态，如 NtStatus.AccessDenied 或 NtStatus.ObjectNameNotFound 等
-        //    return NtStatus.Success;
-        //}
+        /// <summary>
+        /// 释放资源
+        /// </summary>
+        public void Dispose()
+        {
+            //// 卸载 Dokan 文件系统
+            //if (_dokanInstance != null)
+            //{
+            //    //Dokan.RemoveMountPoint(_mountPoint);
+            //}
+
+            //_dokanInstance?.Dispose();
+            //_mountTask?.Dispose();
+        }
+
+        #endregion 公共方法
+
+        #region 已实现
+
+        /// <summary>
+        /// 查找文件列表
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="searchPattern"></param>
+        /// <returns></returns>
+        public IList<FileInformation> FindFilesHelper(string fileName, string searchPattern)
+        {
+            var files = new List<FileInformation>();
+
+            var parentId = _driveParentFileId;
+            if (fileName != "\\")
+            {
+                var parentKey = GetPathKey(fileName);
+                if (_driveFolders.TryGetValue(parentKey, out var p) && p != null)
+                {
+                    parentId = p.FileId;
+                }
+                else
+                {
+                    // 如果没有找到父级，则返回空
+                    return files;
+                }
+            }
+
+            // 加载文件夹
+            var dirs = _driveFolders.Values.Where(c => c.ParentFileId == parentId);
+            foreach (var d in dirs)
+            {
+                files.Add(new FileInformation()
+                {
+                    CreationTime = d.CreatedAt?.DateTime.ToLocalTime() ?? DateTime.Now,
+                    LastAccessTime = d.UpdatedAt?.DateTime.ToLocalTime() ?? DateTime.Now,
+                    LastWriteTime = null,
+                    FileName = d.Name ?? d.FileName,
+                    Length = d.Size ?? 0,
+                    Attributes = FileAttributes.Directory,
+                });
+            }
+
+            // 加载文件
+            var fs = _driveFiles.Values.Where(c => c.ParentFileId == parentId);
+            foreach (var file in fs)
+            {
+                files.Add(new FileInformation()
+                {
+                    CreationTime = file.CreatedAt?.DateTime.ToLocalTime(),
+                    LastAccessTime = file.UpdatedAt?.DateTime.ToLocalTime(),
+                    LastWriteTime = file.UpdatedAt?.DateTime.ToLocalTime(),
+                    FileName = file.Name ?? file.FileName,
+                    Length = file.Size ?? 0,
+                    Attributes = FileAttributes.Normal,
+                });
+            }
+
+            // 注意过滤 searchPattern 否则可能导致创建文件夹显示不出来
+            return files.Where(finfo => DokanHelper.DokanIsNameInExpression(searchPattern, finfo.FileName, true))
+                .Select(finfo => new FileInformation
+                {
+                    Attributes = finfo.Attributes,
+                    CreationTime = finfo.CreationTime,
+                    LastAccessTime = finfo.LastAccessTime,
+                    LastWriteTime = finfo.LastWriteTime,
+                    Length = finfo.Length,
+                    FileName = finfo.FileName
+                }).ToList();
+        }
 
         /// <summary>
         /// 创建文件/文件夹
@@ -644,15 +662,17 @@ namespace MDriveSync.Core.Services
         /// <param name="attributes">文件属性</param>
         /// <param name="info">文件信息</param>
         /// <returns>操作状态</returns>
-        public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode,
-            FileOptions options, FileAttributes attributes, IDokanFileInfo info)
+        public NtStatus CreateFile(string fileName, FileAccess access, FileShare share, FileMode mode, FileOptions options, FileAttributes attributes, IDokanFileInfo info)
         {
             try
             {
-                var result = DokanResult.Success;
+                var key = GetPathKey(fileName);
 
+                var pathIsDirectory = _driveFolders.ContainsKey(key);
+                var pathIsFile = _driveFiles.ContainsKey(key);
+                var pathExists = pathIsDirectory || pathIsFile;
 
-                // 当fileName为"\"时，表示访问的是根目录
+                // 表示访问的是根目录
                 if (fileName == "\\")
                 {
                     // 检查根目录的访问权限等
@@ -661,98 +681,32 @@ namespace MDriveSync.Core.Services
                     return DokanResult.Success;
                 }
 
-                if (fileName.Contains("新"))
+                if (info.IsDirectory)
                 {
-                }
-
-                //if (info.IsDirectory)
-                //{
-                try
-                {
-                    switch (mode)
+                    try
                     {
-                        case FileMode.Open:
-                            {
-                                // 处理目录的创建或打开
-                                var key = GetPathKey(fileName);
-                                if (!_driveFolders.ContainsKey(key))
+                        switch (mode)
+                        {
+                            case FileMode.Open:
                                 {
-                                    //return DokanResult.PathNotFound;
-                                    return DokanResult.NotADirectory;
-                                }
-
-                                //var rootPath = fileName.ToUrlPath().Split(_pathSeparator, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                                //if (!string.IsNullOrWhiteSpace(rootPath) && _job.CurrrentJob.Sources.Any(x => x.EndsWith(rootPath)))
-                                //{
-                                //    // 处理目录的创建或打开
-                                //    var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-                                //    if (!_driveFolders.ContainsKey(key))
-                                //    {
-                                //        //return DokanResult.PathNotFound;
-                                //        return DokanResult.NotADirectory;
-                                //    }
-                                //}
-
-                                //if (!_driveFolders.ContainsKey(fileName.ToUrlPath()))
-                                //{
-                                //    //return DokanResult.PathNotFound;
-                                //    return DokanResult.NotADirectory;
-                                //}
-                            }
-                            //if (!Directory.Exists(filePath))
-                            //{
-                            //    try
-                            //    {
-                            //        if (!File.GetAttributes(filePath).HasFlag(FileAttributes.Directory))
-                            //            return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                            //                attributes, DokanResult.NotADirectory);
-                            //    }
-                            //    catch (Exception)
-                            //    {
-                            //        return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                            //            attributes, DokanResult.FileNotFound);
-                            //    }
-                            //    return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                            //        attributes, DokanResult.PathNotFound);
-                            //}
-
-                            //new DirectoryInfo(filePath).EnumerateFileSystemInfos().Any();
-                            // you can't list the directory
-                            break;
-
-                        case FileMode.CreateNew:
-                            {
-                                if (info.IsDirectory)
-                                {
-                                    //var key = fileName.ToUrlPath();
-                                    //if (!_driveFolders.ContainsKey(key))
-                                    //{
-                                    //    //_job.CreateFolders(key);
-
-                                    //    _driveFolders.TryAdd(key, new AliyunDriveFileItem()
-                                    //    {
-                                    //        FileId = Guid.NewGuid().ToString(),
-                                    //        FileName = key,
-                                    //    });
-
-                                    //    //Dokan.Notify.Create(_dokanInstance, fileName, isDirectory: true);
-
-                                    //    return DokanResult.Success;
-                                    //}
-                                    //else
-                                    //{
-                                    //    //return NtStatus.Success;
-
-                                    //    //return DokanResult.AlreadyExists;
-                                    //    return DokanResult.FileExists;
-                                    //}
-
-                                    //var rootPath = fileName.ToUrlPath().Split(_pathSeparator, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                                    //if (!string.IsNullOrWhiteSpace(rootPath) && _job.CurrrentJob.Sources.Any(x => x.EndsWith(rootPath)))
-                                    //{
                                     // 处理目录的创建或打开
-                                    var key = GetPathKey(fileName);
-                                    if (!_driveFolders.ContainsKey(key))
+                                    if (!pathIsDirectory)
+                                    {
+                                        //return DokanResult.PathNotFound;
+                                        //return DokanResult.FileNotFound;
+                                        return DokanResult.NotADirectory;
+                                    }
+                                }
+                                break;
+
+                            case FileMode.CreateNew:
+                                {
+                                    if (pathIsFile && pathIsFile)
+                                    {
+                                        return DokanResult.AlreadyExists;
+                                    }
+
+                                    if (!pathExists)
                                     {
                                         lock (_lock)
                                         {
@@ -761,227 +715,58 @@ namespace MDriveSync.Core.Services
                                                 return DokanResult.FileExists;
                                             }
 
-                                            CreateFolders(key);
+                                            AliyunDriveCreateFolders(key);
 
-                                            ////Dokan.Notify.Create(_dokanInstance, fileName, isDirectory: true);
+                                            // 如果需要通知系统，注意：这里是包含挂载点的完整路径
+                                            //Dokan.Notify.Create(_dokanInstance, @$"K:\{fileName}", isDirectory: true);
+                                            //Dokan.Notify.Create(_dokanInstance, fileName, isDirectory: true);
 
-                                            Dokan.Notify.Create(_dokanInstance, @$"K:\{fileName}", isDirectory: true);
-
-                                            //Dokan.Notify.Rename(_dokanInstance, GetPath(fileName), GetPath(fileName), isDirectory: true, true);
+                                            return NtStatus.Success;
                                         }
-
-                                        //_driveFolders.TryAdd(key, new AliyunDriveFileItem()
-                                        //{
-                                        //    FileId = Guid.NewGuid().ToString(),
-                                        //    FileName = fileName,
-                                        //});
-
-                                        //Dokan.Notify.Create(_dokanInstance, fileName, isDirectory: true);
-
-                                        //access = FileAccess.GenericAll;
-
-                                        //// 设置默认安全描述符
-                                        //var security = new DirectorySecurity();
-                                        //security.AddAccessRule(new FileSystemAccessRule("Everyone", FileSystemRights.FullControl, AccessControlType.Allow));
-                                        //new DirectoryInfo(GetPath(fileName)).SetAccessControl(security);
-
-
-                                        //return DokanResult.Success;
                                     }
                                     else
                                     {
-                                        //return NtStatus.Success;
-
                                         //return DokanResult.AlreadyExists;
                                         return DokanResult.FileExists;
                                     }
-                                    //}
                                 }
-                                else
-                                {
-                                }
-                            }
-                            //if (Directory.Exists(filePath))
-                            //    return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                            //        attributes, DokanResult.FileExists);
-
-                            //try
-                            //{
-                            //    File.GetAttributes(filePath).HasFlag(FileAttributes.Directory);
-                            //    return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                            //        attributes, DokanResult.AlreadyExists);
-                            //}
-                            //catch (IOException)
-                            //{
-                            //}
-
-                            //Directory.CreateDirectory(GetPath(fileName));
-                            break;
+                        }
                     }
-                }
-                catch (UnauthorizedAccessException)
-                {
-                    //return Trace(nameof(CreateFile), fileName, info, access, share, mode, options, attributes,
-                    //    DokanResult.AccessDenied);
-                    return DokanResult.AccessDenied;
-                }
-                //}
-
-                // 对于非根目录的文件或文件夹，根据mode处理不同的情况
-
-                // 根据文件名和模式确定操作类型
-                switch (mode)
-                {
-                    case FileMode.CreateNew:
-                        // 在这里实现创建新文件的逻辑
-                        {
-                            if (info.IsDirectory)
-                            {
-                                //var rootPath = fileName.ToUrlPath().Split(_pathSeparator, StringSplitOptions.RemoveEmptyEntries)
-                                //    .FirstOrDefault();
-                                //if (!string.IsNullOrWhiteSpace(rootPath) && _job.CurrrentJob.Sources.Any(x => x.EndsWith(rootPath)))
-                                //{
-                                //    // 处理目录的创建或打开
-                                //    var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-                                //    if (!_driveFiles.ContainsKey(key))
-                                //    {
-                                //        _job.CreateFolders(key);
-                                //    }
-                                //}
-                            }
-
-                            //// 处理目录的创建或打开
-                            //var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-                            //if (!_driveFiles.ContainsKey(key))
-                            //{
-                            //    _job.CreateFolders(key);
-                            //}
-                        }
-                        break;
-
-                    case FileMode.Create:
-                        // 在这里实现创建文件的逻辑，如果文件存在则覆盖
-                        {
-                        }
-                        break;
-
-                    case FileMode.Open:
-                        // 在这里实现打开文件的逻辑，如果文件不存在则失败
-                        {
-                            //if (info.IsDirectory)
-                            //{
-                            //    var rootPath = fileName.ToUrlPath().Split(_pathSeparator, StringSplitOptions.RemoveEmptyEntries)
-                            //        .FirstOrDefault();
-                            //    if (!string.IsNullOrWhiteSpace(rootPath) && _job.CurrrentJob.Sources.Any(x => x.EndsWith(rootPath)))
-                            //    {
-                            //        // 处理目录的创建或打开
-                            //        var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-                            //        if (!_driveFiles.ContainsKey(key))
-                            //        {
-                            //            _job.CreateFolders(key);
-                            //        }
-                            //    }
-                            //}
-                        }
-                        break;
-
-                    case FileMode.OpenOrCreate:
-                        // 在这里实现打开文件的逻辑，如果文件不存在则创建
-                        {
-                        }
-                        break;
-
-                    case FileMode.Truncate:
-                        // 在这里实现截断文件的逻辑
-                        break;
-
-                        // 其他模式的处理
-                }
-
-                // 一些特殊的文件操作可能需要单独处理
-                if (info.IsDirectory)
-                {
+                    catch (UnauthorizedAccessException)
+                    {
+                        return DokanResult.AccessDenied;
+                    }
                 }
                 else
                 {
-                    // 处理文件的创建或打开
-                }
-
-                if (!info.IsDirectory)
-                {
-                    //var filePath = GetPath(fileName);
-
-                    var pathExists = false;
-                    var pathIsDirectory = false;
-
-                    //var readWriteAttributes = (access & DataAccess) == 0;
-                    //var readAccess = (access & DataWriteAccess) == 0;
-
-                    try
-                    {
-                        var key = GetPathKey(fileName);
-                        if (_driveFolders.ContainsKey(key))
-                        {
-                            pathIsDirectory = true;
-                            pathExists = true;
-                        }
-                        else if (_driveFiles.ContainsKey(key))
-                        {
-                            pathExists = true;
-                        }
-
-
-
-                        //pathExists = (Directory.Exists(filePath) || File.Exists(filePath));
-                        //pathIsDirectory = pathExists ? File.GetAttributes(filePath).HasFlag(FileAttributes.Directory) : false;
-                    }
-                    catch (IOException)
-                    {
-                    }
-
                     switch (mode)
                     {
                         case FileMode.Open:
 
                             if (pathExists)
                             {
-                                // check if driver only wants to read attributes, security info, or open directory
                                 if (pathIsDirectory)
                                 {
-                                    //if (pathIsDirectory && (access & FileAccess.Delete) == FileAccess.Delete
-                                    //    && (access & FileAccess.Synchronize) != FileAccess.Synchronize)
-                                    //    //It is a DeleteFile request on a directory
-                                    //    //return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                                    //    //    attributes, DokanResult.AccessDenied);
-                                    //    return DokanResult.AccessDenied;
-
                                     info.IsDirectory = pathIsDirectory;
                                     info.Context = new object();
-                                    // must set it to something if you return DokanError.Success
 
-                                    //return Trace(nameof(CreateFile), fileName, info, access, share, mode, options,
-                                    //    attributes, DokanResult.Success);
-                                    //return DokanResult.Success;
+                                    return DokanResult.Success;
                                 }
                             }
                             else
                             {
-                                //return Trace(nameof(CreateFile), fileName, info, access, share, mode, options, attributes,
-                                //    DokanResult.FileNotFound);
                                 return DokanResult.FileNotFound;
                             }
                             break;
 
                         case FileMode.CreateNew:
-                            //if (pathExists)
-                            //    return Trace(nameof(CreateFile), fileName, info, access, share, mode, options, attributes,
-                            //        DokanResult.FileExists);
+                            if (pathExists)
+                                return DokanResult.FileExists;
                             break;
 
                         case FileMode.Truncate:
-                            //if (!pathExists)
-                            //    return Trace(nameof(CreateFile), fileName, info, access, share, mode, options, attributes,
-                            //        DokanResult.FileNotFound);
+                            if (!pathExists)
+                                return DokanResult.FileNotFound;
                             break;
                     }
                 }
@@ -993,7 +778,9 @@ namespace MDriveSync.Core.Services
             }
             catch (Exception ex)
             {
-                return NtStatus.Success;
+                _log.Error(ex, "创建或打开文件出错");
+
+                return NtStatus.Error;
             }
         }
 
@@ -1093,108 +880,10 @@ namespace MDriveSync.Core.Services
             }
             catch (Exception ex)
             {
-                // 处理异常情况
+                _log.Error(ex, "读取文件异常");
                 return DokanResult.Error;
             }
         }
-
-        //public TaskStatus GetMountTaskStatus()
-        //{
-        //    return _mountTask?.Status ?? TaskStatus.Canceled;
-        //}
-
-        //public void Dispose()
-        //{
-        //    //// 卸载 Dokan 文件系统
-        //    //if (_dokanInstance != null)
-        //    //{
-        //    //    //Dokan.RemoveMountPoint(_mountPoint);
-        //    //}
-
-        //    //_dokanInstance?.Dispose();
-        //    //_mountTask?.Dispose();
-        //}
-
-        #region 公共方法
-
-        /// <summary>
-        /// 挂载
-        /// </summary>
-        public void Mount()
-        {
-            var dokanLogger = new ConsoleLogger("[Dokan] ");
-            var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
-                .ConfigureOptions(options =>
-                {
-                    // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
-                    //  DokanOptions.NetworkDrive
-
-                    options.Options = DokanOptions.FixedDrive | DokanOptions.DebugMode | DokanOptions.StderrOutput;
-                    options.MountPoint = _driveConfig.MountPoint;
-                });
-
-            //_dokanInstance = dokanInstanceBuilder.Build(this);
-
-            _mountTask = new Task(() =>
-            {
-                using var dokanInstance = dokanInstanceBuilder.Build(this);
-                _dokanInstance = dokanInstance;
-                _mre.WaitOne();
-            });
-            _mountTask.Start();
-
-            //// 我的意思在这里管理 task // TODO
-            //// 运行 Dokan 实例在新的任务中
-            //await Task.Run(async () =>
-            //{
-            //    try
-            //    {
-            //        await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
-            //    }
-            //    catch (DokanException ex)
-            //    {
-            //        // 处理 Dokan 相关的异常
-            //    }
-            //});
-
-            //await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
-
-            //_mountTask = Task.Run(async () =>
-            //{
-            //    try
-            //    {
-            //        await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
-            //    }
-            //    catch (DokanException ex)
-            //    {
-            //        // 处理 Dokan 相关的异常
-            //        dokanLogger.Error(ex.Message);
-            //    }
-            //});
-
-            //if (_mountTask != null && _mountTask.Status == TaskStatus.Created)
-            //{
-            //    _mountTask.Start();
-            //}
-        }
-
-        /// <summary>
-        /// 卸载
-        /// </summary>
-        public void Unmount()
-        {
-            // 卸载 Dokan 文件系统
-            if (_dokanInstance != null)
-            {
-                //Dokan.RemoveMountPoint(_mountPoint);
-            }
-            _mre.Set();
-            _dokanInstance?.Dispose();
-        }
-
-        #endregion 公共方法
-
-        #region 已实现
 
         /// <summary>
         /// 文件安全策略
@@ -1270,7 +959,7 @@ namespace MDriveSync.Core.Services
 
             var key = GetPathKey(fileName);
 
-            // info.IsDirectory 不准确，因此不适用
+            // info.IsDirectory 不准确，因此不使用
             if (_driveFolders.TryGetValue(key, out var d) && d != null)
             {
                 fileInfo = new FileInformation()
@@ -1299,14 +988,13 @@ namespace MDriveSync.Core.Services
                 return NtStatus.Success;
             }
 
-
             fileInfo = new FileInformation()
             {
                 Length = 0,
                 FileName = fileName,
-                CreationTime = null,
-                LastAccessTime = null,
-                LastWriteTime = null,
+                CreationTime = DateTime.Now,
+                LastAccessTime = DateTime.Now,
+                LastWriteTime = DateTime.Now,
                 Attributes = info.IsDirectory ? FileAttributes.Directory : FileAttributes.Normal,
             };
 
@@ -1323,54 +1011,7 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         public NtStatus FindFilesWithPattern(string fileName, string searchPattern, out IList<FileInformation> files, IDokanFileInfo info)
         {
-            files = new List<FileInformation>();
-
-            var parentId = "";
-
-            // 根目录
-            if (fileName == "\\")
-            {
-                parentId = _driveParentFileId;
-            }
-            else
-            {
-                var parentKey = GetPathKey(fileName);
-                if (_driveFolders.TryGetValue(parentKey, out var p) && p != null)
-                {
-                    parentId = p.FileId;
-                }
-            }
-
-            // 加载文件夹
-            var dirs = _driveFolders.Values.Where(c => c.ParentFileId == parentId);
-            foreach (var d in dirs)
-            {
-                files.Add(new FileInformation()
-                {
-                    CreationTime = d.CreatedAt?.DateTime.ToLocalTime(),
-                    LastAccessTime = d.UpdatedAt?.DateTime.ToLocalTime(),
-                    LastWriteTime = null,
-                    FileName = d.Name ?? d.FileName,
-                    Length = d.Size ?? 0,
-                    Attributes = FileAttributes.Directory,
-                });
-            }
-
-            // 加载文件
-            var fs = _driveFiles.Values.Where(c => c.ParentFileId == parentId);
-            foreach (var file in fs)
-            {
-                files.Add(new FileInformation()
-                {
-                    CreationTime = file.CreatedAt?.DateTime.ToLocalTime(),
-                    LastAccessTime = file.UpdatedAt?.DateTime.ToLocalTime(),
-                    LastWriteTime = file.UpdatedAt?.DateTime.ToLocalTime(),
-                    FileName = file.Name ?? file.FileName,
-                    Length = file.Size ?? 0,
-                    Attributes = FileAttributes.Normal,
-                });
-            }
-
+            files = FindFilesHelper(fileName, searchPattern);
             return NtStatus.Success;
         }
 
@@ -1426,6 +1067,63 @@ namespace MDriveSync.Core.Services
             return DokanResult.Success;
         }
 
+        /// <summary>
+        /// 清理文件操作
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="info"></param>
+        public void Cleanup(string fileName, IDokanFileInfo info)
+        {
+            if (info.Context != null && info.Context is FileStream fs)
+            {
+                fs?.Dispose();
+                info.Context = null;
+            }
+
+            if (info.DeleteOnClose)
+            {
+                if (fileName == "\\")
+                {
+                    return;
+                }
+
+                var key = GetPathKey(fileName);
+                if (_driveFolders.ContainsKey(key))
+                {
+                    // 删除文件夹
+                    AliyunDriveDeleteFolder(key);
+                }
+                else if (_driveFiles.ContainsKey(key))
+                {
+                    // 删除文件
+                    AliyunDriveDeleteFile(key);
+                }
+
+                //if (info.IsDirectory)
+                //{
+                //    Directory.Delete(GetPath(fileName));
+                //}
+                //else
+                //{
+                //    File.Delete(GetPath(fileName));
+                //}
+            }
+        }
+
+        /// <summary>
+        /// 关闭文件操作
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="info"></param>
+        public void CloseFile(string fileName, IDokanFileInfo info)
+        {
+            if (info.Context != null && info.Context is FileStream fs)
+            {
+                fs?.Dispose();
+                info.Context = null;
+            }
+        }
+
         #endregion 已实现
 
         #region 无需实现
@@ -1436,6 +1134,16 @@ namespace MDriveSync.Core.Services
         }
 
         public NtStatus Unmounted(IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
+        {
+            return DokanResult.Success;
+        }
+
+        public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
         {
             return NtStatus.Success;
         }
@@ -1499,16 +1207,11 @@ namespace MDriveSync.Core.Services
 
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, IDokanFileInfo info)
         {
-            files = new List<FileInformation>();
+            files = FindFilesHelper(fileName, "*");
             return DokanResult.Success;
         }
 
         public NtStatus SetFileAttributes(string fileName, FileAttributes attributes, IDokanFileInfo info)
-        {
-            return DokanResult.Success;
-        }
-
-        public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
         {
             return DokanResult.Success;
         }
@@ -1518,29 +1221,6 @@ namespace MDriveSync.Core.Services
             return NtStatus.Success;
         }
 
-        public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
-        {
-            //var key = (_job.CurrrentJob.Target.TrimPrefix() + "/" + fileName.TrimPath()).ToUrlPath();
-            //if (_driveFolders.TryGetValue(key, out var p) && p != null)
-            //{
-            //}
-
-            return NtStatus.Success;
-        }
-
-        public void Cleanup(string fileName, IDokanFileInfo info)
-        {
-            // 清理文件操作
-        }
-
-        public void CloseFile(string fileName, IDokanFileInfo info)
-        {
-            // 关闭文件操作
-        }
-
         #endregion 暂不实现
-
-
-
     }
 }

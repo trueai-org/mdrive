@@ -102,6 +102,14 @@ namespace MDriveSync.Core
 
                 foreach (var ad in ds)
                 {
+#if DEBUG
+                    if (!ad.MountOnStartup)
+                    {
+                        ad.MountOnStartup = true;
+                        ad.MountPoint = "Y:\\";
+                    }
+#endif
+
                     // 云盘自动挂载
                     if (ad.MountOnStartup)
                     {
