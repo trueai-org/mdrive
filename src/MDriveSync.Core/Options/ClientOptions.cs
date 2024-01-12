@@ -100,6 +100,11 @@ namespace MDriveSync.Core
         public bool IsRecycleBin { get; set; } = false;
 
         /// <summary>
+        /// 是否已挂载
+        /// </summary>
+        public bool IsMount { get; set; }
+
+        /// <summary>
         /// 阿里云盘元信息（用户信息、云盘信息、VIP 信息）
         /// </summary>
         public AliyunDriveMetadata Metadata { get; set; }

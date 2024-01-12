@@ -5,7 +5,6 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
-using System.Diagnostics.Metrics;
 
 namespace MDriveSync.Core
 {
@@ -106,7 +105,7 @@ namespace MDriveSync.Core
                     if (!ad.MountOnStartup)
                     {
                         ad.MountOnStartup = true;
-                        ad.MountPoint = "Y:\\";
+                        ad.MountPoint = "K:\\";
                     }
 #endif
 
@@ -216,6 +215,9 @@ namespace MDriveSync.Core
             var ds = DriveDb.Instacne.GetAll();
             foreach (var kvp in ds)
             {
+                // 是否挂载
+                kvp.IsMount = _mounter.ContainsKey(kvp.Id);
+
                 var js = kvp.Jobs.ToList();
                 js.ForEach(j =>
                 {
@@ -225,6 +227,7 @@ namespace MDriveSync.Core
                         j.State = job.CurrentState;
                     }
                 });
+
                 kvp.Jobs = js;
             }
 
