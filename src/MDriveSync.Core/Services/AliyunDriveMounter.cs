@@ -7,12 +7,9 @@ using RestSharp;
 using Serilog;
 using ServiceStack;
 using System.Collections.Concurrent;
-using System.IO;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Runtime.InteropServices;
 using System.Security.AccessControl;
-using System.Text.Json;
 using FileAccess = DokanNet.FileAccess;
 using ILogger = Serilog.ILogger;
 
@@ -39,8 +36,7 @@ namespace MDriveSync.Core.Services
 
         private Dictionary<string, long> _fileWriteLengths = new Dictionary<string, long>();
 
-
-        private int partSize = 1 * 1024 * 1024; // 10 MB per part
+        private readonly int partSize = 1 * 1024 * 1024; // 10 MB per part
         private Dictionary<string, List<FilePart>> _fileParts = new Dictionary<string, List<FilePart>>();
 
         /// <summary>
@@ -531,235 +527,10 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
         /// <exception cref="HttpRequestException"></exception>
-        private async Task AliyunDriveUploadFile(string fileName, string fileFullPath, long fileLength, bool needPreHash = true)
+        private async Task AliyunDrivePartUpload(string tmpFileName, string uploadUrl)
         {
-            //var fileFullPath = fileName;
-
-            var fileInfo = new FileInfo(fileFullPath);
-            if (!fileInfo.Exists)
-            {
-                throw new Exception("文件不存在");
-            }
-
-            if (fileInfo.Length != fileLength)
-            {
-                throw new Exception("文件内容错误");
-            }
-
-            // 文件名
-            var name = AliyunDriveHelper.EncodeFileName(fileName);
-
-            // 存储目录 ID
-            var saveParentFileId = "root";
-
-            //// 计算保存存储目录
-            //var saveParentPath = $"{_driveSavePath}/{localFileInfo.KeyPath}".TrimPath();
-
-            //// 计算文件存储路径
-            //var saveFilePath = $"{saveParentPath}/{name}".TrimPath();
-
-            //// 判断云盘是否存在路径，不存在则创建
-            //if (!string.IsNullOrWhiteSpace(saveParentPath))
-            //{
-            //    if (!_driveFolders.ContainsKey(saveParentPath))
-            //    {
-            //        var savePaths = saveParentPath.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-            //        var savePathsParentFileId = "root";
-            //        foreach (var subPath in savePaths)
-            //        {
-            //            savePathsParentFileId = AliyunDriveCreateFolder(subPath, savePathsParentFileId);
-            //        }
-            //    }
-
-            //    if (!_driveFolders.ContainsKey(saveParentPath))
-            //    {
-            //        throw new Exception("文件夹创建失败");
-            //    }
-
-            //    saveParentFileId = _driveFolders[saveParentPath].FileId;
-            //}
-
-            //if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
-            //{
-            //    // 计算 hash
-            //    localFileInfo.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
-            //}
-
-            //// 本地文件没有 sha1 时，计算本地文件的 sha1
-            //if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
-            //{
-            //    localFileInfo.Sha1 = HashHelper.ComputeFileHash(fileFullPath, "sha1");
-            //}
-
-            //// 如果文件已上传则跳过
-            //// 对比文件差异 sha1
-            //if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null)
-            //{
-            //    // 如果存在同名文件，且内容相同则跳过
-            //    if (driveItem.ContentHash == localFileInfo.Sha1)
-            //    {
-            //        return;
-            //    }
-            //    else
-            //    {
-            //        // 删除同名文件
-            //        _driveApi.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
-            //        _driveFiles.TryRemove(saveFilePath, out _);
-
-            //        // 再次搜索确认是否有同名文件，有则删除
-            //        do
-            //        {
-            //            var delData = _driveApi.Exist(_driveId, saveParentFileId, name, AccessToken);
-            //            if (delData?.Items?.Count > 0)
-            //            {
-            //                foreach (var f in delData.Items)
-            //                {
-            //                    var delRes = _driveApi.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
-            //                    if (delRes == null)
-            //                    {
-            //                        _log.Information($"远程文件已删除 {localFileInfo.Key}");
-            //                    }
-            //                }
-            //            }
-            //            else
-            //            {
-            //                break;
-            //            }
-            //        } while (true);
-            //    }
-            //}
-
-            //_log.Information($"正在上传文件 {localFileInfo.Key}");
-
-            var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
-            request.AddHeader("Content-Type", "application/json");
-            request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-            var fileSize = fileLength; // fileInfo.Length;
-
-            object body = new
-            {
-                drive_id = _driveId,
-                parent_file_id = saveParentFileId,
-                name = name,
-                type = "file",
-
-                // refuse 同名不创建
-                // ignore 同名文件可创建
-
-                check_name_mode = "refuse", // 覆盖文件模式
-                size = fileSize
-            };
-
-            //// 是否进行秒传处理
-            //var isRapidUpload = false;
-
-            //if (_driveConfig.RapidUpload)
-            //{
-            //    // 开启秒传
-            //    // 如果文件 > 10kb 则进行秒传计算，否则不进行
-            //    if (fileSize > 1024 * 10)
-            //    {
-            //        isRapidUpload = true;
-            //    }
-            //}
-
-            //// 如果需要计算秒传
-            //if (isRapidUpload)
-            //{
-            //    if (fileSize > 1024 * 1024 && needPreHash)
-            //    {
-            //        // 如果文件超过 1mb 则进行预处理，判断是否可以进行妙传
-            //        var preHash = AliyunDriveHelper.GenerateStartSHA1(fileFullPath);
-            //        body = new
-            //        {
-            //            drive_id = _driveId,
-            //            parent_file_id = saveParentFileId,
-            //            name = name,
-            //            type = "file",
-
-            //            // refuse 同名不创建
-            //            // ignore 同名文件可创建
-            //            check_name_mode = "refuse",
-            //            size = fileSize, // fileInfo.Length,
-            //            pre_hash = preHash
-            //        };
-            //    }
-            //    else
-            //    {
-            //        // > 10kb 且 < 1mb 的文件直接计算 sha1
-            //        var proofCode = AliyunDriveHelper.GenerateProofCode(fileFullPath, fileSize, AccessToken);
-            //        var contentHash = AliyunDriveHelper.GenerateSHA1(fileFullPath);
-
-            //        body = new
-            //        {
-            //            drive_id = _driveId,
-            //            parent_file_id = saveParentFileId,
-            //            name = name,
-            //            type = "file",
-
-            //            // refuse 同名不创建
-            //            // ignore 同名文件可创建
-            //            check_name_mode = "refuse",
-            //            size = fileSize, // fileInfo.Length,
-            //            content_hash = contentHash,
-            //            content_hash_name = "sha1",
-            //            proof_version = "v1",
-            //            proof_code = proofCode
-            //        };
-            //    }
-            //}
-
-            request.AddBody(body);
-            var response = _driveApi.WithRetry<dynamic>(request);
-
-            //// 如果需要秒传，并且需要预处理时
-            //// System.Net.HttpStatusCode.Conflict 注意可能不是 409
-            //if (isRapidUpload && needPreHash
-            //    && (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
-            //    && response.Content.Contains("PreHashMatched"))
-            //{
-            //    using (var mcDoc = JsonDocument.Parse(response.Content))
-            //    {
-            //        // 尝试获取code属性的值
-            //        if (mcDoc.RootElement.TryGetProperty("code", out JsonElement codeElement))
-            //        {
-            //            var code = codeElement.GetString();
-            //            if (code == "PreHashMatched")
-            //            {
-            //                // 匹配成功，进行完整的秒传，不需要预处理
-            //                await AliyunDriveUploadFile(localFileInfo, false);
-            //                return;
-            //            }
-            //        }
-            //    }
-            //}
-
-            if (response.StatusCode != HttpStatusCode.OK)
-            {
-                _log.Error(response.ErrorException, $"文件上传失败 {response.Content}");
-
-                throw response.ErrorException ?? new Exception($"文件上传失败");
-            }
-
-            using var doc = JsonDocument.Parse(response.Content!);
-            var root = doc.RootElement;
-
-            var drive_id = root.GetProperty("drive_id").GetString();
-            var file_id = root.GetProperty("file_id").GetString();
-            var upload_id = root.GetProperty("upload_id").GetString();
-
-            var rapid_upload = root.GetProperty("rapid_upload").GetBoolean();
-            if (rapid_upload)
-            {
-                _log.Information($"文件秒传成功");
-                return;
-            }
-
-            var upload_url = root.GetProperty("part_info_list").EnumerateArray().FirstOrDefault().GetProperty("upload_url").GetString();
-
             // 读取文件作为字节流
-            byte[] fileData = await File.ReadAllBytesAsync(fileFullPath);
+            var fileData = File.ReadAllBytes(tmpFileName);
 
             // 创建HttpContent
             var content = new ByteArrayContent(fileData);
@@ -779,7 +550,7 @@ namespace MDriveSync.Core.Services
             // 执行带有重试策略的请求
             await retryPolicy.ExecuteAsync(async () =>
             {
-                uploadRes = await _uploadHttpClient.PutAsync(upload_url, content);
+                uploadRes = await _uploadHttpClient.PutAsync(uploadUrl, content);
 
                 if (!uploadRes.IsSuccessStatusCode)
                 {
@@ -792,10 +563,84 @@ namespace MDriveSync.Core.Services
             {
                 throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
             }
+        }
 
+        /// <summary>
+        /// 创建分块文件上传请求
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="fileSize"></param>
+        /// <param name="saveParentFileId"></param>
+        /// <param name="partCount"></param>
+        /// <returns></returns>
+        /// <exception cref="Exception"></exception>
+        private AliyunDriveOpenFileCreateResponse AliyunDriveCreatePartUpload(string fileName, long fileSize, string saveParentFileId, int partCount)
+        {
+            var name = AliyunDriveHelper.EncodeFileName(Path.GetFileName(fileName));
+
+            var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+            // 使用分块上传
+            // https://www.yuque.com/aliyundrive/zpfszx/ezlzok
+
+            object body = new
+            {
+                drive_id = _driveId,
+                parent_file_id = saveParentFileId,
+                name = name,
+                type = "file",
+
+                // refuse 同名不创建
+                // ignore 同名文件可创建
+                check_name_mode = "refuse",
+                size = fileSize,
+
+                // 分块数量
+                part_info_list = Enumerable.Range(1, partCount).Select(c => new
+                {
+                    part_number = c
+                }).ToArray()
+            };
+
+            request.AddBody(body);
+            var response = _driveApi.WithRetry<AliyunDriveOpenFileCreateResponse>(request);
+
+            if (response.StatusCode != HttpStatusCode.OK)
+            {
+                _log.Error(response.ErrorException, $"创建文件上传请求失败 {response.Content}");
+
+                throw response.ErrorException ?? new Exception($"创建文件上传请求失败");
+            }
+
+            if (response.Data != null && response.Data.PartInfoList?.Count > 0)
+            {
+                return response.Data;
+            }
+            else
+            {
+                throw new Exception("创建文件上传请求失败");
+            }
+
+            //using var doc = JsonDocument.Parse(response.Content!);
+            //var root = doc.RootElement;
+            //var drive_id = root.GetProperty("drive_id").GetString();
+            //var file_id = root.GetProperty("file_id").GetString();
+            //var upload_id = root.GetProperty("upload_id").GetString();
+            //var upload_url = root.GetProperty("part_info_list").EnumerateArray().FirstOrDefault().GetProperty("upload_url").GetString();
+        }
+
+        /// <summary>
+        /// 上传标记完成
+        /// </summary>
+        /// <param name="file_id"></param>
+        /// <param name="upload_id"></param>
+        private void AliyunDriveUploadComplete(string file_id, string upload_id)
+        {
             // 将文件添加到上传列表
             var data = _driveApi.UploadComplete(_driveId, file_id, upload_id, AccessToken);
-            if (data.ParentFileId == "root")
+            if (data.ParentFileId == _driveParentFileId)
             {
                 // 当前目录在根路径
                 // /{当前路径}/
@@ -810,303 +655,7 @@ namespace MDriveSync.Core.Services
                 // /{父级路径}/{当前路径}/
                 _driveFiles.TryAdd(path, data);
             }
-
-            _log.Information($"文件上传成功");
         }
-
-        /// <summary>
-        /// 阿里云盘 - 上传文件
-        /// </summary>
-        /// <param name="localFileInfo"></param>
-        /// <param name="needPreHash"></param>
-        /// <returns></returns>
-        /// <exception cref="Exception"></exception>
-        /// <exception cref="HttpRequestException"></exception>
-        private async Task AliyunDriveUploadFileUrl(string fileName, byte[] fileBytes, long offset, long fileTotalLength, bool needPreHash = true)
-        {
-            var (upload_url, file_id, upload_id) = _cache.GetOrCreate($"{fileName}", c =>
-            {
-                var fileFullPath = fileName;
-
-                //var fileInfo = new FileInfo(fileFullPath);
-                //if (!fileInfo.Exists)
-                //{
-                //    // 本地文件不存在
-                //    _localFiles.TryRemove(localFileInfo.Key, out _);
-                //    return;
-                //}
-
-                // 文件名
-                var name = AliyunDriveHelper.EncodeFileName(fileName);
-
-                // 存储目录 ID
-                var saveParentFileId = "root";
-
-                //// 计算保存存储目录
-                //var saveParentPath = $"{_driveSavePath}/{localFileInfo.KeyPath}".TrimPath();
-
-                //// 计算文件存储路径
-                //var saveFilePath = $"{saveParentPath}/{name}".TrimPath();
-
-                //// 判断云盘是否存在路径，不存在则创建
-                //if (!string.IsNullOrWhiteSpace(saveParentPath))
-                //{
-                //    if (!_driveFolders.ContainsKey(saveParentPath))
-                //    {
-                //        var savePaths = saveParentPath.Split(new char[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-                //        var savePathsParentFileId = "root";
-                //        foreach (var subPath in savePaths)
-                //        {
-                //            savePathsParentFileId = AliyunDriveCreateFolder(subPath, savePathsParentFileId);
-                //        }
-                //    }
-
-                //    if (!_driveFolders.ContainsKey(saveParentPath))
-                //    {
-                //        throw new Exception("文件夹创建失败");
-                //    }
-
-                //    saveParentFileId = _driveFolders[saveParentPath].FileId;
-                //}
-
-                //if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
-                //{
-                //    // 计算 hash
-                //    localFileInfo.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
-                //}
-
-                //// 本地文件没有 sha1 时，计算本地文件的 sha1
-                //if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
-                //{
-                //    localFileInfo.Sha1 = HashHelper.ComputeFileHash(fileFullPath, "sha1");
-                //}
-
-                //// 如果文件已上传则跳过
-                //// 对比文件差异 sha1
-                //if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null)
-                //{
-                //    // 如果存在同名文件，且内容相同则跳过
-                //    if (driveItem.ContentHash == localFileInfo.Sha1)
-                //    {
-                //        return;
-                //    }
-                //    else
-                //    {
-                //        // 删除同名文件
-                //        _driveApi.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
-                //        _driveFiles.TryRemove(saveFilePath, out _);
-
-                //        // 再次搜索确认是否有同名文件，有则删除
-                //        do
-                //        {
-                //            var delData = _driveApi.Exist(_driveId, saveParentFileId, name, AccessToken);
-                //            if (delData?.Items?.Count > 0)
-                //            {
-                //                foreach (var f in delData.Items)
-                //                {
-                //                    var delRes = _driveApi.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
-                //                    if (delRes == null)
-                //                    {
-                //                        _log.Information($"远程文件已删除 {localFileInfo.Key}");
-                //                    }
-                //                }
-                //            }
-                //            else
-                //            {
-                //                break;
-                //            }
-                //        } while (true);
-                //    }
-                //}
-
-                //_log.Information($"正在上传文件 {localFileInfo.Key}");
-
-                var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
-                request.AddHeader("Content-Type", "application/json");
-                request.AddHeader("Authorization", $"Bearer {AccessToken}");
-
-                //var fileSize = fileLength; // fileInfo.Length;
-
-                object body = new
-                {
-                    drive_id = _driveId,
-                    parent_file_id = saveParentFileId,
-                    name = name,
-                    type = "file",
-
-                    // refuse 同名不创建
-                    // ignore 同名文件可创建
-
-                    check_name_mode = "refuse", // 覆盖文件模式
-                    size = fileTotalLength
-                };
-
-                //// 是否进行秒传处理
-                //var isRapidUpload = false;
-
-                //if (_driveConfig.RapidUpload)
-                //{
-                //    // 开启秒传
-                //    // 如果文件 > 10kb 则进行秒传计算，否则不进行
-                //    if (fileSize > 1024 * 10)
-                //    {
-                //        isRapidUpload = true;
-                //    }
-                //}
-
-                //// 如果需要计算秒传
-                //if (isRapidUpload)
-                //{
-                //    if (fileSize > 1024 * 1024 && needPreHash)
-                //    {
-                //        // 如果文件超过 1mb 则进行预处理，判断是否可以进行妙传
-                //        var preHash = AliyunDriveHelper.GenerateStartSHA1(fileFullPath);
-                //        body = new
-                //        {
-                //            drive_id = _driveId,
-                //            parent_file_id = saveParentFileId,
-                //            name = name,
-                //            type = "file",
-
-                //            // refuse 同名不创建
-                //            // ignore 同名文件可创建
-                //            check_name_mode = "refuse",
-                //            size = fileSize, // fileInfo.Length,
-                //            pre_hash = preHash
-                //        };
-                //    }
-                //    else
-                //    {
-                //        // > 10kb 且 < 1mb 的文件直接计算 sha1
-                //        var proofCode = AliyunDriveHelper.GenerateProofCode(fileFullPath, fileSize, AccessToken);
-                //        var contentHash = AliyunDriveHelper.GenerateSHA1(fileFullPath);
-
-                //        body = new
-                //        {
-                //            drive_id = _driveId,
-                //            parent_file_id = saveParentFileId,
-                //            name = name,
-                //            type = "file",
-
-                //            // refuse 同名不创建
-                //            // ignore 同名文件可创建
-                //            check_name_mode = "refuse",
-                //            size = fileSize, // fileInfo.Length,
-                //            content_hash = contentHash,
-                //            content_hash_name = "sha1",
-                //            proof_version = "v1",
-                //            proof_code = proofCode
-                //        };
-                //    }
-                //}
-
-                request.AddBody(body);
-                var response = _driveApi.WithRetry<dynamic>(request);
-
-                //// 如果需要秒传，并且需要预处理时
-                //// System.Net.HttpStatusCode.Conflict 注意可能不是 409
-                //if (isRapidUpload && needPreHash
-                //    && (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
-                //    && response.Content.Contains("PreHashMatched"))
-                //{
-                //    using (var mcDoc = JsonDocument.Parse(response.Content))
-                //    {
-                //        // 尝试获取code属性的值
-                //        if (mcDoc.RootElement.TryGetProperty("code", out JsonElement codeElement))
-                //        {
-                //            var code = codeElement.GetString();
-                //            if (code == "PreHashMatched")
-                //            {
-                //                // 匹配成功，进行完整的秒传，不需要预处理
-                //                await AliyunDriveUploadFile(localFileInfo, false);
-                //                return;
-                //            }
-                //        }
-                //    }
-                //}
-
-                if (response.StatusCode != HttpStatusCode.OK)
-                {
-                    _log.Error(response.ErrorException, $"文件上传失败 {response.Content}");
-
-                    throw response.ErrorException ?? new Exception($"文件上传失败");
-                }
-
-                using var doc = JsonDocument.Parse(response.Content!);
-                var root = doc.RootElement;
-
-                var drive_id = root.GetProperty("drive_id").GetString();
-                var file_id = root.GetProperty("file_id").GetString();
-                var upload_id = root.GetProperty("upload_id").GetString();
-
-                //var rapid_upload = root.GetProperty("rapid_upload").GetBoolean();
-                //if (rapid_upload)
-                //{
-                //    _log.Information($"文件秒传成功");
-                //    return;
-                //}
-
-                var upload_url = root.GetProperty("part_info_list").EnumerateArray().FirstOrDefault().GetProperty("upload_url").GetString();
-
-                return (upload_url, file_id, upload_id);
-            });
-
-            // 读取文件作为字节流
-            byte[] fileData = fileBytes; // await File.ReadAllBytesAsync(fileFullPath);
-
-            // 创建HttpContent
-            var content = new ByteArrayContent(fileData, (int)offset, (int)fileTotalLength);
-
-            // 发送PUT请求
-            HttpResponseMessage uploadRes = null;
-
-            // 定义重试策略 3 次
-            var retryPolicy = Policy
-                .Handle<HttpRequestException>()
-                .WaitAndRetryAsync(3, retryAttempt =>
-                {
-                    // 5s 25s 125s 后重试
-                    return TimeSpan.FromSeconds(Math.Pow(5, retryAttempt));
-                });
-
-            // 执行带有重试策略的请求
-            await retryPolicy.ExecuteAsync(async () =>
-            {
-                uploadRes = await _uploadHttpClient.PutAsync(upload_url, content);
-
-                if (!uploadRes.IsSuccessStatusCode)
-                {
-                    throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
-                }
-            });
-
-            // 检查请求是否成功
-            if (!uploadRes.IsSuccessStatusCode)
-            {
-                throw new HttpRequestException($"Failed to upload file. Status code: {uploadRes.StatusCode}");
-            }
-
-            //// 将文件添加到上传列表
-            //var data = _driveApi.UploadComplete(_driveId, file_id, upload_id, AccessToken);
-            //if (data.ParentFileId == "root")
-            //{
-            //    // 当前目录在根路径
-            //    // /{当前路径}/
-            //    _driveFiles.TryAdd($"{data.Name}".TrimPath(), data);
-            //}
-            //else
-            //{
-            //    // 计算父级路径
-            //    var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == data.ParentFileId).First()!;
-            //    var path = $"{parent.Key}/{data.Name}".TrimPath();
-
-            //    // /{父级路径}/{当前路径}/
-            //    _driveFiles.TryAdd(path, data);
-            //}
-
-            _log.Information($"文件上传成功");
-        }
-
         #region 公共方法
 
         /// <summary>
@@ -1166,7 +715,7 @@ namespace MDriveSync.Core.Services
                 {
                     // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI | DokanOptions.NetworkDrive;
 
-                    options.Options = DokanOptions.FixedDrive | DokanOptions.DebugMode | DokanOptions.StderrOutput;
+                    options.Options = DokanOptions.FixedDrive | DokanOptions.DebugMode; // | DokanOptions.StderrOutput;
                     options.MountPoint = _driveConfig.MountPoint;
                 });
 
@@ -1406,17 +955,13 @@ namespace MDriveSync.Core.Services
 
                     try
                     {
-
                         if (fileName.Contains("111.exe"))
                         {
-
                         }
                         if (mode == FileMode.CreateNew)
                         {
-
                             //var filePath = GetLocalPath(fileName);
                             //System.IO.FileAccess streamAccess = readAccess ? System.IO.FileAccess.Read : System.IO.FileAccess.ReadWrite;
-
 
                             //streamAccess = System.IO.FileAccess.ReadWrite;
 
@@ -1427,10 +972,7 @@ namespace MDriveSync.Core.Services
                             //    //  DokanResult.AlreadyExists;
 
                             //}
-
                         };
-
-
 
                         //bool fileCreated = mode == FileMode.CreateNew || mode == FileMode.Create || (!pathExists && mode == FileMode.OpenOrCreate);
                         //if (fileCreated)
@@ -1641,7 +1183,6 @@ namespace MDriveSync.Core.Services
         {
             if (fileName.Contains("111.exe"))
             {
-
             }
 
             fileInfo = new FileInformation() { FileName = fileName };
@@ -1842,6 +1383,42 @@ namespace MDriveSync.Core.Services
                 _fileWriteLengths.TryRemove(key, out _);
             }
 
+            try
+            {
+                if (_fileParts.TryGetValue(key, out var ps) && ps != null && ps.Count > 0)
+                {
+                    // 未上传的分块，执行上传
+                    foreach (var item in ps)
+                    {
+                        if (!item.IsUploaded)
+                        {
+                            AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl).GetAwaiter().GetResult();
+                            item.IsUploaded = true;
+                        }
+                    }
+
+                    // 清理缓存
+                    foreach (var item in ps)
+                    {
+                        if (File.Exists(item.LocalFilePath))
+                        {
+                            File.Delete(item.LocalFilePath);
+                        }
+                    }
+
+                    if (ps.All(x => x.IsUploaded))
+                    {
+                        // 全部上传完成
+                        // 标记为已完成
+                        AliyunDriveUploadComplete(ps[0].FileId, ps[0].UploadId);
+                    }
+                }
+            }
+            finally
+            {
+                _fileParts.TryRemove(key, out _);
+            }
+
             if (info.Context != null && info.Context is FileStream fs)
             {
                 fs?.Dispose();
@@ -1879,33 +1456,75 @@ namespace MDriveSync.Core.Services
 
         public NtStatus SetEndOfFile(string fileName, long length, IDokanFileInfo info)
         {
+            // 改变文件的大小。当文件被截断或扩展时，这个方法会被调用
+            // 复制文件到云盘时也会触发。
+
             var key = GetPathKey(fileName);
-            _fileWriteLengths[key] = length;
 
-            //int partsCount = (int)Math.Ceiling((double)length / partSize);
-            //var parts = new List<FilePart>(partsCount);
-            //for (int i = 0; i < partsCount; i++)
-            //{
-            //    parts.Add(new FilePart(partSize));
-            //}
-
-            // TODO 创建上传请求
-
-            int partsCount = (int)Math.Ceiling((double)length / partSize);
-            var parts = new List<FilePart>(partsCount);
-            for (int i = 0; i < partsCount; i++)
+            using (_lockV2.Lock($"upload:{key}"))
             {
-                var tmpFile = Path.Combine(Directory.GetCurrentDirectory(), ".duplicatiuploadcache", $"{key}.duplicatipart{i}");
+                _fileWriteLengths[key] = length;
 
-                //string tempFilePath = Path.Combine(tempDirectory, $"{fileName}.part{i}");
+                // 判断文件对应的文件夹是否存在，如果不存在则创建
+                var keyPath = Path.GetDirectoryName(key).ToUrlPath();
+                var saveParentFileId = "";
+                if (string.IsNullOrWhiteSpace(keyPath))
+                {
+                    // 根目录
+                    saveParentFileId = _driveParentFileId;
+                }
+                else
+                {
+                    if (_driveFolders.ContainsKey(keyPath))
+                    {
+                        using (_lockV2.Lock(keyPath))
+                        {
+                            if (!_driveFolders.ContainsKey(keyPath))
+                            {
+                                AliyunDriveCreateFolders(keyPath);
+                            }
+                        }
+                    }
+                    if (!_driveFolders.ContainsKey(keyPath))
+                    {
+                        _log.Error("创建文件夹失败 {@0}", keyPath);
+                        return NtStatus.Error;
+                    }
+                    saveParentFileId = _driveFolders[keyPath].FileId;
+                }
+                // 分块数量
+                var partsCount = (int)Math.Ceiling((double)length / partSize);
 
-                //string uploadUrl = $"{baseUploadUrl}/{fileName}/part{i}";
-                parts.Add(new FilePart(i, tmpFile, ""));
+                // 创建上传请求，并获取上传地址
+                var data = AliyunDriveCreatePartUpload(fileName, length, saveParentFileId, partsCount);
+                if (data == null || data.PartInfoList.Count != partsCount)
+                {
+                    _log.Error("创建文件上传请求失败 {@0}", keyPath);
+                }
+
+                var parts = new List<FilePart>(partsCount);
+                for (int i = 0; i < partsCount; i++)
+                {
+                    var tmpFile = Path.Combine(Directory.GetCurrentDirectory(), ".duplicatiuploadcache", $"{key}.{i}.duplicatipart");
+
+                    // 如果存在临时文件，则删除
+                    if (File.Exists(tmpFile))
+                    {
+                        File.Delete(tmpFile);
+                    }
+
+                    var uploadUrl = data.PartInfoList[i].UploadUrl;
+
+                    parts.Add(new FilePart(i + 1, tmpFile, uploadUrl)
+                    {
+                        FileId = data.FileId,
+                        UploadId = data.UploadId
+                    });
+                }
+
+                _fileParts[key] = parts;
             }
 
-            _fileParts[key] = parts;
-
-            // 改变文件的大小。当文件被截断或扩展时，这个方法会被调用
             return NtStatus.Success;
         }
 
@@ -1999,145 +1618,149 @@ namespace MDriveSync.Core.Services
             try
             {
                 var key = GetPathKey(fileName);
-                var parts = _fileParts[key];
 
-                int currentPartIndex = (int)(offset / partSize);
-                int partOffset = (int)(offset % partSize);
-                int bufferOffset = 0;
-                int remainingBuffer = buffer.Length;
-
-                while (remainingBuffer > 0 && currentPartIndex < parts.Count)
+                // 文件上传锁
+                using (_lockV2.Lock($"upload:{key}"))
                 {
-                    FilePart currentPart = parts[currentPartIndex];
-                    int writeSize = Math.Min(remainingBuffer, partSize - partOffset);
-                    WriteToFile(currentPart.LocalFilePath, buffer, bufferOffset, writeSize, partOffset);
+                    var parts = _fileParts[key];
 
-                    currentPart.CurrentSize += writeSize;
-                    bufferOffset += writeSize;
-                    partOffset = 0; // 重置偏移量
-                    remainingBuffer -= writeSize;
+                    int currentPartIndex = (int)(offset / partSize);
+                    int partOffset = (int)(offset % partSize);
+                    int bufferOffset = 0;
+                    int remainingBuffer = buffer.Length;
 
-                    if (currentPart.CurrentSize >= partSize && !currentPart.IsUploaded)
+                    while (remainingBuffer > 0 && currentPartIndex < parts.Count)
                     {
-                        //UploadPart(currentPart);
-                        // TODO 上传
+                        FilePart currentPart = parts[currentPartIndex];
+                        int writeSize = Math.Min(remainingBuffer, partSize - partOffset);
 
-                        currentPart.IsUploaded = true;
-                    }
+                        // 写入到本地临时文件
+                        WriteToFile(currentPart.LocalFilePath, buffer, bufferOffset, writeSize, partOffset);
 
-                    currentPartIndex++;
-                }
+                        currentPart.CurrentSize += writeSize;
+                        bufferOffset += writeSize;
+                        partOffset = 0; // 重置偏移量
+                        remainingBuffer -= writeSize;
 
-                bytesWritten = buffer.Length - remainingBuffer;
-
-
-                //int currentPartIndex = (int)(offset / partSize);
-                //int partOffset = (int)(offset % partSize);
-                //int remainingBuffer = buffer.Length;
-                //int bufferOffset = 0;
-
-                //if (parts != null)
-                //{
-                //    while (remainingBuffer > 0 && currentPartIndex < parts.Count)
-                //    {
-                //        FilePart currentPart = parts[currentPartIndex];
-                //        int copySize = Math.Min(remainingBuffer, partSize - partOffset);
-                //        Array.Copy(buffer, bufferOffset, currentPart.Data, partOffset, copySize);
-
-                //        currentPart.FilledSize += copySize;
-                //        bufferOffset += copySize;
-                //        partOffset = 0; // Reset for next part
-                //        remainingBuffer -= copySize;
-                //        currentPartIndex++;
-
-                //        if (currentPart.FilledSize == partSize && !currentPart.IsUploaded)
-                //        {
-                //            //UploadPart(fileName, currentPart);
-                //            // 我需要上传了
-                //            currentPart.IsUploaded = true;
-                //        }
-                //    }
-                //}
-
-
-                //bytesWritten = buffer.Length - remainingBuffer;
-
-
-                var append = offset == -1;
-                if (info.Context == null)
-                {
-                    var tmpFile = Path.Combine(Directory.GetCurrentDirectory(), ".duplicatiuploadcache", $"{key}.duplicatipart");
-                    lock (_lock)
-                    {
-                        if (!Directory.Exists(Path.GetDirectoryName(tmpFile)))
+                        if (currentPart.CurrentSize >= partSize && !currentPart.IsUploaded)
                         {
-                            Directory.CreateDirectory(Path.GetDirectoryName(tmpFile));
+                            // 分块上传
+                            AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl).GetAwaiter().GetResult();
+
+                            currentPart.IsUploaded = true;
                         }
+
+                        currentPartIndex++;
                     }
 
-                    // 加锁
-                    using (_lockV2.Lock(key))
-                    {
-                        //// 更新文件的写入长度
-                        //if (!_fileWriteLengths.ContainsKey(key))
-                        //{
-                        //    _fileWriteLengths[key] = 0;
+                    bytesWritten = buffer.Length - remainingBuffer;
 
-                        //    // 如果是首次写入，如果文件存在，则删除
-                        //    if (File.Exists(tmpFile))
-                        //    {
-                        //        File.Delete(tmpFile);
-                        //    }
-                        //}
+                    //int currentPartIndex = (int)(offset / partSize);
+                    //int partOffset = (int)(offset % partSize);
+                    //int remainingBuffer = buffer.Length;
+                    //int bufferOffset = 0;
 
-                        //using (var stream = new FileStream(tmpFile, append ? FileMode.Append : FileMode.OpenOrCreate, System.IO.FileAccess.Write))
-                        //{
-                        //    if (!append) // Offset of -1 is an APPEND: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
-                        //    {
-                        //        stream.Position = offset;
-                        //    }
-                        //    var bytesToCopy = GetNumOfBytesToCopy(buffer.Length, offset, info, stream);
-                        //    stream.Write(buffer, 0, bytesToCopy);
-                        //    bytesWritten = bytesToCopy;
+                    //if (parts != null)
+                    //{
+                    //    while (remainingBuffer > 0 && currentPartIndex < parts.Count)
+                    //    {
+                    //        FilePart currentPart = parts[currentPartIndex];
+                    //        int copySize = Math.Min(remainingBuffer, partSize - partOffset);
+                    //        Array.Copy(buffer, bufferOffset, currentPart.Data, partOffset, copySize);
 
-                        //    _fileWriteLengths[key] += bytesWritten;
-                        //}
+                    //        currentPart.FilledSize += copySize;
+                    //        bufferOffset += copySize;
+                    //        partOffset = 0; // Reset for next part
+                    //        remainingBuffer -= copySize;
+                    //        currentPartIndex++;
 
-                        bytesWritten = buffer.Length;
+                    //        if (currentPart.FilledSize == partSize && !currentPart.IsUploaded)
+                    //        {
+                    //            //UploadPart(fileName, currentPart);
+                    //            // 我需要上传了
+                    //            currentPart.IsUploaded = true;
+                    //        }
+                    //    }
+                    //}
 
-                        _log.Error($"长度：{buffer.Length}");
-                        // 分块上传
-                        //AliyunDriveUploadFileUrl(fileName.TrimPath(), buffer, offset, _fileWriteLengths[key]).GetAwaiter().GetResult();
-                    }
-                }
-                else
-                {
-                    // TODO
-                    // 如果上下文存在文件流，待定
+                    //bytesWritten = buffer.Length - remainingBuffer;
 
-                    var stream = info.Context as FileStream;
-                    lock (stream) //Protect from overlapped write
-                    {
-                        if (append)
-                        {
-                            if (stream.CanSeek)
-                            {
-                                stream.Seek(0, SeekOrigin.End);
-                            }
-                            else
-                            {
-                                bytesWritten = 0;
-                                return DokanResult.Error;
-                            }
-                        }
-                        else
-                        {
-                            stream.Position = offset;
-                        }
-                        var bytesToCopy = GetNumOfBytesToCopy(buffer.Length, offset, info, stream);
-                        stream.Write(buffer, 0, bytesToCopy);
-                        bytesWritten = bytesToCopy;
-                    }
+                    //var append = offset == -1;
+                    //if (info.Context == null)
+                    //{
+                    //    var tmpFile = Path.Combine(Directory.GetCurrentDirectory(), ".duplicatiuploadcache", $"{key}.duplicatipart");
+                    //    lock (_lock)
+                    //    {
+                    //        if (!Directory.Exists(Path.GetDirectoryName(tmpFile)))
+                    //        {
+                    //            Directory.CreateDirectory(Path.GetDirectoryName(tmpFile));
+                    //        }
+                    //    }
+
+                    //    // 加锁
+                    //    using (_lockV2.Lock(key))
+                    //    {
+                    //        //// 更新文件的写入长度
+                    //        //if (!_fileWriteLengths.ContainsKey(key))
+                    //        //{
+                    //        //    _fileWriteLengths[key] = 0;
+
+                    //        //    // 如果是首次写入，如果文件存在，则删除
+                    //        //    if (File.Exists(tmpFile))
+                    //        //    {
+                    //        //        File.Delete(tmpFile);
+                    //        //    }
+                    //        //}
+
+                    //        //using (var stream = new FileStream(tmpFile, append ? FileMode.Append : FileMode.OpenOrCreate, System.IO.FileAccess.Write))
+                    //        //{
+                    //        //    if (!append) // Offset of -1 is an APPEND: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
+                    //        //    {
+                    //        //        stream.Position = offset;
+                    //        //    }
+                    //        //    var bytesToCopy = GetNumOfBytesToCopy(buffer.Length, offset, info, stream);
+                    //        //    stream.Write(buffer, 0, bytesToCopy);
+                    //        //    bytesWritten = bytesToCopy;
+
+                    //        //    _fileWriteLengths[key] += bytesWritten;
+                    //        //}
+
+                    //        bytesWritten = buffer.Length;
+
+                    //        _log.Error($"长度：{buffer.Length}");
+                    //        // 分块上传
+                    //        //AliyunDriveUploadFileUrl(fileName.TrimPath(), buffer, offset, _fileWriteLengths[key]).GetAwaiter().GetResult();
+                    //    }
+                    //}
+                    //else
+                    //{
+                    //    // TODO
+                    //    // 如果上下文存在文件流，待定
+
+                    //    var stream = info.Context as FileStream;
+                    //    lock (stream) //Protect from overlapped write
+                    //    {
+                    //        if (append)
+                    //        {
+                    //            if (stream.CanSeek)
+                    //            {
+                    //                stream.Seek(0, SeekOrigin.End);
+                    //            }
+                    //            else
+                    //            {
+                    //                bytesWritten = 0;
+                    //                return DokanResult.Error;
+                    //            }
+                    //        }
+                    //        else
+                    //        {
+                    //            stream.Position = offset;
+                    //        }
+                    //        var bytesToCopy = GetNumOfBytesToCopy(buffer.Length, offset, info, stream);
+                    //        stream.Write(buffer, 0, bytesToCopy);
+                    //        bytesWritten = bytesToCopy;
+                    //    }
+                    //}
                 }
             }
             catch (Exception ex)
@@ -2151,25 +1774,25 @@ namespace MDriveSync.Core.Services
 
             return DokanResult.Success;
 
-            if (info.Context == null)
-            {
-                //using (var stream = new FileStream(GetPath(fileName), FileMode.Open, System.IO.FileAccess.Write))
-                //{
-                //    var bytesToCopy = (uint)GetNumOfBytesToCopy((int)bufferLength, offset, info, stream);
-                //    DoWrite(stream.SafeFileHandle, buffer, bytesToCopy, out bytesWritten, offset);
-                //}
-            }
-            else
-            {
-                var stream = info.Context as FileStream;
-                lock (stream) //Protect from overlapped write
-                {
-                    //var bytesToCopy = (uint)GetNumOfBytesToCopy((int)bufferLength, offset, info, stream);
-                    //DoWrite(stream.SafeFileHandle, buffer, bytesToCopy, out bytesWritten, offset);
-                }
-            }
+            //if (info.Context == null)
+            //{
+            //    //using (var stream = new FileStream(GetPath(fileName), FileMode.Open, System.IO.FileAccess.Write))
+            //    //{
+            //    //    var bytesToCopy = (uint)GetNumOfBytesToCopy((int)bufferLength, offset, info, stream);
+            //    //    DoWrite(stream.SafeFileHandle, buffer, bytesToCopy, out bytesWritten, offset);
+            //    //}
+            //}
+            //else
+            //{
+            //    var stream = info.Context as FileStream;
+            //    lock (stream) //Protect from overlapped write
+            //    {
+            //        //var bytesToCopy = (uint)GetNumOfBytesToCopy((int)bufferLength, offset, info, stream);
+            //        //DoWrite(stream.SafeFileHandle, buffer, bytesToCopy, out bytesWritten, offset);
+            //    }
+            //}
 
-            bytesWritten = buffer.Length;
+            //bytesWritten = buffer.Length;
 
             //var stream = info.Context as FileStream;
 
@@ -2215,7 +1838,7 @@ namespace MDriveSync.Core.Services
             //return Trace($"Unsafe{nameof(WriteFile)}", fileName, info, DokanResult.Success, "out " + bytesWritten.ToString(),
             //    offset.ToString(CultureInfo.InvariantCulture));
 
-            return DokanResult.Success;
+            //return DokanResult.Success;
         }
 
         public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
@@ -2265,6 +1888,16 @@ namespace MDriveSync.Core.Services
         public int CurrentSize { get; set; }
         public bool IsUploaded { get; set; }
 
+        /// <summary>
+        /// 文件ID。
+        /// </summary>
+        public string FileId { get; set; }
+
+        /// <summary>
+        /// 上传ID。
+        /// </summary>
+        public string UploadId { get; set; }
+
         public FilePart(int partNumber, string localFilePath, string uploadUrl)
         {
             PartNumber = partNumber;
@@ -2274,5 +1907,4 @@ namespace MDriveSync.Core.Services
             IsUploaded = false;
         }
     }
-
 }
