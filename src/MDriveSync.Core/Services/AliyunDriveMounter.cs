@@ -1,7 +1,6 @@
 ﻿using DokanNet;
 using DokanNet.Logging;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Win32.SafeHandles;
 using Polly;
 using RestSharp;
 using Serilog;
@@ -34,10 +33,15 @@ namespace MDriveSync.Core.Services
                                                    FileAccess.Delete |
                                                    FileAccess.GenericWrite;
 
-        private Dictionary<string, long> _fileWriteLengths = new Dictionary<string, long>();
+        /// <summary>
+        /// 4 MB per part
+        /// </summary>
+        private readonly int partSize = 4 * 1024 * 1024;
 
-        private readonly int partSize = 1 * 1024 * 1024; // 10 MB per part
-        private Dictionary<string, List<FilePart>> _fileParts = new Dictionary<string, List<FilePart>>();
+        /// <summary>
+        /// 分块上传文件列表
+        /// </summary>
+        private Dictionary<string, List<FilePart>> _fileParts = new();
 
         /// <summary>
         /// 文件上传请求
@@ -656,6 +660,7 @@ namespace MDriveSync.Core.Services
                 _driveFiles.TryAdd(path, data);
             }
         }
+
         #region 公共方法
 
         /// <summary>
@@ -1365,24 +1370,6 @@ namespace MDriveSync.Core.Services
         {
             var key = GetPathKey(fileName);
 
-            if (_fileWriteLengths.TryGetValue(key, out long totalWritten))
-            {
-                // 在这里检查 totalWritten 是否符合您预期的文件大小
-                // 如果符合，可以认为文件上传完毕
-
-                //var tmpFile = Path.Combine(Directory.GetCurrentDirectory(), ".duplicatiuploadcache", $"{key}.duplicatipart");
-                //if (File.Exists(tmpFile))
-                //{
-                //    AliyunDriveUploadFile(fileName.TrimPath(), tmpFile, totalWritten).GetAwaiter().GetResult();
-
-                //    File.Delete(tmpFile);
-                //}
-
-                // 删除完毕后，删除临时文件
-                // 清除缓存
-                _fileWriteLengths.TryRemove(key, out _);
-            }
-
             try
             {
                 if (_fileParts.TryGetValue(key, out var ps) && ps != null && ps.Count > 0)
@@ -1463,8 +1450,6 @@ namespace MDriveSync.Core.Services
 
             using (_lockV2.Lock($"upload:{key}"))
             {
-                _fileWriteLengths[key] = length;
-
                 // 判断文件对应的文件夹是否存在，如果不存在则创建
                 var keyPath = Path.GetDirectoryName(key).ToUrlPath();
                 var saveParentFileId = "";
@@ -1518,7 +1503,8 @@ namespace MDriveSync.Core.Services
                     parts.Add(new FilePart(i + 1, tmpFile, uploadUrl)
                     {
                         FileId = data.FileId,
-                        UploadId = data.UploadId
+                        UploadId = data.UploadId,
+                        TotalSize = length
                     });
                 }
 
@@ -1547,24 +1533,6 @@ namespace MDriveSync.Core.Services
         public NtStatus SetFileSecurity(string fileName, FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
         {
             return NtStatus.Success;
-        }
-
-        //public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
-        //{
-        //    bytesWritten = 0;
-        //    return NtStatus.Success;
-        //}
-
-        private static void DoRead(SafeFileHandle handle, IntPtr buffer, uint bufferLength, out int bytesRead, long offset)
-        {
-            handle.SetFilePointer(offset);
-            handle.ReadFile(buffer, bufferLength, out bytesRead);
-        }
-
-        private static void DoWrite(SafeFileHandle handle, IntPtr buffer, uint bufferLength, out int bytesWritten, long offset)
-        {
-            var newpos = Extensions.SetFilePointer(handle, offset);
-            handle.WriteFile(buffer, bufferLength, out bytesWritten);
         }
 
         protected static Int32 GetNumOfBytesToCopy(Int32 bufferLength, long offset, IDokanFileInfo info, FileStream stream)
@@ -1599,6 +1567,7 @@ namespace MDriveSync.Core.Services
                     fileStream.Write(buffer, bufferOffset, writeSize);
                 }
             }
+
             //using (var stream = new FileStream(filePath,  FileMode.OpenOrCreate, System.IO.FileAccess.Write))
             //{
             //    if (!append) // Offset of -1 is an APPEND: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
@@ -1608,7 +1577,6 @@ namespace MDriveSync.Core.Services
             //    var bytesToCopy = GetNumOfBytesToCopy(buffer.Length, offset, info, stream);
             //    stream.Write(buffer, 0, bytesToCopy);
             //    bytesWritten = bytesToCopy;
-
             //}
         }
 
@@ -1642,12 +1610,30 @@ namespace MDriveSync.Core.Services
                         partOffset = 0; // 重置偏移量
                         remainingBuffer -= writeSize;
 
+                        // 如果当前分块已填充内容完毕
                         if (currentPart.CurrentSize >= partSize && !currentPart.IsUploaded)
                         {
                             // 分块上传
                             AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl).GetAwaiter().GetResult();
-
                             currentPart.IsUploaded = true;
+                        }
+
+                        // 如果是最后一个分块，并且填充完毕，则也执行上传
+                        var isLastPart = currentPartIndex == parts.Count - 1;
+                        if (isLastPart && !currentPart.IsUploaded)
+                        {
+                            // 计算最后一个分块的实际大小
+                            int lastPartSize = (int)(currentPart.TotalSize % partSize);
+                            if (lastPartSize == 0)
+                                lastPartSize = partSize; // 如果文件大小是分块大小的整数倍
+
+                            if (currentPart.CurrentSize >= lastPartSize)
+                            {
+                                // 分块上传
+                                // 最后一块上传
+                                AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl).GetAwaiter().GetResult();
+                                currentPart.IsUploaded = true;
+                            }
                         }
 
                         currentPartIndex++;
@@ -1655,6 +1641,7 @@ namespace MDriveSync.Core.Services
 
                     bytesWritten = buffer.Length - remainingBuffer;
 
+                    // 写入内存
                     //int currentPartIndex = (int)(offset / partSize);
                     //int partOffset = (int)(offset % partSize);
                     //int remainingBuffer = buffer.Length;
@@ -1773,72 +1760,6 @@ namespace MDriveSync.Core.Services
             }
 
             return DokanResult.Success;
-
-            //if (info.Context == null)
-            //{
-            //    //using (var stream = new FileStream(GetPath(fileName), FileMode.Open, System.IO.FileAccess.Write))
-            //    //{
-            //    //    var bytesToCopy = (uint)GetNumOfBytesToCopy((int)bufferLength, offset, info, stream);
-            //    //    DoWrite(stream.SafeFileHandle, buffer, bytesToCopy, out bytesWritten, offset);
-            //    //}
-            //}
-            //else
-            //{
-            //    var stream = info.Context as FileStream;
-            //    lock (stream) //Protect from overlapped write
-            //    {
-            //        //var bytesToCopy = (uint)GetNumOfBytesToCopy((int)bufferLength, offset, info, stream);
-            //        //DoWrite(stream.SafeFileHandle, buffer, bytesToCopy, out bytesWritten, offset);
-            //    }
-            //}
-
-            //bytesWritten = buffer.Length;
-
-            //var stream = info.Context as FileStream;
-
-            //AliyunDriveUploadFile(fileName.TrimPath(), buffer.Length, buffer).GetAwaiter().GetResult();
-
-            ////var bufferLength = buffer.Length;
-
-            //// 将数据从非托管内存复制到托管数组
-            //byte[] managedBuffer = new byte[bufferLength];
-
-            //Marshal.Copy(buffer, managedBuffer, 0, bufferLength);
-
-            //// 调用阿里云盘客户端上传文件
-            //_aliyunDriveClient.UploadFile(GetPath(fileName), managedBuffer);
-
-            // 设置 bytesWritten 为 bufferLength，表示全部数据都被“写入”
-
-            //if (info.Context == null)
-            //{
-            //    using (var stream = new FileStream(GetPathKey(fileName), FileMode.Open, System.IO.FileAccess.Write))
-            //    {
-            //        DoWrite(stream.SafeFileHandle, buffer, bufferLength, out bytesWritten, offset);
-            //        //UploadToAliyunDrive(fileName, buffer, bufferLength); // 调用上传方法
-            //    }
-            //}
-            //else
-            //{
-            //    var stream = info.Context as FileStream;
-            //    lock (stream) //Protect from overlapped write
-            //    {
-            //        // 将数据从非托管内存复制到托管数组
-            //        byte[] managedBuffer = new byte[bufferLength];
-            //        Marshal.Copy(buffer, managedBuffer, 0, (int)bufferLength);
-
-            //        //// 调用阿里云盘客户端上传文件
-            //        //_aliyunDriveClient.UploadFile(GetPath(fileName), managedBuffer);
-
-            //        DoWrite(stream.SafeFileHandle, buffer, bufferLength, out bytesWritten, offset);
-            //        //UploadToAliyunDrive(fileName, buffer, bufferLength); // 调用上传方法
-            //    }
-            //}
-
-            //return Trace($"Unsafe{nameof(WriteFile)}", fileName, info, DokanResult.Success, "out " + bytesWritten.ToString(),
-            //    offset.ToString(CultureInfo.InvariantCulture));
-
-            //return DokanResult.Success;
         }
 
         public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
@@ -1882,10 +1803,34 @@ namespace MDriveSync.Core.Services
 
     public class FilePart
     {
+        /// <summary>
+        /// 分块序号，从 1 开始
+        /// </summary>
         public int PartNumber { get; private set; }
+
+        /// <summary>
+        /// 本地上传文件路径
+        /// </summary>
         public string LocalFilePath { get; private set; }
+
+        /// <summary>
+        /// 云盘上传路径
+        /// </summary>
         public string UploadUrl { get; private set; }
+
+        /// <summary>
+        /// 当前已写入的文件大小
+        /// </summary>
         public int CurrentSize { get; set; }
+
+        /// <summary>
+        /// 文件的总大小
+        /// </summary>
+        public long TotalSize { get; set; }
+
+        /// <summary>
+        /// 是否已上传到云盘
+        /// </summary>
         public bool IsUploaded { get; set; }
 
         /// <summary>
