@@ -120,7 +120,9 @@ namespace MDriveSync.Core.Services
                 file_id = fileId
             };
             request.AddBody(body);
-            var response = WithRetry<AliyunDriveOpenFileDeleteResponse>(request);
+
+            // 删除文件可能出现 404，不抛出异常
+            var response = WithRetry<AliyunDriveOpenFileDeleteResponse>(request, false);
             if (response.StatusCode == HttpStatusCode.OK && response.Data != null)
             {
                 return response.Data;
@@ -416,7 +418,7 @@ namespace MDriveSync.Core.Services
         /// <param name="request"></param>
         /// <returns></returns>
         /// <exception cref="Exception"></exception>
-        public RestResponse<T> WithRetry<T>(RestRequest request)
+        public RestResponse<T> WithRetry<T>(RestRequest request, bool isThrow = true)
         {
             const int maxRetries = 5;
             int retries = 0;
@@ -462,7 +464,15 @@ namespace MDriveSync.Core.Services
                 {
                     _log.Error(response.ErrorException, $"请求失败：{request.Resource} {response.StatusCode} {response.Content}");
 
-                    throw response.ErrorException ?? new Exception($"请求失败：{response.StatusCode} {response.Content}");
+                    // 如果需要抛出异常
+                    if (isThrow)
+                    {
+                        throw response.ErrorException ?? new Exception($"请求失败：{response.StatusCode} {response.Content}");
+                    }
+                    else
+                    {
+                        return response;
+                    }
                 }
             }
         }

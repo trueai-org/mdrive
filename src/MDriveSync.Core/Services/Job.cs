@@ -2405,7 +2405,11 @@ namespace MDriveSync.Core
                 parent_file_id = saveParentFileId,
                 name = name,
                 type = "file",
-                check_name_mode = "ignore", // 覆盖文件模式
+
+                // refuse 同名不创建
+                // ignore 同名文件可创建
+
+                check_name_mode = "refuse", // 覆盖文件模式
                 size = fileSize
             };
 

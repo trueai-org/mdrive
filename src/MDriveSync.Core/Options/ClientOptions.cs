@@ -95,6 +95,13 @@ namespace MDriveSync.Core
         public string MountDrive { get; set; } = "backup";
 
         /// <summary>
+        /// 挂载的云盘是否启用秒传功能
+        /// 是否启用秒传功能
+        /// 启用阿里云盘秒传
+        /// </summary>
+        public bool RapidUpload { get; set; } = true;
+
+        /// <summary>
         /// 是否启用回收站，如果启用则删除文件时，保留到回收站
         /// </summary>
         public bool IsRecycleBin { get; set; } = false;
