@@ -171,11 +171,6 @@ namespace MDriveSync.Core.Services
             return $"{_driveConfig.MountPath.TrimPath()}/{fileName.TrimPath()}".ToUrlPath();
         }
 
-        private string GetLocalPath(string fileName)
-        {
-            return Path.Combine(_driveConfig.MountPoint, fileName.TrimPath());
-        }
-
         /// <summary>
         /// 获取当前有效的访问令牌
         /// </summary>
@@ -375,6 +370,296 @@ namespace MDriveSync.Core.Services
             }
 
             _log.Information($"云盘文件加载完成，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹。");
+        }
+
+        /// <summary>
+        /// 阿里云移动文件
+        /// </summary>
+        /// <param name="oldpath"></param>
+        /// <param name="newpath"></param>
+        /// <returns></returns>
+        private NtStatus AliyunDriveMoveFile(string oldpath, string newpath, bool replace = false)
+        {
+            using (_lockV2.Lock($"move_{newpath}"))
+            {
+                if (_driveFiles.TryGetValue(oldpath, out var f) && f != null)
+                {
+                    var oldParent = Path.GetDirectoryName(oldpath);
+                    var newParent = Path.GetDirectoryName(newpath);
+
+                    var newName = AliyunDriveHelper.EncodeFileName(Path.GetFileName(newpath));
+
+                    // 父级相同，重命名
+                    if (oldParent.Equals(newParent))
+                    {
+                        // 仅重命名
+                        var oldName1 = Path.GetFileName(oldpath.TrimPath());
+                        var newName1 = Path.GetFileName(newpath.TrimPath());
+                        if (oldName1.Equals(newName1))
+                        {
+                            return NtStatus.Success;
+                        }
+
+                        // 如果文件已存在
+                        if (_driveFiles.ContainsKey(newpath))
+                        {
+                            return DokanResult.FileExists;
+                        }
+
+                        var data = _driveApi.FileUpdate(_driveId, f.FileId, newName, AccessToken);
+                        if (data == null || data.FileId != f.FileId)
+                        {
+                            _log.Error("文件夹重命名失败 {@0} -> {@1}", oldpath, newpath);
+                            return NtStatus.Error;
+                        }
+
+                        f.FileName = newName;
+                        f.Name = newName;
+
+                        // 先移除旧的文件
+                        _driveFiles.TryRemove(oldpath, out _);
+
+                        // 如果相对是根目录文件
+                        if (f.ParentFileId == _driveParentFileId)
+                        {
+                            _driveFiles.TryAdd($"{f.Name}".TrimPath(), f);
+                        }
+                        else
+                        {
+                            // 文件必须在备份路径中
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == f.ParentFileId).FirstOrDefault();
+                            if (!string.IsNullOrWhiteSpace(parent.Key))
+                            {
+                                _driveFiles.TryAdd($"{parent.Key}/{f.Name}".TrimPath(), f);
+                            }
+                        }
+
+                        return NtStatus.Success;
+                    }
+                    else
+                    {
+
+                        // 判断文件对应的文件夹是否存在，如果不存在则创建
+                        var keyPath = Path.GetDirectoryName(newpath).ToUrlPath();
+                        var saveParentFileId = "";
+                        if (string.IsNullOrWhiteSpace(keyPath))
+                        {
+                            // 根目录
+                            saveParentFileId = _driveParentFileId;
+                        }
+                        else
+                        {
+                            if (!_driveFolders.ContainsKey(keyPath))
+                            {
+                                using (_lockV2.Lock(keyPath))
+                                {
+                                    if (!_driveFolders.ContainsKey(keyPath))
+                                    {
+                                        AliyunDriveCreateFolders(keyPath);
+                                    }
+                                }
+                            }
+
+                            if (!_driveFolders.ContainsKey(keyPath))
+                            {
+                                _log.Error("创建文件夹失败 {@0}", keyPath);
+                                return NtStatus.Error;
+                            }
+                            saveParentFileId = _driveFolders[keyPath].FileId;
+                        }
+
+                        if (replace)
+                        {
+                            // 先删除之前的文件，然后再移动
+                            if (_driveFiles.TryGetValue(newpath, out var nf) && nf != null)
+                            {
+                                _driveApi.FileDelete(_driveId, nf.FileId, AccessToken, _driveConfig.IsRecycleBin);
+                            }
+                        }
+
+                        var res = _driveApi.Move(_driveId, f.FileId, saveParentFileId, AccessToken, new_name: newName);
+                        if (res.Exist)
+                        {
+                            return DokanResult.FileExists;
+                        }
+
+                        // 先移除旧的文件
+                        _driveFiles.TryRemove(oldpath, out _);
+
+                        // 移动成功了，设置父级 ID
+                        f.ParentFileId = saveParentFileId;
+                        f.Name = newName;
+                        f.FileName = newName;
+
+                        // 如果相对是根目录文件
+                        if (f.ParentFileId == _driveParentFileId)
+                        {
+                            _driveFiles.TryAdd($"{f.Name}".TrimPath(), f);
+                        }
+                        else
+                        {
+                            // 文件必须在备份路径中
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == f.ParentFileId).FirstOrDefault();
+                            if (!string.IsNullOrWhiteSpace(parent.Key))
+                            {
+                                _driveFiles.TryAdd($"{parent.Key}/{f.Name}".TrimPath(), f);
+                            }
+                        }
+
+                        return NtStatus.Success;
+                    }
+                }
+                else
+                {
+                    // 没有这个文件
+                    return NtStatus.NoSuchFile;
+                }
+            }
+        }
+
+        /// <summary>
+        /// 阿里云移动文件夹
+        /// </summary>
+        /// <param name="oldpath"></param>
+        /// <param name="newpath"></param>
+        /// <returns></returns>
+        private NtStatus AliyunDriveMoveFolder(string oldpath, string newpath)
+        {
+            using (_lockV2.Lock($"move_{newpath}"))
+            {
+                if (_driveFolders.TryGetValue(oldpath, out var fo) && fo != null)
+                {
+                    var oldParent = Path.GetDirectoryName(oldpath);
+                    var newParent = Path.GetDirectoryName(newpath);
+
+                    // 父级相同，重命名
+                    if (oldParent.Equals(newParent))
+                    {
+                        // 仅重命名
+                        var oldFolderName = Path.GetFileName(oldpath.TrimPath());
+                        var newFolderName = Path.GetFileName(newpath.TrimPath());
+
+                        if (oldFolderName.Equals(newFolderName))
+                        {
+                            return NtStatus.Success;
+                        }
+
+                        var newName = AliyunDriveHelper.EncodeFileName(newFolderName);
+                        var data = _driveApi.FileUpdate(_driveId, fo.FileId, newName, AccessToken);
+                        if (data == null || data.FileId != fo.FileId)
+                        {
+                            _log.Error("文件夹重命名失败 {@0} -> {@1}", oldpath, newpath);
+                            return NtStatus.Error;
+                        }
+
+                        fo.FileName = newName;
+                        fo.Name = newName;
+
+                        // 先移除旧的文件
+                        _driveFolders.TryRemove(oldpath, out _);
+
+                        if (fo.ParentFileId == _driveParentFileId)
+                        {
+                            // 当前目录在根路径
+                            // /{当前路径}/
+                            _driveFolders.TryAdd($"{fo.Name}".TrimPath(), fo);
+                        }
+                        else
+                        {
+                            // 计算父级路径
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == fo.ParentFileId).First()!;
+                            var path = $"{parent.Key}/{fo.Name}".TrimPath();
+
+                            // /{父级路径}/{当前路径}/
+                            _driveFolders.TryAdd(path, fo);
+                        }
+                    }
+                    else
+                    {
+                        // 移除最后一个当前文件夹
+                        var newsubs = newpath.ToSubPaths().ToList();
+                        newsubs.RemoveAt(newsubs.Count - 1);
+
+                        var newParentPath = newsubs.Join("/");
+                        var saveParentFileId = "";
+                        if (string.IsNullOrWhiteSpace(newParentPath))
+                        {
+                            // 根目录
+                            saveParentFileId = _driveParentFileId;
+                        }
+                        else
+                        {
+                            if (!_driveFolders.ContainsKey(newParentPath))
+                            {
+                                // 移动时，父级文件夹一定是存在的
+                                return NtStatus.NotADirectory;
+                            }
+
+                            saveParentFileId = _driveFolders[newParentPath].FileId;
+                        }
+
+                        var res = _driveApi.Move(_driveId, fo.FileId, saveParentFileId, AccessToken);
+                        if (res.Exist)
+                        {
+                            return DokanResult.AlreadyExists;
+                        }
+
+                        fo.ParentFileId = saveParentFileId;
+
+                        // 先移除旧的文件
+                        _driveFolders.TryRemove(oldpath, out _);
+
+                        if (saveParentFileId == _driveParentFileId)
+                        {
+                            // 当前目录在根路径
+                            // /{当前路径}/
+                            _driveFolders.TryAdd($"{fo.Name}".TrimPath(), fo);
+                        }
+                        else
+                        {
+                            // 计算父级路径
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == saveParentFileId).First()!;
+                            var path = $"{parent.Key}/{fo.Name}".TrimPath();
+
+                            // /{父级路径}/{当前路径}/
+                            _driveFolders.TryAdd(path, fo);
+                        }
+                    }
+
+                    // 重新计算关联当前的子文件和子文件夹
+                    // 确保以斜杠结尾
+                    // 排除自身
+                    var oldPathPrefix = $"{oldpath}/";
+                    var newPathPrefix = $"{newpath}/";
+                    var itemFoldersToUpdate = _driveFolders.Where(kvp => kvp.Value.FileId != fo.FileId && kvp.Key.StartsWith(oldPathPrefix)).ToList();
+                    foreach (var item in itemFoldersToUpdate)
+                    {
+                        var subPath = item.Key.Substring(oldPathPrefix.Length);
+                        var newPath = $"{newPathPrefix}{subPath}".ToUrlPath();
+
+                        _driveFolders.TryRemove(item.Key, out _); // 移除旧路径
+                        _driveFolders.TryAdd(newPath, item.Value); // 添加新路径
+                    }
+
+                    // 计算相关文件
+                    var itemFilesToUpdate = _driveFiles.Where(kvp => kvp.Key.StartsWith(oldPathPrefix)).ToList();
+                    foreach (var item in itemFilesToUpdate)
+                    {
+                        var subPath = item.Key.Substring(oldPathPrefix.Length);
+                        var newPath = $"{newPathPrefix}{subPath}".ToUrlPath();
+
+                        _driveFiles.TryRemove(item.Key, out _); // 移除旧路径
+                        _driveFiles.TryAdd(newPath, item.Value); // 添加新路径
+                    }
+
+                    return NtStatus.Success;
+                }
+                else
+                {
+                    // 没有这个文件夹
+                    return NtStatus.NotADirectory;
+                }
+            }
         }
 
         /// <summary>
@@ -1059,6 +1344,23 @@ namespace MDriveSync.Core.Services
             {
                 if (_driveFiles.TryGetValue(key, out var f) && f != null)
                 {
+                    //// 如果缓冲超过文件的本身大小
+                    //if (buffer.Length >= f.Size)
+                    //{
+                    //    // 获取下载链接
+                    //    var url = AliyunDriveGetDownloadUrl(f.FileId, f.ContentHash)?.Url;
+                    //    if (string.IsNullOrWhiteSpace(url))
+                    //    {
+                    //        throw new Exception("获取下载链接失败");
+                    //    }
+
+                    //    int bytesToCopy = Math.Min(buffer.Length, (int)f.Size);
+                    //    var partialContent = ReadFileContentAsync(url).GetAwaiter().GetResult();
+                    //    Array.Copy(partialContent, 0, buffer, 0, bytesToCopy);
+                    //    bytesRead = bytesToCopy;
+                    //}
+                    //else
+                    //{
                     byte[] partialContent = [];
 
                     // 小于 64KB 的资源请求直接使用缓存
@@ -1076,7 +1378,8 @@ namespace MDriveSync.Core.Services
                                 throw new Exception("获取下载链接失败");
                             };
                             // 使用 Range 请求下载文件的特定部分
-                            int endOffset = (int)offset + buffer.Length - 1;
+                            //int endOffset = (int)offset + buffer.Length - 1;
+                            int endOffset = (int)Math.Min(offset + buffer.Length - 1, (int)f.Size - 1);
                             var content = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
                             return content;
                         });
@@ -1113,14 +1416,21 @@ namespace MDriveSync.Core.Services
                             throw new Exception("获取下载链接失败");
                         }
 
-                        int endOffset = (int)offset + buffer.Length - 1;
+                        //int endOffset = (int)offset + buffer.Length - 1;
+                        int endOffset = (int)Math.Min(offset + buffer.Length - 1, (int)f.Size - 1);
                         partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                    }
+
+                    if (fileName.Contains("jpg"))
+                    {
+
                     }
 
                     // 确保不会复制超出 buffer 大小的数据
                     int bytesToCopy = Math.Min(buffer.Length, partialContent.Length);
                     Array.Copy(partialContent, 0, buffer, 0, bytesToCopy);
                     bytesRead = bytesToCopy;
+                    //}
                 }
 
                 return DokanResult.Success;
@@ -1372,6 +1682,7 @@ namespace MDriveSync.Core.Services
 
             try
             {
+                // 分块上传文件处理
                 if (_fileParts.TryGetValue(key, out var ps) && ps != null && ps.Count > 0)
                 {
                     // 未上传的分块，执行上传
@@ -1379,8 +1690,30 @@ namespace MDriveSync.Core.Services
                     {
                         if (!item.IsUploaded)
                         {
-                            AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl).GetAwaiter().GetResult();
-                            item.IsUploaded = true;
+                            // 验证是否填充完整的数据
+                            if (item.PartNumber < ps.Count && item.CurrentSize >= partSize)
+                            {
+                                // 非最后一个分块
+                                AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl).GetAwaiter().GetResult();
+                                item.IsUploaded = true;
+                            }
+                            else if (item.PartNumber == ps.Count)
+                            {
+                                // 最后一个分块
+
+                                // 计算最后一个分块的实际大小
+                                int lastPartSize = (int)(item.TotalSize % partSize);
+                                if (lastPartSize == 0)
+                                    lastPartSize = partSize; // 如果文件大小是分块大小的整数倍
+
+                                if (item.CurrentSize >= lastPartSize)
+                                {
+                                    // 分块上传
+                                    // 最后一块上传
+                                    AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl).GetAwaiter().GetResult();
+                                    item.IsUploaded = true;
+                                }
+                            }
                         }
                     }
 
@@ -1413,34 +1746,13 @@ namespace MDriveSync.Core.Services
             }
         }
 
-        #endregion 已实现
-
-        #region 无需实现
-
-        public NtStatus Mounted(string mountPoint, IDokanFileInfo info)
-        {
-            return NtStatus.Success;
-        }
-
-        public NtStatus Unmounted(IDokanFileInfo info)
-        {
-            return NtStatus.Success;
-        }
-
-        public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
-        {
-            return DokanResult.Success;
-        }
-
-        public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
-        {
-            return NtStatus.Success;
-        }
-
-        #endregion 无需实现
-
-        #region 暂不实现
-
+        /// <summary>
+        /// 设置文件大小
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="length"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
         public NtStatus SetEndOfFile(string fileName, long length, IDokanFileInfo info)
         {
             // 改变文件的大小。当文件被截断或扩展时，这个方法会被调用
@@ -1460,7 +1772,7 @@ namespace MDriveSync.Core.Services
                 }
                 else
                 {
-                    if (_driveFolders.ContainsKey(keyPath))
+                    if (!_driveFolders.ContainsKey(keyPath))
                     {
                         using (_lockV2.Lock(keyPath))
                         {
@@ -1511,27 +1823,6 @@ namespace MDriveSync.Core.Services
                 _fileParts[key] = parts;
             }
 
-            return NtStatus.Success;
-        }
-
-        public NtStatus SetAllocationSize(string fileName, long length, IDokanFileInfo info)
-        {
-            // 用于预先分配文件空间。这不一定改变文件的大小，但它保留了文件可能需要的空间。
-            // 这个方法通常用于性能优化，因为它可以减少文件增长时所需的磁盘空间重新分配的次数。
-            return NtStatus.Success;
-        }
-
-        public NtStatus FindStreams(string fileName, out IList<FileInformation> streams, IDokanFileInfo info)
-        {
-            streams = new List<FileInformation>();
-
-            // 如果您的文件系统不支持备用数据流，可以直接返回 Success
-            // 这表示该文件没有备用数据流
-            return DokanResult.Success;
-        }
-
-        public NtStatus SetFileSecurity(string fileName, FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
-        {
             return NtStatus.Success;
         }
 
@@ -1762,14 +2053,115 @@ namespace MDriveSync.Core.Services
             return DokanResult.Success;
         }
 
+        #endregion 已实现
+
+        #region 无需实现
+
+        public NtStatus Mounted(string mountPoint, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus Unmounted(IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        public NtStatus DeleteFile(string fileName, IDokanFileInfo info)
+        {
+            return DokanResult.Success;
+        }
+
+        public NtStatus DeleteDirectory(string fileName, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
+        #endregion 无需实现
+
+        #region 暂不实现
+
+        public NtStatus SetAllocationSize(string fileName, long length, IDokanFileInfo info)
+        {
+            // 用于预先分配文件空间。这不一定改变文件的大小，但它保留了文件可能需要的空间。
+            // 这个方法通常用于性能优化，因为它可以减少文件增长时所需的磁盘空间重新分配的次数。
+            return NtStatus.Success;
+        }
+
+        public NtStatus FindStreams(string fileName, out IList<FileInformation> streams, IDokanFileInfo info)
+        {
+            streams = new List<FileInformation>();
+
+            // 如果您的文件系统不支持备用数据流，可以直接返回 Success
+            // 这表示该文件没有备用数据流
+            return DokanResult.Success;
+        }
+
+        public NtStatus SetFileSecurity(string fileName, FileSystemSecurity security, AccessControlSections sections, IDokanFileInfo info)
+        {
+            return NtStatus.Success;
+        }
+
         public NtStatus FlushFileBuffers(string fileName, IDokanFileInfo info)
         {
             return NtStatus.Success;
         }
 
+        /// <summary>
+        /// 文件重命名或移动文件
+        /// </summary>
+        /// <param name="oldName"></param>
+        /// <param name="newName"></param>
+        /// <param name="replace"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
         public NtStatus MoveFile(string oldName, string newName, bool replace, IDokanFileInfo info)
         {
-            return NtStatus.Success;
+            var oldpath = GetPathKey(oldName);
+            var newpath = GetPathKey(newName);
+
+            if (info.Context != null && info.Context is FileStream fs)
+            {
+                fs?.Dispose();
+                info.Context = null;
+            }
+
+            var exist = info.IsDirectory ? _driveFolders.ContainsKey(newpath) : _driveFiles.ContainsKey(newpath);
+
+            try
+            {
+                if (!exist)
+                {
+                    info.Context = null;
+                    if (info.IsDirectory)
+                    {
+                        return AliyunDriveMoveFolder(oldpath, newpath);
+                    }
+                    else
+                    {
+                        return AliyunDriveMoveFile(oldpath, newpath);
+                    }
+                }
+                else if (replace)
+                {
+                    info.Context = null;
+
+                    if (info.IsDirectory) //Cannot replace directory destination - See MOVEFILE_REPLACE_EXISTING
+                        return DokanResult.AccessDenied;
+
+                    return AliyunDriveMoveFile(oldpath, newpath, true);
+                }
+            }
+            catch (UnauthorizedAccessException)
+            {
+                return DokanResult.AccessDenied;
+            }
+
+            // 如果重命名文件夹与当前目录文件夹存在一致，则不允许操作，否则可能会触发合并处理，但是合并在本方法中，不会被触发
+            // 因此不提供支持
+            return NtStatus.Error;
+
+            //return DokanResult.FileExists;
         }
 
         public NtStatus LockFile(string fileName, long offset, long length, IDokanFileInfo info)

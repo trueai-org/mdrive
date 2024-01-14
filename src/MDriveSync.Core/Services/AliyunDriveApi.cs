@@ -413,6 +413,46 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
+        /// 移动文件或文件夹
+        /// https://www.yuque.com/aliyundrive/zpfszx/gzeh9ecpxihziqrc
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="fileId"></param>
+        /// <param name="to_parent_file_id"></param>
+        /// <param name="check_name_mode"></param>
+        /// <param name="new_name"></param>
+        /// <param name="accessToken"></param>
+        /// <returns></returns>
+        public AliyunDriveOpenFileMoveResponse Move(string driveId, string fileId, string to_parent_file_id, string accessToken, string check_name_mode = "refuse", string new_name = "")
+        {
+            var req = new RestRequest("/adrive/v1.0/openFile/move", Method.Post);
+            req.AddHeader("Content-Type", "application/json");
+            req.AddHeader("Authorization", $"Bearer {accessToken}");
+
+            // 同名文件处理模式，可选值如下：
+            // ignore：允许同名文件；
+            // auto_rename：当发现同名文件是，云端自动重命名。
+            // refuse：当云端存在同名文件时，拒绝创建新文件。
+            // 默认为 refuse
+
+            var bodyCom = new
+            {
+                drive_id = driveId,
+                file_id = fileId,
+                to_parent_file_id = to_parent_file_id,
+                check_name_mode = check_name_mode,
+                new_name = new_name
+            };
+            req.AddBody(bodyCom);
+            var response = WithRetry<AliyunDriveOpenFileMoveResponse>(req);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                return response.Data;
+            }
+            throw response.ErrorException ?? new Exception(response.Content ?? "移动文件或文件夹失败");
+        }
+
+        /// <summary>
         /// 阿里云盘 - 执行重试请求
         /// </summary>
         /// <param name="request"></param>
