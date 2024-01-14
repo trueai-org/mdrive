@@ -49,16 +49,31 @@ namespace MDriveSync.Core.Services
         private readonly HttpClient _uploadHttpClient;
 
         private readonly ILogger _log;
+
+        /// <summary>
+        /// 唯一锁
+        /// </summary>
         private readonly object _lock = new();
 
         /// <summary>
         /// 异步锁/资源锁
         /// </summary>
-        private AsyncLockV2 _lockV2 = new();
+        private readonly AsyncLockV2 _lockV2 = new();
 
+        /// <summary>
+        /// 挂载作业
+        /// </summary>
         private Task _mountTask;
+
+        /// <summary>
+        ///
+        /// </summary>
         private DokanInstance _dokanInstance;
-        private ManualResetEvent _mre = new(false);
+
+        /// <summary>
+        /// 挂载信号
+        /// </summary>
+        private readonly ManualResetEvent _dokanMre = new(false);
 
         /// <summary>
         /// 本地缓存
@@ -438,7 +453,6 @@ namespace MDriveSync.Core.Services
                     }
                     else
                     {
-
                         // 判断文件对应的文件夹是否存在，如果不存在则创建
                         var keyPath = Path.GetDirectoryName(newpath).ToUrlPath();
                         var saveParentFileId = "";
@@ -1005,7 +1019,13 @@ namespace MDriveSync.Core.Services
                 {
                     // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI | DokanOptions.NetworkDrive;
 
-                    options.Options = DokanOptions.FixedDrive | DokanOptions.DebugMode; // | DokanOptions.StderrOutput;
+                    options.Options = DokanOptions.FixedDrive; // | DokanOptions.DebugMode; // | DokanOptions.StderrOutput;
+
+                    if (_driveConfig.MountReadOnly)
+                    {
+                        options.Options |= DokanOptions.WriteProtection;
+                    }
+
                     options.MountPoint = _driveConfig.MountPoint;
                 });
 
@@ -1014,7 +1034,7 @@ namespace MDriveSync.Core.Services
                 using var dokanInstance = dokanInstanceBuilder.Build(this);
                 _dokanInstance = dokanInstance;
                 // await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
-                _mre.WaitOne();
+                _dokanMre.WaitOne();
             });
 
             _mountTask.Start();
@@ -1030,7 +1050,7 @@ namespace MDriveSync.Core.Services
             {
                 //Dokan.RemoveMountPoint(_mountPoint);
             }
-            _mre.Set();
+            _dokanMre.Set();
             _dokanInstance?.Dispose();
         }
 
@@ -1423,7 +1443,6 @@ namespace MDriveSync.Core.Services
 
                     if (fileName.Contains("jpg"))
                     {
-
                     }
 
                     // 确保不会复制超出 buffer 大小的数据

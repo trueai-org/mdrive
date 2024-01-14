@@ -99,7 +99,7 @@ namespace MDriveSync.Core
         /// 是否启用秒传功能
         /// 启用阿里云盘秒传
         /// </summary>
-        public bool RapidUpload { get; set; } = true;
+        public bool RapidUpload { get; set; } = false;
 
         /// <summary>
         /// 是否启用回收站，如果启用则删除文件时，保留到回收站

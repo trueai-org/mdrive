@@ -54,21 +54,6 @@ namespace MDriveSync.Core.DB
             }
         }
 
-        //// 批量增加
-        //public void AddRange(IEnumerable<T> entities)
-        //{
-        //    var col = _db.GetCollection<T>();
-        //    col.InsertBulk(entities);
-
-        //    if (_useCache == true)
-        //    {
-        //        foreach (var entity in entities)
-        //        {
-        //            _cache.TryAdd(entity.Id, entity);
-        //        }
-        //    }
-        //}
-
         // 批量增加，优化处理超过 10000 条记录的情况
         public void AddRange(IEnumerable<T> entities)
         {

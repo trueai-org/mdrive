@@ -101,23 +101,14 @@ namespace MDriveSync.Core
 
                 foreach (var ad in ds)
                 {
-#if DEBUG
-                    if (!ad.MountOnStartup)
-                    {
-                        ad.MountOnStartup = true;
-                        ad.MountPoint = "K:\\";
-                    }
-#endif
-
                     // 云盘自动挂载
-                    if (ad.MountOnStartup)
+                    if (ad.MountOnStartup && !string.IsNullOrWhiteSpace(ad.MountPoint))
                     {
                         if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
                         {
                             mt = new AliyunDriveMounter(ad);
                             mt.AliyunDriveInitFiles();
                             mt.Mount();
-
                             _mounter[ad.Id] = mt;
                         }
                     }
@@ -237,7 +228,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 添加云盘
         /// </summary>
-        public void DriveAdd(RefreshTokenRequest request)
+        public void DriveAdd(DriveEditRequest request)
         {
             if (string.IsNullOrWhiteSpace(request?.RefreshToken))
             {
@@ -248,7 +239,13 @@ namespace MDriveSync.Core
             {
                 Id = Guid.NewGuid().ToString("N"),
                 RefreshToken = request.RefreshToken,
-                Jobs = []
+                Jobs = [],
+                IsRecycleBin = request.IsRecycleBin,
+                MountDrive = request.MountDrive,
+                MountOnStartup = request.MountOnStartup,
+                MountPath = request.MountPath,
+                MountPoint = request.MountPoint,
+                MountReadOnly = request.MountReadOnly,
             };
 
             // 保存配置
@@ -258,7 +255,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 编辑云盘
         /// </summary>
-        public void DriveEdit(string driveId, RefreshTokenRequest request)
+        public void DriveEdit(string driveId, DriveEditRequest request)
         {
             if (string.IsNullOrWhiteSpace(request?.RefreshToken))
             {
@@ -271,7 +268,18 @@ namespace MDriveSync.Core
                 throw new LogicException("云盘不存在");
             }
 
+            if (_mounter.ContainsKey(drive.Id))
+            {
+                throw new LogicException("云盘已挂载，不可修改配置，如需修改，请先卸载挂载");
+            }
+
             drive.RefreshToken = request.RefreshToken;
+            drive.IsRecycleBin = request.IsRecycleBin;
+            drive.MountDrive = request.MountDrive;
+            drive.MountOnStartup = request.MountOnStartup;
+            drive.MountPath = request.MountPath;
+            drive.MountPoint = request.MountPoint;
+            drive.MountReadOnly = request.MountReadOnly;
 
             // 保存配置
             drive.Save();
@@ -299,70 +307,73 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 挂载磁盘
+        /// 挂载磁盘 - 云盘作业
         /// </summary>
         /// <param name="jobId"></param>
         /// <param name="mountPoint"></param>
-        public void DriveMount(string jobId, string mountPoint)
+        public void DriveJobMount(string jobId, string mountPoint)
         {
             if (_jobs.TryGetValue(jobId, out var job) || job != null)
             {
                 job.DriveMount(mountPoint);
             }
-
-            //var cloudDrive = new MountDrive(mountPoint);
-            //cloudDrive.Mount();
-            //_cloudDrives.TryAdd(mountPoint, cloudDrive);
-
-            //try
-            //{
-            //var dokanLogger = new ConsoleLogger("[Dokan] ");
-
-            //// 创建 Dokan 实例
-            //var dokan = new Dokan(dokanLogger);
-
-            //// 使用 DokanInstanceBuilder 创建 Dokan 实例
-            //var dokanInstanceBuilder = new DokanInstanceBuilder(dokan)
-            //    .ConfigureOptions(options =>
-            //    {
-            //        options.Options = DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI;
-            //        options.MountPoint = mountPoint;
-            //    });
-
-            //using (var dokanInstance = dokanInstanceBuilder.Build(cloudDrive))
-            //{
-            //    //Console.CancelKeyPress += (object sender, ConsoleCancelEventArgs e) =>
-            //    //{
-            //    //    e.Cancel = true;
-            //    //    //Dokan.RemoveMountPoint(mountPoint);
-            //    //};
-
-            //    await dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
-            //}
-
-            //Console.WriteLine("云盘已卸载。");
-            //}
-            //catch (DokanException ex)
-            //{
-            //    Console.WriteLine("发生错误: " + ex.Message);
-            //}
         }
 
         /// <summary>
-        /// 卸载磁盘挂载
+        /// 卸载磁盘挂载 - 云盘作业
         /// </summary>
         /// <param name="jobId"></param>
-        public void DriveUnmount(string jobId)
+        public void DriveJobUnmount(string jobId)
         {
             if (_jobs.TryGetValue(jobId, out var job) || job != null)
             {
                 job.DriveUnmount();
             }
+        }
 
-            //if (_cloudDrives.TryRemove(mountPoint, out var mountDrive))
-            //{
-            //    mountDrive.Unmount();
-            //}
+        /// <summary>
+        /// 挂载磁盘 - 云盘
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="mountPoint"></param>
+        public void DriveMount(string driveId)
+        {
+            var ds = DriveDb.Instacne.GetAll();
+            var drive = ds.FirstOrDefault(x => x.Id == driveId);
+            if (drive == null)
+                throw new LogicException("云盘不存在");
+
+            if (_mounter.ContainsKey(driveId))
+            {
+                throw new LogicException("云盘已挂载，请不要重复挂载");
+            }
+
+            if (string.IsNullOrEmpty(drive.MountPoint))
+            {
+                throw new LogicException("请选择或输入挂载点");
+            }
+
+            if (!_mounter.TryGetValue(drive.Id, out var mt) || mt == null)
+            {
+                mt = new AliyunDriveMounter(drive);
+                mt.AliyunDriveInitFiles();
+                mt.Mount();
+                _mounter[drive.Id] = mt;
+            }
+        }
+
+        /// <summary>
+        /// 卸载磁盘挂载 - 云盘
+        /// </summary>
+        /// <param name="driveId"></param>
+        public void DriveUnmount(string driveId)
+        {
+            if (_mounter.TryGetValue(driveId, out var mt) && mt != null)
+            {
+                mt?.Unmount();
+                mt?.Dispose();
+                _mounter.TryRemove(driveId, out _);
+            }
         }
 
         //private void DoWork(object state)

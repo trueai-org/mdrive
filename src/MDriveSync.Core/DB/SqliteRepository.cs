@@ -67,20 +67,6 @@ namespace MDriveSync.Core.DB
             AddToCache(entity);
         }
 
-        //// 批量增加
-        //public void AddRange(IEnumerable<T> entities)
-        //{
-        //    using var db = _dbFactory.Open();
-        //    db.InsertAll(entities);
-
-        //    var items = GetCachedDataOrNull();
-        //    if (items != null)
-        //    {
-        //        items.AddRange(entities);
-        //        UpdateCache(items);
-        //    }
-        //}
-
         // 批量增加，优化处理超过 10000 条记录的情况
         public void AddRange(IEnumerable<T> entities)
         {

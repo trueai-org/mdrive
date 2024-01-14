@@ -41,26 +41,49 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
-        /// 挂载磁盘
+        /// 挂载磁盘 - 云盘挂载
         /// </summary>
-        /// <param name="mountRequest"></param>
         /// <returns></returns>
-        [HttpPost("mount/{jobId}")]
-        public Result DriveMount(string jobId, [FromBody] MountRequest mountRequest)
+        [HttpPost("mount/{driveId}")]
+        public Result DriveMount(string driveId)
         {
-            _timedHostedService.DriveMount(jobId, mountRequest.MountPoint);
+            _timedHostedService.DriveMount(driveId);
             return Result.Ok();
         }
 
         /// <summary>
-        /// 挂载磁盘 - 卸载
+        /// 挂载磁盘 - 云盘卸载
         /// </summary>
-        /// <param name="jobId"></param>
+        /// <param name="driveId"></param>
         /// <returns></returns>
-        [HttpPost("unmount/{jobId}")]
-        public Result DriveUnmount(string jobId)
+        [HttpPost("unmount/{driveId}")]
+        public Result DriveUnmount(string driveId)
         {
-            _timedHostedService.DriveUnmount(jobId);
+            _timedHostedService.DriveUnmount(driveId);
+            return Result.Ok();
+        }
+
+        /// <summary>
+        /// 挂载磁盘 - 云盘作业挂载
+        /// </summary>
+        /// <param name="mountRequest"></param>
+        /// <returns></returns>
+        [HttpPost("job/mount/{jobId}")]
+        public Result DriveJobMount(string jobId, [FromBody] MountRequest mountRequest)
+        {
+            _timedHostedService.DriveJobMount(jobId, mountRequest.MountPoint);
+            return Result.Ok();
+        }
+
+        /// <summary>
+        /// 挂载磁盘 - 云盘作业卸载
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <returns></returns>
+        [HttpPost("job/unmount/{jobId}")]
+        public Result DriveJobUnmount(string jobId)
+        {
+            _timedHostedService.DriveJobUnmount(jobId);
             return Result.Ok();
         }
 
@@ -141,7 +164,7 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="cfg"></param>
         /// <returns></returns>
         [HttpPost()]
-        public Result DriveAdd([FromBody] RefreshTokenRequest cfg)
+        public Result DriveAdd([FromBody] DriveEditRequest cfg)
         {
             _timedHostedService.DriveAdd(cfg);
             return Result.Ok();
@@ -154,7 +177,7 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="cfg"></param>
         /// <returns></returns>
         [HttpPut("{driveId}")]
-        public Result DriveEdit(string driveId, [FromBody] RefreshTokenRequest cfg)
+        public Result DriveEdit(string driveId, [FromBody] DriveEditRequest cfg)
         {
             _timedHostedService.DriveEdit(driveId, cfg);
             return Result.Ok();
