@@ -20,6 +20,7 @@ Supports a variety of algorithms for synchronization and backup.
 ## 特性
 
 - 不限速，阿里云盘官方接口支持，上传下载均不限速。
+- 挂载云盘支持，支持将云盘挂载到本地，作为本地硬盘使用。
 - 多线程支持，多线程上传、下载、同步，充分利用带宽。
 - 定时作业，定时同步、还原、备份等。
 - 在线云盘文件管理。

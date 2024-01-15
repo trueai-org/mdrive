@@ -16,11 +16,6 @@ namespace MDriveSync.Core.Services
 {
     /// <summary>
     /// 阿里云盘挂载
-    ///
-    /// TODO：
-    /// 队列
-    /// 缓存
-    /// 自动刷新
     /// </summary>
     public class AliyunDriveMounter : IDokanOperations, IDisposable
     {
@@ -32,6 +27,11 @@ namespace MDriveSync.Core.Services
         private const FileAccess DataWriteAccess = FileAccess.WriteData | FileAccess.AppendData |
                                                    FileAccess.Delete |
                                                    FileAccess.GenericWrite;
+
+        /// <summary>
+        /// 打开的文件夹列表，用于刷新文件夹内容
+        /// </summary>
+        private ConcurrentDictionary<string, DateTime> _openFolders = new();
 
         /// <summary>
         /// 4 MB per part
@@ -385,6 +385,9 @@ namespace MDriveSync.Core.Services
             }
 
             _log.Information($"云盘文件加载完成，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹。");
+
+            // TODO 如果远程不存在的，则从队列中删除
+
         }
 
         /// <summary>
@@ -1017,9 +1020,9 @@ namespace MDriveSync.Core.Services
             var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
                 .ConfigureOptions(options =>
                 {
-                    // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI | DokanOptions.NetworkDrive;
+                    // DokanOptions.DebugMode | DokanOptions.EnableNotificationAPI | DokanOptions.NetworkDrive  | DokanOptions.StderrOutput;
 
-                    options.Options = DokanOptions.FixedDrive; // | DokanOptions.DebugMode; // | DokanOptions.StderrOutput;
+                    options.Options = DokanOptions.FixedDrive;
 
                     if (_driveConfig.MountReadOnly)
                     {
@@ -1033,8 +1036,35 @@ namespace MDriveSync.Core.Services
             {
                 using var dokanInstance = dokanInstanceBuilder.Build(this);
                 _dokanInstance = dokanInstance;
+
+                // 初始化文件列表
+                AliyunDriveInitFiles();
+
+                // 创建轮询计划
+                // 每 15 分钟更新一次列表
+                var scheduler = new QuartzCronScheduler("0 0/15 * * * ?", () =>
+                {
+                    AliyunDriveSearchFiles();
+                });
+                scheduler.Start();
+
+
+                // 开启一个作业，用于处理打开文件夹的作业处理
+                // TODO
+                while (_openFolders.Count > 0)
+                {
+                    // 如果文件夹存在，则更新此文件夹列表
+                    // 1、优先从第一个 key 处理
+                    // 2、如果文件夹文件不存在了，注意更新缓存
+
+                }
+
                 // await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
+
                 _dokanMre.WaitOne();
+
+                // 销毁计划
+                scheduler.Dispose();
             });
 
             _mountTask.Start();
@@ -1174,6 +1204,7 @@ namespace MDriveSync.Core.Services
                     return DokanResult.Success;
                 }
 
+
                 if (info.IsDirectory)
                 {
                     try
@@ -1182,6 +1213,9 @@ namespace MDriveSync.Core.Services
                         {
                             case FileMode.Open:
                                 {
+                                    _openFolders.TryRemove(key, out _);
+                                    _openFolders.TryAdd(key, DateTime.Now);
+
                                     // 处理目录的创建或打开
                                     if (!pathIsDirectory)
                                     {
@@ -1235,11 +1269,14 @@ namespace MDriveSync.Core.Services
                     switch (mode)
                     {
                         case FileMode.Open:
-
                             if (pathExists)
                             {
                                 if (pathIsDirectory)
                                 {
+                                    _log.Information("打开文件夹 {@0}", fileName);
+                                    _openFolders.TryRemove(key, out _);
+                                    _openFolders.TryAdd(key, DateTime.Now);
+
                                     info.IsDirectory = pathIsDirectory;
                                     info.Context = new object();
 
@@ -1265,9 +1302,6 @@ namespace MDriveSync.Core.Services
 
                     try
                     {
-                        if (fileName.Contains("111.exe"))
-                        {
-                        }
                         if (mode == FileMode.CreateNew)
                         {
                             //var filePath = GetLocalPath(fileName);
@@ -1515,10 +1549,6 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         public NtStatus GetFileInformation(string fileName, out FileInformation fileInfo, IDokanFileInfo info)
         {
-            if (fileName.Contains("111.exe"))
-            {
-            }
-
             fileInfo = new FileInformation() { FileName = fileName };
 
             if (fileName == "\\")
@@ -1539,7 +1569,6 @@ namespace MDriveSync.Core.Services
 
             var key = GetPathKey(fileName);
 
-            // info.IsDirectory 不准确，因此不使用
             if (_driveFolders.TryGetValue(key, out var d) && d != null)
             {
                 fileInfo = new FileInformation()

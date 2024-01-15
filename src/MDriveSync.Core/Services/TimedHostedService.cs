@@ -107,7 +107,7 @@ namespace MDriveSync.Core
                         if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
                         {
                             mt = new AliyunDriveMounter(ad);
-                            mt.AliyunDriveInitFiles();
+                            //mt.AliyunDriveInitFiles();
                             mt.Mount();
                             _mounter[ad.Id] = mt;
                         }
@@ -356,7 +356,7 @@ namespace MDriveSync.Core
             if (!_mounter.TryGetValue(drive.Id, out var mt) || mt == null)
             {
                 mt = new AliyunDriveMounter(drive);
-                mt.AliyunDriveInitFiles();
+                //mt.AliyunDriveInitFiles();
                 mt.Mount();
                 _mounter[drive.Id] = mt;
             }
