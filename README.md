@@ -68,6 +68,7 @@ Supports a variety of algorithms for synchronization and backup.
 > 截图
 
 ![首页](/docs/screenshots/home.jpg)
+![挂载](/docs/screenshots/mount.png)
 ![作业](/docs/screenshots/job.gif)
 
 ### Docker 版
