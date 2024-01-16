@@ -6,6 +6,7 @@ using RestSharp;
 using Serilog;
 using ServiceStack;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.AccessControl;
@@ -32,6 +33,11 @@ namespace MDriveSync.Core.Services
         /// 打开的文件夹列表，用于刷新文件夹内容
         /// </summary>
         private ConcurrentDictionary<string, DateTime> _openFolders = new();
+
+        /// <summary>
+        /// 打开文件夹信号通知
+        /// </summary>
+        private ManualResetEvent _openFolderMre = new(false);
 
         /// <summary>
         /// 4 MB per part
@@ -234,6 +240,27 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
+        /// 打开文件夹，并触发加载当前文件夹的文件列表
+        /// 注意处理，如果文件夹被删除
+        /// </summary>
+        /// <param name="key"></param>
+        private void OpenFolder(string key)
+        {
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                return;
+            }
+
+            _log.Information("打开文件夹 {@0}", key);
+
+            _openFolders.TryRemove(key, out _);
+            _openFolders.TryAdd(key, DateTime.Now);
+
+            // 通知加载列表
+            _openFolderMre.Set();
+        }
+
+        /// <summary>
         /// 阿里云盘 - 初始化作业（路径、云盘信息等）
         /// </summary>
         /// <returns></returns>
@@ -387,7 +414,6 @@ namespace MDriveSync.Core.Services
             _log.Information($"云盘文件加载完成，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹。");
 
             // TODO 如果远程不存在的，则从队列中删除
-
         }
 
         /// <summary>
@@ -966,6 +992,86 @@ namespace MDriveSync.Core.Services
         #region 公共方法
 
         /// <summary>
+        /// 阿里云盘 - 获取文件列表（限流 4 QPS）
+        /// </summary>
+        /// <param name="parentFileId"></param>
+        /// <param name="limit"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="orderDirection"></param>
+        /// <param name="category"></param>
+        /// <param name="type"></param>
+        /// <param name="saveRootPath">备份保存的目录，如果匹配到则立即返回</param>
+        /// <returns></returns>
+        private async Task AliyunDriveLoadFiles(string parentFileId, int limit = 100, string orderBy = null, string orderDirection = null, string category = null, string type = "all")
+        {
+            try
+            {
+                var allItems = new List<AliyunDriveFileItem>();
+                string marker = null;
+                do
+                {
+                    var sw = new Stopwatch();
+                    sw.Start();
+
+                    var responseData = _driveApi.FileList(_driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type, AccessToken);
+                    if (responseData.Items.Count > 0)
+                    {
+                        allItems.AddRange(responseData.Items.ToList());
+                    }
+                    marker = responseData.NextMarker;
+
+                    sw.Stop();
+
+                    // 等待 250ms 以遵守限流策略
+                    if (sw.ElapsedMilliseconds < AliyunDriveApi.REQUEST_INTERVAL)
+                        await Task.Delay((int)(AliyunDriveApi.REQUEST_INTERVAL - sw.ElapsedMilliseconds));
+                } while (!string.IsNullOrEmpty(marker));
+
+                foreach (var item in allItems)
+                {
+                    // 如果是文件夹
+                    if (item.Type == "folder")
+                    {
+                        // 如果是根目录
+                        if (item.ParentFileId == _driveParentFileId)
+                        {
+                            _driveFolders.TryAdd($"{item.Name}".TrimPath(), item);
+                        }
+                        else
+                        {
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == item.ParentFileId).First()!;
+                            _driveFolders.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                        }
+                    }
+                    else
+                    {
+                        // 如果是根目录的文件
+                        if (item.ParentFileId == _driveParentFileId)
+                        {
+                            _driveFiles.TryAdd($"{item.Name}".TrimPath(), item);
+                        }
+                        else
+                        {
+                            // 构建文件路径作为字典的键
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == item.ParentFileId).First()!;
+                            _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                        }
+                    }
+
+                    _log.Information($"云盘文件加载完成，包含 {allItems.Count} 个文件/文件夹");
+                }
+
+                // TODO
+                // 如果文件夹存在，则更新此文件夹列表
+                // 如果文件夹文件不存在了，注意更新缓存
+            }
+            catch (Exception ex)
+            {
+                _log.Error(ex, "云盘文件列表加载失败 {@0}", parentFileId);
+            }
+        }
+
+        /// <summary>
         /// 初始化文件列表
         /// </summary>
         public void AliyunDriveInitFiles()
@@ -1048,16 +1154,57 @@ namespace MDriveSync.Core.Services
                 });
                 scheduler.Start();
 
-
                 // 开启一个作业，用于处理打开文件夹的作业处理
-                // TODO
-                while (_openFolders.Count > 0)
+                Task.Run(async () =>
                 {
-                    // 如果文件夹存在，则更新此文件夹列表
-                    // 1、优先从第一个 key 处理
-                    // 2、如果文件夹文件不存在了，注意更新缓存
+                    while (true)
+                    {
+                        while (_openFolders.Count > 0)
+                        {
+                            // 优先从第一个 key 处理
+                            var key = _openFolders.Keys.FirstNonDefault();
+                            if (_openFolders.TryGetValue(key, out var ketTime))
+                            {
+                                try
+                                {
+                                    // 10 分钟内曾经打开的文件夹
+                                    if (ketTime >= DateTime.Now.AddMinutes(-10))
+                                    {
+                                        if (key == "\\")
+                                        {
+                                            await AliyunDriveLoadFiles(_driveParentFileId);
+                                        }
+                                        else
+                                        {
+                                            if (_driveFolders.TryGetValue(key, out var fo) && fo != null)
+                                            {
+                                                await AliyunDriveLoadFiles(fo.FileId);
+                                            }
+                                        }
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _log.Error(ex, "加载文件列表异常 {@0}", key);
+                                }
+                                finally
+                                {
+                                    _openFolders.TryRemove(key, out _);
+                                }
+                            }
 
-                }
+                            // 超过 100 个移除
+                            var lastKeys = _openFolders.Keys.Skip(100).ToList();
+                            foreach (var lk in lastKeys)
+                            {
+                                _openFolders.TryRemove(lk, out _);
+                            }
+                        }
+
+                        // 处理完后，等待
+                        _openFolderMre.WaitOne();
+                    }
+                });
 
                 // await _dokanInstance.WaitForFileSystemClosedAsync(uint.MaxValue);
 
@@ -1204,7 +1351,6 @@ namespace MDriveSync.Core.Services
                     return DokanResult.Success;
                 }
 
-
                 if (info.IsDirectory)
                 {
                     try
@@ -1213,8 +1359,7 @@ namespace MDriveSync.Core.Services
                         {
                             case FileMode.Open:
                                 {
-                                    _openFolders.TryRemove(key, out _);
-                                    _openFolders.TryAdd(key, DateTime.Now);
+                                    OpenFolder(key);
 
                                     // 处理目录的创建或打开
                                     if (!pathIsDirectory)
@@ -1273,10 +1418,6 @@ namespace MDriveSync.Core.Services
                             {
                                 if (pathIsDirectory)
                                 {
-                                    _log.Information("打开文件夹 {@0}", fileName);
-                                    _openFolders.TryRemove(key, out _);
-                                    _openFolders.TryAdd(key, DateTime.Now);
-
                                     info.IsDirectory = pathIsDirectory;
                                     info.Context = new object();
 
@@ -1620,6 +1761,18 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         public NtStatus FindFilesWithPattern(string fileName, string searchPattern, out IList<FileInformation> files, IDokanFileInfo info)
         {
+            //_log.Information("查找文件 {@0}", fileName);
+
+            if (fileName == "\\")
+            {
+                OpenFolder("\\");
+            }
+            else
+            {
+                var key = GetPathKey(fileName);
+                OpenFolder(key);
+            }
+
             files = FindFilesHelper(fileName, searchPattern);
             return NtStatus.Success;
         }
