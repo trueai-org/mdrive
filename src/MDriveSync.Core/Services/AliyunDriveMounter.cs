@@ -1479,7 +1479,8 @@ namespace MDriveSync.Core.Services
                         {
                             case FileMode.Open:
                                 {
-                                    OpenFolder(key);
+                                    // 不再触发打开文件夹
+                                    //OpenFolder(key);
 
                                     // 处理目录的创建或打开
                                     if (!pathIsDirectory)
