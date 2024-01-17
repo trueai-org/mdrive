@@ -1276,6 +1276,9 @@ namespace MDriveSync.Core.Services
                 {
                     while (true)
                     {
+                        // 等待信号通知
+                        _openFolderMre.WaitOne();
+
                         while (_openFolders.Count > 0)
                         {
                             // 优先从第一个 key 处理
@@ -1319,7 +1322,7 @@ namespace MDriveSync.Core.Services
                         }
 
                         // 处理完后，等待
-                        _openFolderMre.WaitOne();
+                        _openFolderMre.Reset();
                     }
                 });
 
