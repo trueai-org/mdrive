@@ -2,22 +2,6 @@
 
 namespace MDriveSync.Core
 {
-    ///// <summary>
-    ///// 客户端备份配置项文件
-    ///// </summary>
-    //public class ClientSettings
-    //{
-    //    /// <summary>
-    //    /// 客户端配置项
-    //    /// </summary>
-    //    public const string ClientSettingsPath = "appsettings.Client.json";
-
-    //    /// <summary>
-    //    ///
-    //    /// </summary>
-    //    public ClientOptions Client { get; set; }
-    //}
-
     /// <summary>
     /// 客户端备份配置项
     /// </summary>

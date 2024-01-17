@@ -85,11 +85,9 @@ docker run --name mdrive -d --restart=always \
  -e READ_ONLY=true \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 
-
 # 快速启动示例2
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -e READ_ONLY=true \
  -p 18080:8080 trueaiorg/m-drive-sync-client
@@ -100,11 +98,12 @@ docker run --name mdrive -d --restart=always \
 mkdir /home/mdrive
 cd /home/mdirve
 
-# 创建配置文件
-vi appsettings.Client.json
+# 创建配置文件（可选）
+vi appsettings.json
 
 # 输入授权令牌，修改备份目录、作业计划时间、目标位置等
 {
+  // ...
   "Client": {
     "AliyunDrives": [
       {
@@ -133,12 +132,12 @@ vi appsettings.Client.json
   }
 }
 
-# 确保配置具有可写配置权限 appsettings.Client.json
-chmod 666 appsettings.Client.json
+# 确保配置具有可写配置权限 appsettings.json
+chmod 666 appsettings.json
 
 # 快速启动示例，并挂载 /data 目录到容器 /data 只读模式，并映射端口 8080
 docker run --name mdrive -d --restart=always \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
+ -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
@@ -157,8 +156,8 @@ http://{ip}:8080
 mkdir /home/mdrive/logs
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
- -v /home/mdrive/appsettings.Client.json:/app/appsettings.Client.json:rw \
  -v /home/mdrive/logs:/app/logs \
+ -v /home/mdrive/db:/app/db \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/m-drive-sync-client
@@ -184,9 +183,59 @@ docker run --name mdrive -d --restart=always \
 - 只读模式：WebUI 下如果开启只读模式，则允许编辑和修改，只能查看，默认 `ReadOnly: false`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e READ_ONLY=true`。
 - 基础认证：WebUI 账号和密码，如果开启则打开网站管理后台时需要输入账号和密码，默认启用 `BasicAuth`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 ` -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456`。
 
-## 高级配置
+## 通过配置加载（可选）
 
-客户端高级配置 `appsettings.Client.json`
+> 默认 `appsettings.json` 配置
+
+```json
+{
+  "ReadOnly": null,
+  "BasicAuth": {
+    "User": "",
+    "Password": ""
+  },
+  "Client": {
+    "AliyunDrives": [
+    ]
+  },
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Default": "Warning",
+        "System": "Warning",
+        "Microsoft": "Warning"
+      }
+    },
+    "WriteTo": [
+      {
+        "Name": "File",
+        "Args": {
+          "path": "logs/log.txt",
+          "rollingInterval": "Day",
+          "fileSizeLimitBytes": null,
+          "rollOnFileSizeLimit": false,
+          "retainedFileCountLimit": 31
+        }
+      }
+      //{
+      //  "Name": "Console"
+      //}
+    ]
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "urls": "http://*:8080"
+}
+
+```
+
+> 默认 `Client` 配置（可选）
 
 - `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:read,file:all:write&relogin=true)令牌，或登录官网获取授权令牌。
 - `Jobs` 可以配置多个作业，计划中的作业时间可以可以配置多个时间点。
@@ -341,39 +390,34 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
-- 还原到本地，选择文件/文件夹还原
-- 本地挂载
-- WebDAV 挂载
+- [紧急 🆘] 增加还原计划，还原到本地，选择文件/文件夹还原
+- [紧急 🆘] 分块上传、分块下载、超大文件支持
 - 多版本、快照、加密
-- 分块上传、分块下载、超大文件支持
-- 锁定模式，超时多少时间自动推出 UI
-- Windows 客户端 UI/WPF 版本
-- MacUI 版本
-- 移动端打包
-- Winwos 安装包
-- WPF 安装包
 - Kopia 模式、插件开发
-- 百度云盘集成
-- 本地模式集成
-- 阿里云 OSS、腾讯云 COS 等
+- 百度云盘集成、本地模式集成、阿里云 OSS、腾讯云 COS 等
 - 加密、分块插件等
 - 上传增加文件的本地时间
-- WebDAV、磁盘挂载
+- WebDAV 支持
 - 多版本、多备份、版本还原
-- WebUI 增加下次作业时间
-- WebUI 增加公告
-- WebUI 增加上次执行结果
-- 支持从配置文件中自动读取并更新配置、支持导出配置、支持导入配置。
 - 配置加密、作业加密
 - 支持自定义文件后缀。避免被任何文件分析。
 - 支持多个备份点，避免快照数据损坏（待定），支持多重备份点。
-- 还原时恢复权限和时间
-- 空文件、空文件夹也同步
-- 快捷方式支持同步，注意可能存在兼容性问题
-- APP 启动时，通过接口获取欢迎语，检查版本等
+- 还原时恢复原始权限和时间
+- [验证] 空文件、空文件夹也同步
+- [验证] 快捷方式支持同步，注意可能存在兼容性问题
 - [修复] 指向同一目标 bug -> https://github.com/trueai-org/MDriveSync/issues/3
 - [优化] 优化挂载读写性能
 - [新增] 增加 linux/unix/mac 磁盘挂载支持
+
+## 客户端路线图
+
+- App 启动时，通过接口获取欢迎语，检查版本等
+- App 增加下次作业时间
+- App 增加公告
+- App 增加上次执行结果
+- Mac 版本、移动端打包、Windows 安装包、WPF 安装包
+- 锁定模式，超时多少时间自动退出登录
+- Windows 客户端 UI/WPF 版本
 
 ## 发布
 
