@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.IO;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.Extensions.Hosting;
@@ -313,6 +314,11 @@ namespace MDriveSync.Core
         /// <param name="mountPoint"></param>
         public void DriveJobMount(string jobId, string mountPoint)
         {
+            if (Platform.IsClientPosix)
+            {
+                throw new LogicException("暂不支持非 Windows 系统挂载云盘，请等待下个版本发布！");
+            }
+
             if (_jobs.TryGetValue(jobId, out var job) || job != null)
             {
                 job.DriveMount(mountPoint);
@@ -338,6 +344,11 @@ namespace MDriveSync.Core
         /// <param name="mountPoint"></param>
         public void DriveMount(string driveId)
         {
+            if (Platform.IsClientPosix)
+            {
+                throw new LogicException("暂不支持非 Windows 系统挂载云盘，请等待下个版本发布！");
+            }
+
             var ds = DriveDb.Instacne.GetAll();
             var drive = ds.FirstOrDefault(x => x.Id == driveId);
             if (drive == null)
