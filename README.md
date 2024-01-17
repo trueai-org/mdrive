@@ -371,6 +371,9 @@ docker run --name mdrive -d --restart=always \
 - 空文件、空文件夹也同步
 - 快捷方式支持同步，注意可能存在兼容性问题
 - APP 启动时，通过接口获取欢迎语，检查版本等
+- [修复] 指向同一目标 bug -> https://github.com/trueai-org/MDriveSync/issues/3
+- [优化] 优化挂载读写性能
+- [新增] 增加 linux/unix/mac 磁盘挂载支持
 
 ## 发布
 
