@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Security.AccessControl;
+
 using FileAccess = DokanNet.FileAccess;
 using ILogger = Serilog.ILogger;
 
@@ -344,76 +345,111 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         private void AliyunDriveSearchFiles(int limit = 100)
         {
-            _log.Information("初始化云盘文件列表");
-
-            var allItems = new List<AliyunDriveFileItem>();
-            var marker = "";
-            do
+            using (_lockV2.Lock("AliyunDriveSearchFiles"))
             {
-                var data = _driveApi.SearchAllFileList(_driveId, limit, marker, AccessToken);
+                _log.Information("初始化云盘文件列表");
 
-                if (data?.Items.Count > 0)
+                var allItems = new List<AliyunDriveFileItem>();
+                var marker = "";
+                do
                 {
-                    allItems.AddRange(data.Items);
-                }
-                marker = data.NextMarker;
-            } while (!string.IsNullOrEmpty(marker));
+                    var data = _driveApi.SearchAllFileList(_driveId, limit, marker, AccessToken);
 
-            // 先加载文件夹
-            LoadPath(_driveParentFileId);
-            void LoadPath(string parentFileId)
-            {
-                foreach (var item in allItems.Where(c => c.IsFolder).Where(c => c.ParentFileId == parentFileId))
-                {
-                    // 如果是文件夹，则递归获取子文件列表
-                    if (item.IsFolder)
+                    if (data?.Items.Count > 0)
                     {
-                        var keyPath = "";
+                        allItems.AddRange(data.Items);
+                    }
+                    marker = data.NextMarker;
+                } while (!string.IsNullOrEmpty(marker));
 
-                        // 如果相对是根目录
+                // 先加载文件夹
+                LoadPath(_driveParentFileId);
+
+                void LoadPath(string parentFileId)
+                {
+                    foreach (var item in allItems.Where(c => c.IsFolder).Where(c => c.ParentFileId == parentFileId))
+                    {
+                        // 如果是文件夹，则递归获取子文件列表
+                        if (item.IsFolder)
+                        {
+                            var key = "";
+
+                            // 如果相对是根目录
+                            if (item.ParentFileId == _driveParentFileId)
+                            {
+                                key = $"{item.Name}".TrimPath();
+                            }
+                            else
+                            {
+                                var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == item.ParentFileId).First()!;
+                                key = $"{parent.Key}/{item.Name}".TrimPath();
+                            }
+
+                            _driveFolders.TryAdd(key, item);
+
+                            // 加载子文件夹
+                            LoadPath(item.FileId);
+                        }
+                    }
+                }
+
+                // 加载文件列表
+                foreach (var item in allItems.Where(c => c.IsFile))
+                {
+                    if (item.IsFile)
+                    {
+                        // 如果相对是根目录文件
                         if (item.ParentFileId == _driveParentFileId)
                         {
-                            keyPath = $"{item.Name}".TrimPath();
+                            _driveFiles.TryAdd($"{item.Name}".TrimPath(), item);
                         }
                         else
                         {
-                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == item.ParentFileId).First()!;
-                            keyPath = $"{parent.Key}/{item.Name}".TrimPath();
+                            // 文件必须在备份路径中
+                            var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == item.ParentFileId).FirstOrDefault();
+                            if (!string.IsNullOrWhiteSpace(parent.Key))
+                            {
+                                _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                            }
                         }
-
-                        _driveFolders.TryAdd(keyPath, item);
-
-                        // 加载子文件夹
-                        LoadPath(item.FileId);
                     }
                 }
-            }
 
-            // 加载文件列表
-            foreach (var item in allItems.Where(c => c.IsFile))
-            {
-                if (item.IsFile)
+                // 已有的所有文件
+                var allFileIds = allItems.Select(c => c.FileId).ToDictionary(c => c, c => true);
+
+                // 如果远程不存在的，则从队列中删除
+                // 删除远程不存在的缓存
+                // 文件夹处理
+                var folderFileIds = _driveFolders.Values.Select(c => c.FileId).ToList();
+                var folderFileIdPathDic = _driveFolders.ToDictionary(c => c.Value.FileId, c => c.Key);
+                foreach (var fid in folderFileIds)
                 {
-                    // 如果相对是根目录文件
-                    if (item.ParentFileId == _driveParentFileId)
+                    if (!allFileIds.ContainsKey(fid))
                     {
-                        _driveFiles.TryAdd($"{item.Name}".TrimPath(), item);
-                    }
-                    else
-                    {
-                        // 文件必须在备份路径中
-                        var parent = _driveFolders.Where(c => c.Value.IsFolder && c.Value.FileId == item.ParentFileId).FirstOrDefault();
-                        if (!string.IsNullOrWhiteSpace(parent.Key))
+                        if (folderFileIdPathDic.TryGetValue(fid, out var p))
                         {
-                            _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                            _driveFolders.TryRemove(p, out _);
                         }
                     }
                 }
+
+                // 文件处理
+                var fileFileIds = _driveFiles.Values.Select(c => c.FileId).ToList();
+                var fileFileIdPathDic = _driveFiles.ToDictionary(c => c.Value.FileId, c => c.Key);
+                foreach (var fid in fileFileIds)
+                {
+                    if (!allFileIds.ContainsKey(fid))
+                    {
+                        if (fileFileIdPathDic.TryGetValue(fid, out var p))
+                        {
+                            _driveFiles.TryRemove(p, out _);
+                        }
+                    }
+                }
+
+                _log.Information($"云盘文件加载完成，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹。");
             }
-
-            _log.Information($"云盘文件加载完成，包含 {_driveFiles.Count} 个文件，{_driveFolders.Count} 个文件夹。");
-
-            // TODO 如果远程不存在的，则从队列中删除
         }
 
         /// <summary>
@@ -992,6 +1028,35 @@ namespace MDriveSync.Core.Services
         #region 公共方法
 
         /// <summary>
+        /// 删除文件夹以及子文件和子文件夹
+        /// </summary>
+        /// <param name="key"></param>
+        public void DeleteFolderAndSubFiles(string key)
+        {
+            if (!string.IsNullOrWhiteSpace(key))
+            {
+                _driveFolders.TryRemove(key, out _);
+
+                // 子文件夹处理，以当前路径开头的子文件和子文件夹
+                // 重新计算关联当前的子文件和子文件夹
+                // 确保以斜杠结尾
+                var oldPathPrefix = $"{key.TrimPath()}/";
+                var itemFoldersToUpdate = _driveFolders.Where(kvp => kvp.Key.StartsWith(oldPathPrefix)).ToList();
+                foreach (var item in itemFoldersToUpdate)
+                {
+                    _driveFolders.TryRemove(item.Key, out _);
+                }
+
+                // 计算相关文件
+                var itemFilesToUpdate = _driveFiles.Where(kvp => kvp.Key.StartsWith(oldPathPrefix)).ToList();
+                foreach (var item in itemFilesToUpdate)
+                {
+                    _driveFiles.TryRemove(item.Key, out _);
+                }
+            }
+        }
+
+        /// <summary>
         /// 阿里云盘 - 获取文件列表（限流 4 QPS）
         /// </summary>
         /// <param name="parentFileId"></param>
@@ -1002,10 +1067,19 @@ namespace MDriveSync.Core.Services
         /// <param name="type"></param>
         /// <param name="saveRootPath">备份保存的目录，如果匹配到则立即返回</param>
         /// <returns></returns>
-        private async Task AliyunDriveLoadFiles(string parentFileId, int limit = 100, string orderBy = null, string orderDirection = null, string category = null, string type = "all")
+        private async Task AliyunDriveLoadFolderFiles(string parentKey, string parentFileId, int limit = 100, string orderBy = null, string orderDirection = null, string category = null, string type = "all")
         {
             try
             {
+                // 首先判断进入的文件夹是否存在
+                var error = string.Empty;
+                if (!_driveApi.TryGetDetail(_driveId, parentFileId, AccessToken, out var detail, ref error) && error == AliyunDriveApi.ERROR_NOTFOUNDFILEID)
+                {
+                    // 文件不存在
+                    DeleteFolderAndSubFiles(parentKey);
+                    return;
+                }
+
                 var allItems = new List<AliyunDriveFileItem>();
                 string marker = null;
                 do
@@ -1013,7 +1087,18 @@ namespace MDriveSync.Core.Services
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    var responseData = _driveApi.FileList(_driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type, AccessToken);
+                    if (!_driveApi.TryFileList(_driveId, parentFileId, limit, marker, orderBy, orderDirection, category, type, AccessToken, out var responseData, ref error)
+                        && (error == AliyunDriveApi.ERROR_NOTFOUNDFILEID || error == AliyunDriveApi.ERROR_FORBIDDENFILEINTHERECYCLEBIN))
+                    {
+                        DeleteFolderAndSubFiles(parentKey);
+                        return;
+                    }
+
+                    if (responseData == null)
+                    {
+                        throw new Exception("请求列表失败");
+                    }
+
                     if (responseData.Items.Count > 0)
                     {
                         allItems.AddRange(responseData.Items.ToList());
@@ -1061,9 +1146,41 @@ namespace MDriveSync.Core.Services
                     _log.Information($"云盘文件加载完成，包含 {allItems.Count} 个文件/文件夹");
                 }
 
-                // TODO
                 // 如果文件夹存在，则更新此文件夹列表
                 // 如果文件夹文件不存在了，注意更新缓存
+
+                // 已有的所有文件
+                var allFileIds = allItems.Select(c => c.FileId).ToDictionary(c => c, c => true);
+
+                // 如果远程不存在的，则从队列中删除
+                // 删除远程不存在的缓存
+                // 文件夹处理
+                var folderFileIds = _driveFolders.Values.Where(c => c.ParentFileId == parentFileId).Select(c => c.FileId).ToList();
+                var folderFileIdPathDic = _driveFolders.Where(c => c.Value.ParentFileId == parentFileId).ToDictionary(c => c.Value.FileId, c => c.Key);
+                foreach (var fid in folderFileIds)
+                {
+                    if (!allFileIds.ContainsKey(fid))
+                    {
+                        if (folderFileIdPathDic.TryGetValue(fid, out var key))
+                        {
+                            DeleteFolderAndSubFiles(key);
+                        }
+                    }
+                }
+
+                // 文件处理
+                var fileFileIds = _driveFiles.Values.Where(c => c.ParentFileId == parentFileId).Select(c => c.FileId).ToList();
+                var fileFileIdPathDic = _driveFiles.Where(c => c.Value.ParentFileId == parentFileId).ToDictionary(c => c.Value.FileId, c => c.Key);
+                foreach (var fid in fileFileIds)
+                {
+                    if (!allFileIds.ContainsKey(fid))
+                    {
+                        if (fileFileIdPathDic.TryGetValue(fid, out var p))
+                        {
+                            _driveFiles.TryRemove(p, out _);
+                        }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -1162,7 +1279,7 @@ namespace MDriveSync.Core.Services
                         while (_openFolders.Count > 0)
                         {
                             // 优先从第一个 key 处理
-                            var key = _openFolders.Keys.FirstNonDefault();
+                            var key = _openFolders.Keys.FirstOrDefault();
                             if (_openFolders.TryGetValue(key, out var ketTime))
                             {
                                 try
@@ -1172,13 +1289,13 @@ namespace MDriveSync.Core.Services
                                     {
                                         if (key == "\\")
                                         {
-                                            await AliyunDriveLoadFiles(_driveParentFileId);
+                                            await AliyunDriveLoadFolderFiles("", _driveParentFileId);
                                         }
                                         else
                                         {
                                             if (_driveFolders.TryGetValue(key, out var fo) && fo != null)
                                             {
-                                                await AliyunDriveLoadFiles(fo.FileId);
+                                                await AliyunDriveLoadFolderFiles(key, fo.FileId);
                                             }
                                         }
                                     }

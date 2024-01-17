@@ -407,6 +407,7 @@ docker run --name mdrive -d --restart=always \
 - [验证] 快捷方式支持同步，注意可能存在兼容性问题
 - [修复] 指向同一目标 bug -> https://github.com/trueai-org/MDriveSync/issues/3
 - [优化] 优化挂载读写性能
+- [优化] 优化磁盘挂载支持秒传
 - [新增] 增加 linux/unix/mac 磁盘挂载支持
 
 ## 客户端路线图

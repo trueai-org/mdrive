@@ -2,15 +2,33 @@
 using RestSharp;
 using Serilog;
 using System.Net;
+using System.Text.Json;
 
 namespace MDriveSync.Core.Services
 {
     /// <summary>
     /// 阿里云盘 API
     /// https://www.yuque.com/aliyundrive/zpfszx/ezlzok
+    /// https://www.yuque.com/aliyundrive/zpfszx/rgg2p1qnsfdux61r
     /// </summary>
     public class AliyunDriveApi
     {
+        /// <summary>
+        /// 用户已取消授权，或权限已失效，或 token 无效。需要重新发起授权
+        /// </summary>
+        public const string ERROR_PERMISSIONDENIED = "PermissionDenied";
+
+        /// <summary>
+        /// 回收站文件不允许操作
+        /// </summary>
+        public const string ERROR_FORBIDDENFILEINTHERECYCLEBIN = "ForbiddenFileInTheRecycleBin";
+
+        /// <summary>
+        /// 文件找不到
+        /// </summary>
+        public const string ERROR_NOTFOUNDFILEID = "NotFound.FileId";
+
+
         /// <summary>
         /// 阿里云盘 API
         /// </summary>
@@ -281,6 +299,36 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
+        /// 阿里云盘 - 获取文件/文件夹详情
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="fileId"></param>
+        /// <param name="accessToken"></param>
+        /// <returns></returns>
+        public bool TryGetDetail(string driveId, string fileId, string accessToken, out AliyunDriveFileItem data, ref string code)
+        {
+            data = null;
+
+            var request = new RestRequest("/adrive/v1.0/openFile/get", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {accessToken}");
+            object body = new
+            {
+                drive_id = driveId,
+                file_id = fileId
+            };
+            request.AddBody(body);
+            var response = WithCodeRetry<AliyunDriveFileItem>(request, ref code);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                data = response.Data;
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// 阿里云盘 - 获取文件列表
         /// </summary>
         /// <param name="driveId"></param>
@@ -318,6 +366,50 @@ namespace MDriveSync.Core.Services
             }
 
             throw response.ErrorException ?? new Exception(response.Content ?? "获取文件列表失败");
+        }
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件列表
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="parentFileId"></param>
+        /// <param name="limit"></param>
+        /// <param name="marker"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="orderDirection"></param>
+        /// <param name="category"></param>
+        /// <param name="type"></param>
+        /// <param name="accessToken"></param>
+        /// <returns></returns>
+        public bool TryFileList(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type, string accessToken, 
+            out AliyunFileList data, ref string code)
+        {
+            data = null;
+
+            var request = new RestRequest("/adrive/v1.0/openFile/list", Method.Post);
+            request.AddHeader("Content-Type", "application/json");
+            request.AddHeader("Authorization", $"Bearer {accessToken}");
+            var body = new
+            {
+                drive_id = driveId,
+                parent_file_id = parentFileId,
+                limit,
+                marker,
+                order_by = orderBy,
+                order_direction = orderDirection,
+                category,
+                type
+            };
+            request.AddJsonBody(body);
+
+            var response = WithCodeRetry<AliyunFileList>(request, ref code);
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                data = response.Data;
+                return true;
+            }
+
+            return false;
         }
 
         /// <summary>
@@ -453,6 +545,46 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
+        /// 阿里云盘 - 执行重试请求，并返回错误码
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="request"></param>
+        /// <param name="code"></param>
+        /// <param name="isThrow"></param>
+        /// <returns></returns>
+        public RestResponse<T> WithCodeRetry<T>(RestRequest request, ref string code, bool isThrow = true)
+        {
+            var response = WithRetry<T>(request, isThrow);
+            if (response.StatusCode != HttpStatusCode.OK && response.Content.Contains("\"code\""))
+            {
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(response.Content) && response.Content.Contains("\"code\""))
+                    {
+                        // https://www.yuque.com/aliyundrive/zpfszx/rgg2p1qnsfdux61r
+                        // 尝试解析错误码
+                        using (var mcDoc = JsonDocument.Parse(response.Content))
+                        {
+                            if (mcDoc.RootElement.TryGetProperty("code", out JsonElement codeElement))
+                            {
+                                code = codeElement.GetString();
+                                if (!string.IsNullOrWhiteSpace(code))
+                                {
+                                    return response;
+                                }
+                            }
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return response;
+        }
+
+        /// <summary>
         /// 阿里云盘 - 执行重试请求
         /// </summary>
         /// <param name="request"></param>
@@ -500,9 +632,46 @@ namespace MDriveSync.Core.Services
                     // 如果是秒传预处理的错误码，则直接返回
                     return response;
                 }
+                else if (response.StatusCode == HttpStatusCode.NotFound && response.Content.Contains("NotFound.File"))
+                {
+                    // https://www.yuque.com/aliyundrive/zpfszx/rgg2p1qnsfdux61r
+                    // 404 文件不存在处理
+                    // {"code":"NotFound.File","message":"The resource file cannot be found. file not exist"}
+                    return response;
+                }
+                else if ((response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Forbidden) && response.Content.Contains("ForbiddenFileInTheRecycleBin"))
+                {
+                    // https://www.yuque.com/aliyundrive/zpfszx/rgg2p1qnsfdux61r
+                    // 文件被删除到回收站处理
+                    // {"code":"ForbiddenFileInTheRecycleBin","message":"This operation is forbidden for file in the recycle bin. File is in the recycle bin","data":null,"headers":null,"requestId":null,"pdsRequestId":null,"resultCode":"ForbiddenFileInTheRecycleBin","display_message":null}
+                    return response;
+                }
                 else
                 {
                     _log.Error(response.ErrorException, $"请求失败：{request.Resource} {response.StatusCode} {response.Content}");
+
+                    try
+                    {
+                        if (!string.IsNullOrWhiteSpace(response.Content) && response.Content.Contains("\"code\""))
+                        {
+                            // https://www.yuque.com/aliyundrive/zpfszx/rgg2p1qnsfdux61r
+                            // 尝试解析错误码
+                            using (var mcDoc = JsonDocument.Parse(response.Content))
+                            {
+                                if (mcDoc.RootElement.TryGetProperty("code", out JsonElement codeElement))
+                                {
+                                    var code = codeElement.GetString();
+                                    if (!string.IsNullOrWhiteSpace(code))
+                                    {
+                                        return response;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch
+                    {
+                    }
 
                     // 如果需要抛出异常
                     if (isThrow)
