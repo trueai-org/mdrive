@@ -22,7 +22,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v1
         with:
-          images: trueaiorg/m-drive-sync-client
+          images: trueaiorg/mdrive
       
       - name: Build and push Docker image
         uses: docker/build-push-action@v2

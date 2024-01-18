@@ -61,10 +61,10 @@ Supports a variety of algorithms for synchronization and backup.
 
 ```bash
 # 1. docker 启动
-docker pull trueaiorg/m-drive-sync-client
+docker pull trueaiorg/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 trueaiorg/m-drive-sync-client
+ -p 8080:8080 trueaiorg/mdrive
 
 # 2. windows 使用
 a. 通过 https://github.com/trueai-org/MDriveSync/releases 下载 windows 最新免安装版，例如：MDrvie-SelfContained-x64.zip
@@ -89,17 +89,17 @@ d. 安装为系统服务（可选），右键文件以管理员身份运行 `一
 
 ### Docker 版
 
-https://hub.docker.com/r/trueaiorg/m-drive-sync-client
+https://hub.docker.com/r/trueaiorg/mdrive
 
 ```
 # 拉取镜像
-docker pull trueaiorg/m-drive-sync-client
+docker pull trueaiorg/mdrive
 
 # 快速启动并开启只读模式
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -e READ_ONLY=true \
- -p 8080:8080 trueaiorg/m-drive-sync-client
+ -p 8080:8080 trueaiorg/mdrive
 
 # 快速启动完整示例2，持久化、映射配置、只读、账号密码
 # 如果需要，更改目录权限
@@ -109,7 +109,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/db:/app/db:rw \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -e READ_ONLY=true \
- -p 18080:8080 trueaiorg/m-drive-sync-client
+ -p 18080:8080 trueaiorg/mdrive
 
 # 确保目录存在
 # 确保映射/挂载了备份目录
@@ -159,7 +159,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 trueaiorg/m-drive-sync-client
+ -p 8080:8080 trueaiorg/mdrive
 
 # 调试日志
 docker logs mdrive
@@ -179,7 +179,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/db:/app/db \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 trueaiorg/m-drive-sync-client
+ -p 8080:8080 trueaiorg/mdrive
 ```
 
 ### Windows 服务版
