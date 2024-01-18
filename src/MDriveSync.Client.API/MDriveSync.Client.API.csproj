@@ -19,21 +19,13 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<Content Include="..\..\scripts\WinSW\*.*">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		<!-- 包含 WinSW 文件 -->
+		<Content Include="..\..\scripts\WinSW\**\*.*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			<!-- 排除它们从单文件发布 -->
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>
-	</ItemGroup>
-
-	<ItemGroup>
-	  <Content Update="..\..\scripts\WinSW\WinSW-x64.exe">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="..\..\scripts\WinSW\WinSW-x64.xml">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
-	  <Content Update="..\..\scripts\WinSW\一键安装或卸载_右键以管理员身份运行.bat">
-	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-	  </Content>
 	</ItemGroup>
 
 </Project>

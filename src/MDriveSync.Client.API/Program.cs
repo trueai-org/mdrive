@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Mvc;
 using Quartz.Logging;
 using Serilog;
 using Serilog.Debugging;
+using System.Diagnostics;
+using System.Runtime.InteropServices;
 
 namespace MDriveSync.Client.API
 {
@@ -210,6 +212,12 @@ namespace MDriveSync.Client.API
                 //    }
                 //});
 
+                // 在此处启动浏览器
+                // 从配置文件中读取 URL
+                // 替换 * 以便于浏览器访问
+                var url = builder.Configuration["urls"].Replace("*", "localhost");
+                OpenBrowser(url);
+
                 app.Run();
             }
             catch (Exception ex)
@@ -219,6 +227,40 @@ namespace MDriveSync.Client.API
             finally
             {
                 Log.CloseAndFlush();
+            }
+        }
+
+        /// <summary>
+        /// 打开默认浏览器的方法
+        /// </summary>
+        /// <param name="url"></param>
+        private static void OpenBrowser(string url)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(url))
+                {
+                    return;
+                }
+
+                // 根据不同的操作系统使用不同的命令
+                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    Process.Start(new ProcessStartInfo("cmd", $"/c start {url}")); // Windows
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                {
+                    Process.Start("xdg-open", url); // Linux
+                }
+                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                {
+                    Process.Start("open", url); // MacOS
+                }
+            }
+            catch
+            {
+                // 处理启动浏览器时可能出现的异常
+                // 在这里记录日志或者做其他处理
             }
         }
     }
