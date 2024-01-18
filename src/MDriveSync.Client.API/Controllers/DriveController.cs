@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core;
+using MDriveSync.Core.DB;
 using MDriveSync.Core.IO;
 using MDriveSync.Core.ViewModels;
 using Microsoft.AspNetCore.Mvc;
@@ -235,13 +236,27 @@ namespace MDriveSync.Client.API.Controllers
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
                 job.JobStateChange(state);
+            }
 
+            // 如果作业不再执行队列中
+            if (state == JobState.Deleted)
+            {
                 // 删除作业，清除服务
-                if (state == JobState.Deleted)
+                _timedHostedService.JobDelete(jobId);
+
+                // 修复 https://github.com/trueai-org/MDriveSync/issues/4
+                var ds = DriveDb.Instacne.GetAll();
+                foreach (var d in ds)
                 {
-                    _timedHostedService.JobDelete(jobId);
+                    var jo = d?.Jobs?.FirstOrDefault(x => x.Id == jobId);
+                    if (jo != null)
+                    {
+                        d.Jobs.RemoveAll(x => x.Id == jobId);
+                        DriveDb.Instacne.Update(d);
+                    }
                 }
             }
+
             return Result.Ok();
         }
 
