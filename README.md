@@ -431,6 +431,7 @@ docker run --name mdrive -d --restart=always \
 - [优化] 优化磁盘挂载支持秒传
 - [新增] 增加 linux/unix/mac 磁盘挂载支持
 - [优化] 增加一键安装为 windows 服务的脚本、或作业计划的脚本。
+- [BUG] 多个源文件夹名称一致校验
 
 ## 客户端路线图
 
