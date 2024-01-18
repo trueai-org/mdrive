@@ -1,0 +1,7 @@
+<service>
+  <id>MDriveSyncService</id>
+  <name>MDrive Sync Client API Service</name>
+  <description>This service runs the MDrive Sync Client API.</description>
+  <executable>E:\gits\MDriveSync\src\MDriveSync.Client.API\bin\Release\net8.0\publish\MDriveSync.Client.API.exe</executable>
+  <logmode>rotate</logmode>
+</service>

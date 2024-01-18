@@ -11,11 +11,29 @@
 	</PropertyGroup>
 
 	<ItemGroup>
-	  <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
+		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
 	</ItemGroup>
 
 	<ItemGroup>
 		<ProjectReference Include="..\MDriveSync.Core\MDriveSync.Core.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<Content Include="..\..\scripts\WinSW\*.*">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+		</Content>
+	</ItemGroup>
+
+	<ItemGroup>
+	  <Content Update="..\..\scripts\WinSW\WinSW-x64.exe">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="..\..\scripts\WinSW\WinSW-x64.xml">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
+	  <Content Update="..\..\scripts\WinSW\一键安装或卸载_右键以管理员身份运行.bat">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </Content>
 	</ItemGroup>
 
 </Project>

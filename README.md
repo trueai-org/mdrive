@@ -57,7 +57,23 @@ Supports a variety of algorithms for synchronization and backup.
 
 ## 安装与使用
 
-### 预览
+### 快速启动
+
+```bash
+# 1. docker 启动
+docker pull trueaiorg/m-drive-sync-client
+docker run --name mdrive -d --restart=always \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -p 8080:8080 trueaiorg/m-drive-sync-client
+
+# 2. windows 使用
+a. 通过 https://github.com/trueai-org/MDriveSync/releases 下载 windows 最新免安装版，例如：MDrvie-SelfContained-x64.zip
+b. 解压并执行 MDriveSync.Client.API.exe
+c. 打开网站 http://localhost:8080/
+d. 安装为系统服务（可选），执行此脚本 `install_uninstall.bat` 需要管理员权限（右键文件以管理员身份运行），选择安装或卸载服务。
+```
+
+### 在线预览
 
 > 在线预览
 
@@ -178,12 +194,12 @@ docker run --name mdrive -d --restart=always \
 - [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
 
 
-## WEB UI 管理后台配置
+## 管理后台配置
 
 - 只读模式：WebUI 下如果开启只读模式，则允许编辑和修改，只能查看，默认 `ReadOnly: false`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e READ_ONLY=true`。
 - 基础认证：WebUI 账号和密码，如果开启则打开网站管理后台时需要输入账号和密码，默认启用 `BasicAuth`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 ` -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456`。
 
-## 通过配置加载（可选）
+## 系统配置
 
 > 默认 `appsettings.json` 配置
 
@@ -409,6 +425,7 @@ docker run --name mdrive -d --restart=always \
 - [优化] 优化挂载读写性能
 - [优化] 优化磁盘挂载支持秒传
 - [新增] 增加 linux/unix/mac 磁盘挂载支持
+- 增加一键安装为 windows 服务的脚本、或作业计划的脚本。
 
 ## 客户端路线图
 
@@ -505,3 +522,105 @@ docker run --name mdrive -d --restart=always \
 ## 赞助
 
 - 感谢！
+
+## 示例
+
+> `appsettings.json` 示例配置，如果您通过 `Docker` 或简单使用则无需关心此配置。
+
+```
+{
+  // 网站配置为只读模式
+  "ReadOnly": null,
+  // 网站登录授权账号密码
+  "BasicAuth": {
+    "User": "",
+    "Password": ""
+  },
+  "Client": {
+    // 阿里云盘默认启动时加载的配置项（可选）
+    "AliyunDrives": [
+      {
+        "Id": "1",
+        "Name": "云盘1",
+        "TokenType": "Bearer",
+        "AccessToken": "",
+        "RefreshToken": "【1】这里输入授权令牌",
+        "ExpiresIn": 7200,
+        "Jobs": [
+          {
+            "Id": "1",
+            "Name": "test",
+            "Description": "",
+            "State": 0,
+            "Schedules": [
+              "【2】这里是备份计划时间，例如每分钟执行：0 * * * * ?"
+            ],
+            "Filters": [
+              "/Recovery/",
+              "/System Volume Information/",
+              "/Boot/",
+              "/$RECYCLE.BIN/",
+              "/@Recycle/",
+              "/@Recently-Snapshot/",
+              "**/node_modules/**",
+              "*.duplicatidownload"
+            ],
+            "Sources": [
+              "【3】这里输入备份的文件夹，可填写多个路径，注意：windows 路径，例如：E:\\test"
+            ],
+            "Target": "【4】这里输入云盘备份目录，例如：backups/test",
+            "Restore": "E:\\kopia_restore",
+            "RapidUpload": true,
+            "DefaultDrive": "backup",
+            "CheckAlgorithm": "sha256",
+            "CheckLevel": 1,
+            "FileWatcher": true,
+            "Order": 0,
+            "IsTemporary": false,
+            "IsRecycleBin": false,
+            "UploadThread": 0,
+            "DownloadThread": 0
+          }
+        ]
+      }
+    ]
+  },
+  // 日志输出
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Default": "Warning",
+        "System": "Warning",
+        "Microsoft": "Warning"
+      }
+    },
+    "WriteTo": [
+      // 是否将日志输出到文件
+      {
+        "Name": "File",
+        "Args": {
+          "path": "logs/log.txt",
+          "rollingInterval": "Day",
+          "fileSizeLimitBytes": null,
+          "rollOnFileSizeLimit": false,
+          "retainedFileCountLimit": 31
+        }
+      },
+      // 是否将日志输出到控制台
+      {
+        "Name": "Console"
+      }
+    ]
+  },
+  // 系统日志配置
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "urls": "http://*:8080" // 默认程序启动的端口
+}
+```
