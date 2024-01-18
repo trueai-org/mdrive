@@ -103,12 +103,14 @@ namespace MDriveSync.Core
                 foreach (var ad in ds)
                 {
                     // 云盘自动挂载
-                    if (ad.MountOnStartup && !string.IsNullOrWhiteSpace(ad.MountPoint))
+                    if (ad?.MountConfig?.MountOnStartup == true && !string.IsNullOrWhiteSpace(ad?.MountConfig?.MountPoint))
                     {
                         if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
                         {
-                            mt = new AliyunDriveMounter(ad);
+                            mt = new AliyunDriveMounter(ad, ad.MountConfig);
+
                             //mt.AliyunDriveInitFiles();
+
                             mt.Mount();
                             _mounter[ad.Id] = mt;
                         }
@@ -241,12 +243,15 @@ namespace MDriveSync.Core
                 Id = Guid.NewGuid().ToString("N"),
                 RefreshToken = request.RefreshToken,
                 Jobs = [],
+            };
+            drive.MountConfig = new AliyunDriveMountConfig()
+            {
                 IsRecycleBin = request.IsRecycleBin,
                 MountDrive = request.MountDrive,
                 MountOnStartup = request.MountOnStartup,
                 MountPath = request.MountPath,
                 MountPoint = request.MountPoint,
-                MountReadOnly = request.MountReadOnly,
+                MountReadOnly = request.MountReadOnly
             };
 
             // 保存配置
@@ -273,14 +278,15 @@ namespace MDriveSync.Core
             {
                 throw new LogicException("云盘已挂载，不可修改配置，如需修改，请先卸载挂载");
             }
-
             drive.RefreshToken = request.RefreshToken;
-            drive.IsRecycleBin = request.IsRecycleBin;
-            drive.MountDrive = request.MountDrive;
-            drive.MountOnStartup = request.MountOnStartup;
-            drive.MountPath = request.MountPath;
-            drive.MountPoint = request.MountPoint;
-            drive.MountReadOnly = request.MountReadOnly;
+
+            drive.MountConfig ??= new AliyunDriveMountConfig();
+            drive.MountConfig.IsRecycleBin = request.IsRecycleBin;
+            drive.MountConfig.MountDrive = request.MountDrive;
+            drive.MountConfig.MountOnStartup = request.MountOnStartup;
+            drive.MountConfig.MountPath = request.MountPath;
+            drive.MountConfig.MountPoint = request.MountPoint;
+            drive.MountConfig.MountReadOnly = request.MountReadOnly;
 
             // 保存配置
             drive.Save();
@@ -312,7 +318,7 @@ namespace MDriveSync.Core
         /// </summary>
         /// <param name="jobId"></param>
         /// <param name="mountPoint"></param>
-        public void DriveJobMount(string jobId, string mountPoint)
+        public void DriveJobMount(string jobId)
         {
             if (Platform.IsClientPosix)
             {
@@ -321,7 +327,7 @@ namespace MDriveSync.Core
 
             if (_jobs.TryGetValue(jobId, out var job) || job != null)
             {
-                job.DriveMount(mountPoint);
+                job.DriveMount();
             }
         }
 
@@ -359,15 +365,17 @@ namespace MDriveSync.Core
                 throw new LogicException("云盘已挂载，请不要重复挂载");
             }
 
-            if (string.IsNullOrEmpty(drive.MountPoint))
+            if (string.IsNullOrEmpty(drive.MountConfig.MountPoint))
             {
                 throw new LogicException("请选择或输入挂载点");
             }
 
             if (!_mounter.TryGetValue(drive.Id, out var mt) || mt == null)
             {
-                mt = new AliyunDriveMounter(drive);
+                mt = new AliyunDriveMounter(drive, drive.MountConfig);
+
                 //mt.AliyunDriveInitFiles();
+
                 mt.Mount();
                 _mounter[drive.Id] = mt;
             }

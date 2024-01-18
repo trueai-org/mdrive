@@ -195,7 +195,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 挂载云盘
         /// </summary>
-        private MountDrive _mountDrive;
+        private AliyunDriveMounter _mountDrive;
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
@@ -1175,8 +1175,17 @@ namespace MDriveSync.Core
             _jobConfig.RapidUpload = cfg.RapidUpload;
             _jobConfig.Mode = cfg.Mode;
             _jobConfig.Restore = cfg.Restore;
-            _jobConfig.MountOnStartup = cfg.MountOnStartup;
-            _jobConfig.MountPoint = cfg.MountPoint;
+
+            _jobConfig.MountConfig ??= new AliyunDriveMountConfig();
+            _jobConfig.MountConfig.IsRecycleBin = cfg.IsRecycleBin;
+            _jobConfig.MountConfig.RapidUpload = cfg.RapidUpload;
+            _jobConfig.MountConfig.MountDrive = cfg.DefaultDrive;
+            _jobConfig.MountConfig.MountPath = cfg.Target;
+
+            // 作业挂载、只可编辑 3 项
+            _jobConfig.MountConfig.MountOnStartup = cfg.MountConfig?.MountOnStartup ?? false;
+            _jobConfig.MountConfig.MountReadOnly = cfg.MountConfig?.MountReadOnly ?? false;
+            _jobConfig.MountConfig.MountPoint = cfg?.MountConfig?.MountPoint;
 
             _driveConfig.SaveJob(_jobConfig);
         }
@@ -2920,13 +2929,16 @@ namespace MDriveSync.Core
         /// 挂载磁盘
         /// </summary>
         /// <param name="mountPoint"></param>
-        public void DriveMount(string mountPoint)
+        public void DriveMount()
         {
             //// 先释放
             //_mountDrive?.Unmount();
 
             // 重新创建
-            _mountDrive = new MountDrive(mountPoint, this, _driveFolders, _driveFiles);
+            //_mountDrive = new AliyunDriveMounterByJob(mountPoint, this, _driveFolders, _driveFiles);
+            //_mountDrive.Mount();
+
+            _mountDrive = new AliyunDriveMounter(_driveConfig, _jobConfig.MountConfig);
             _mountDrive.Mount();
         }
 

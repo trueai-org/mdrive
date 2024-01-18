@@ -4,6 +4,7 @@ using Microsoft.Extensions.Caching.Memory;
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Security.AccessControl;
+
 using FileAccess = DokanNet.FileAccess;
 
 namespace MDriveSync.Core.Services
@@ -11,7 +12,7 @@ namespace MDriveSync.Core.Services
     /// <summary>
     /// 挂载云盘
     /// </summary>
-    public class MountDrive : IDokanOperations // , IDisposable
+    public class AliyunDriveMounterByJob : IDokanOperations // , IDisposable
     {
         private Task _mountTask;
         private DokanInstance _dokanInstance;
@@ -57,7 +58,7 @@ namespace MDriveSync.Core.Services
             return await response.Content.ReadAsByteArrayAsync();
         }
 
-        public MountDrive(string mountPoint, Job job, ConcurrentDictionary<string, AliyunDriveFileItem> driveFolders, ConcurrentDictionary<string, AliyunDriveFileItem> driveFiles)
+        public AliyunDriveMounterByJob(string mountPoint, Job job, ConcurrentDictionary<string, AliyunDriveFileItem> driveFolders, ConcurrentDictionary<string, AliyunDriveFileItem> driveFiles)
         {
             _mountPoint = mountPoint;
             _job = job;

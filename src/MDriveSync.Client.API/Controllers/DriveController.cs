@@ -70,9 +70,9 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="mountRequest"></param>
         /// <returns></returns>
         [HttpPost("job/mount/{jobId}")]
-        public Result DriveJobMount(string jobId, [FromBody] MountRequest mountRequest)
+        public Result DriveJobMount(string jobId)
         {
-            _timedHostedService.DriveJobMount(jobId, mountRequest.MountPoint);
+            _timedHostedService.DriveJobMount(jobId);
             return Result.Ok();
         }
 

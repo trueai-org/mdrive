@@ -109,6 +109,11 @@ namespace MDriveSync.Core.Services
         private AliyunDriveConfig _driveConfig;
 
         /// <summary>
+        /// 挂载点配置
+        /// </summary>
+        private AliyunDriveMountConfig _driveMountConfig;
+
+        /// <summary>
         /// 阿里云盘接口
         /// </summary>
         private readonly AliyunDriveApi _driveApi;
@@ -132,7 +137,7 @@ namespace MDriveSync.Core.Services
             Timeout = TimeSpan.FromMinutes(45)
         };
 
-        public AliyunDriveMounter(AliyunDriveConfig driveConfig)
+        public AliyunDriveMounter(AliyunDriveConfig driveConfig, AliyunDriveMountConfig driveMountConfig)
         {
             _log = Log.Logger;
 
@@ -141,6 +146,7 @@ namespace MDriveSync.Core.Services
             _cache = new MemoryCache(new MemoryCacheOptions());
 
             _driveConfig = driveConfig;
+            _driveMountConfig = driveMountConfig;
 
             // 上传请求
             // 上传链接最大有效 1 小时
@@ -190,7 +196,7 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         private string GetPathKey(string fileName)
         {
-            return $"{_driveConfig.MountPath.TrimPath()}/{fileName.TrimPath()}".ToUrlPath();
+            return $"{_driveMountConfig.MountPath.TrimPath()}/{fileName.TrimPath()}".ToUrlPath();
         }
 
         /// <summary>
@@ -281,7 +287,7 @@ namespace MDriveSync.Core.Services
                 AliyunDriveInitVipInfo();
 
                 // 保存云盘信息
-                _driveConfig.MountPath = _driveConfig.MountPath.TrimPath();
+                _driveMountConfig.MountPath = _driveMountConfig.MountPath.TrimPath();
 
                 _driveConfig.Save();
 
@@ -299,11 +305,11 @@ namespace MDriveSync.Core.Services
 
             _driveId = data.DefaultDriveId;
 
-            if (_driveConfig.MountDrive == "backup" && string.IsNullOrWhiteSpace(data.BackupDriveId))
+            if (_driveMountConfig.MountDrive == "backup" && string.IsNullOrWhiteSpace(data.BackupDriveId))
             {
                 _driveId = data.BackupDriveId;
             }
-            else if (_driveConfig.MountDrive == "resource" && !string.IsNullOrWhiteSpace(data.ResourceDriveId))
+            else if (_driveMountConfig.MountDrive == "resource" && !string.IsNullOrWhiteSpace(data.ResourceDriveId))
             {
                 _driveId = data.ResourceDriveId;
             }
@@ -552,7 +558,7 @@ namespace MDriveSync.Core.Services
                             // 先删除之前的文件，然后再移动
                             if (_driveFiles.TryGetValue(newpath, out var nf) && nf != null)
                             {
-                                _driveApi.FileDelete(_driveId, nf.FileId, AccessToken, _driveConfig.IsRecycleBin);
+                                _driveApi.FileDelete(_driveId, nf.FileId, AccessToken, _driveMountConfig.IsRecycleBin);
                             }
                         }
 
@@ -852,7 +858,7 @@ namespace MDriveSync.Core.Services
         {
             if (_driveFolders.TryGetValue(key, out var folder))
             {
-                var res = _driveApi.FileDelete(_driveId, folder.FileId, AccessToken, _driveConfig.IsRecycleBin);
+                var res = _driveApi.FileDelete(_driveId, folder.FileId, AccessToken, _driveMountConfig.IsRecycleBin);
                 if (!string.IsNullOrWhiteSpace(res?.FileId) || !string.IsNullOrWhiteSpace(res.AsyncTaskId))
                 {
                     _driveFolders.TryRemove(key, out _);
@@ -874,7 +880,7 @@ namespace MDriveSync.Core.Services
         {
             if (_driveFiles.TryGetValue(key, out var folder))
             {
-                var res = _driveApi.FileDelete(_driveId, folder.FileId, AccessToken, _driveConfig.IsRecycleBin);
+                var res = _driveApi.FileDelete(_driveId, folder.FileId, AccessToken, _driveMountConfig.IsRecycleBin);
 
                 //// 如果没有返回结果，说明可能被删除了
                 //if (res == null || !string.IsNullOrWhiteSpace(res?.FileId) || !string.IsNullOrWhiteSpace(res.AsyncTaskId))
@@ -1202,9 +1208,9 @@ namespace MDriveSync.Core.Services
                 // 并计算需要保存的目录
                 // 计算/创建备份文件夹
                 // 如果备份文件夹不存在
-                if (!string.IsNullOrWhiteSpace(_driveConfig.MountPath))
+                if (!string.IsNullOrWhiteSpace(_driveMountConfig.MountPath))
                 {
-                    var saveRootSubPaths = _driveConfig.MountPath.ToSubPaths();
+                    var saveRootSubPaths = _driveMountConfig.MountPath.ToSubPaths();
                     var searchParentFileId = "root";
                     foreach (var subPath in saveRootSubPaths)
                     {
@@ -1247,12 +1253,12 @@ namespace MDriveSync.Core.Services
 
                     options.Options = DokanOptions.FixedDrive;
 
-                    if (_driveConfig.MountReadOnly)
+                    if (_driveMountConfig.MountReadOnly)
                     {
                         options.Options |= DokanOptions.WriteProtection;
                     }
 
-                    options.MountPoint = _driveConfig.MountPoint;
+                    options.MountPoint = _driveMountConfig.MountPoint;
                 });
 
             _mountTask = new Task(() =>
