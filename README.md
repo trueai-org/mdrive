@@ -70,7 +70,7 @@ docker run --name mdrive -d --restart=always \
 a. 通过 https://github.com/trueai-org/MDriveSync/releases 下载 windows 最新免安装版，例如：MDrvie-SelfContained-x64.zip
 b. 解压并执行 MDriveSync.Client.API.exe
 c. 打开网站 http://localhost:8080/
-d. 安装为系统服务（可选），执行此脚本 `一键安装或卸载*.bat` 需要管理员权限（右键文件以管理员身份运行），选择安装或卸载服务。
+d. 安装为系统服务（可选），右键文件以管理员身份运行 `一键安装或卸载*.bat`，选择安装或卸载服务。
 ```
 
 ### 在线预览
@@ -101,7 +101,7 @@ docker run --name mdrive -d --restart=always \
  -e READ_ONLY=true \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 
-# 快速启动示例2
+# 快速启动完整示例2，持久化、映射配置、只读、账号密码
 # 如果需要，更改目录权限
 sudo chmod -R 777 /home/mdrive/db
 docker run --name mdrive -d --restart=always \
