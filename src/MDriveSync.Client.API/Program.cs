@@ -250,7 +250,7 @@ namespace MDriveSync.Client.API
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    Process.Start("xdg-open", url); // Linux
+                    //Process.Start("xdg-open", url); // Linux
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 {
