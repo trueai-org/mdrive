@@ -215,7 +215,7 @@ namespace MDriveSync.Client.API
                 // 在此处启动浏览器
                 // 从配置文件中读取 URL
                 // 替换 * 以便于浏览器访问
-                var url = builder.Configuration["urls"].Replace("*", "localhost");
+                var url = builder.Configuration.GetSection("urls")?.Get<string>()?.Replace("*", "localhost");
                 OpenBrowser(url);
 
                 app.Run();
