@@ -102,8 +102,11 @@ docker run --name mdrive -d --restart=always \
  -p 8080:8080 trueaiorg/m-drive-sync-client
 
 # 快速启动示例2
+# 如果需要，更改目录权限
+sudo chmod -R 777 /home/mdrive/db
 docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
+ -v /home/mdrive/db:/app/db:rw \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -e READ_ONLY=true \
  -p 18080:8080 trueaiorg/m-drive-sync-client
