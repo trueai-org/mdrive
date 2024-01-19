@@ -17,9 +17,9 @@ Supports a variety of algorithms for synchronization and backup.
 
 > More versions, stay tuned!
 
-[👍👍阿里云盘推广返现，低至6元每月，点击购买会员支持作者🌸🌸](https://www.alipan.com/cpx/member?userCode=MzAwMzE5)
+[👍👍阿里云盘推广返现，低至6元每月，点击购买会员支持作者，最高30%返现🌸🌸](https://www.alipan.com/cpx/member?userCode=MzAwMzE5)
 
-![限时推广返现](/docs/screenshots/aliyun.png)
+![限时推广返现，最高30%返现](/docs/screenshots/aliyun.png)
 
 ## 特性
 
@@ -533,9 +533,9 @@ docker run --name mdrive -d --restart=always \
 - 感谢所有的贡献者
 - 如果您觉得本项目对您有帮助，欢迎收藏点赞，也可通过扫码购买会员，对作者提供支持！
 
-[阿里云盘推广返现，低至6元每月，点击购买支持👍](https://www.alipan.com/cpx/member?userCode=MzAwMzE5)
+[阿里云盘推广返现，低至6元每月，点击购买支持，限时最高30%返现👍](https://www.alipan.com/cpx/member?userCode=MzAwMzE5)
 
-> 限时推广返现，扫码购买会员
+> 限时推广返现，APP 扫码购买会员
 
 ![限时推广返现](/docs/screenshots/aliyun.png)
 
