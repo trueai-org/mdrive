@@ -1161,7 +1161,7 @@ namespace MDriveSync.Core
             }
 
             // 禁止作业指向同一目标
-            if (!string.IsNullOrWhiteSpace(cfg.Target) && drive.Jobs.Any(x => x.Target == cfg.Target))
+            if (!string.IsNullOrWhiteSpace(cfg.Target) && drive.Jobs.Any(x => x.Target == cfg.Target && x.Id != cfg.Id))
             {
                 throw new LogicException("多个作业禁止指向云盘同一个目标目录");
             }
