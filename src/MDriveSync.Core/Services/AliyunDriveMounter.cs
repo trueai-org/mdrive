@@ -130,6 +130,16 @@ namespace MDriveSync.Core.Services
         private string _driveParentFileId = "root";
 
         /// <summary>
+        /// 别名
+        /// </summary>
+        private string _alias = "";
+
+        /// <summary>
+        /// 显示真实大小
+        /// </summary>
+        private bool _isRealSize;
+
+        /// <summary>
         /// 下载请求
         /// </summary>
         private readonly HttpClient _downloadHttp = new()
@@ -137,9 +147,25 @@ namespace MDriveSync.Core.Services
             Timeout = TimeSpan.FromMinutes(45)
         };
 
-        public AliyunDriveMounter(AliyunDriveConfig driveConfig, AliyunDriveMountConfig driveMountConfig)
+        /// <summary>
+        /// 创建挂载
+        /// </summary>
+        /// <param name="driveConfig">云盘配置</param>
+        /// <param name="driveMountConfig">挂载配置</param>
+        /// <param name="alias">别名</param>
+        public AliyunDriveMounter(
+            AliyunDriveConfig driveConfig,
+            AliyunDriveMountConfig driveMountConfig,
+            string alias = "")
         {
             _log = Log.Logger;
+            _alias = alias;
+    
+            // 如果挂载为目录，则显示真实大小
+            if (!string.IsNullOrWhiteSpace(driveMountConfig.MountPath))
+            {
+                _isRealSize = true;
+            }
 
             _driveApi = new AliyunDriveApi();
 
@@ -196,7 +222,8 @@ namespace MDriveSync.Core.Services
         /// <returns></returns>
         private string GetPathKey(string fileName)
         {
-            return $"{_driveMountConfig.MountPath.TrimPath()}/{fileName.TrimPath()}".ToUrlPath();
+            // {_driveMountConfig.MountPath.TrimPath()}/
+            return $"{fileName.TrimPath()}".ToUrlPath();
         }
 
         /// <summary>
@@ -1445,7 +1472,7 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 创建文件/文件夹
+        /// 创建/打开文件/文件夹
         /// </summary>
         /// <param name="fileName">文件名</param>
         /// <param name="access">访问权限</param>
@@ -1743,9 +1770,9 @@ namespace MDriveSync.Core.Services
                         partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
                     }
 
-                    if (fileName.Contains("jpg"))
-                    {
-                    }
+                    //if (fileName.Contains("jpg"))
+                    //{
+                    //}
 
                     // 确保不会复制超出 buffer 大小的数据
                     int bytesToCopy = Math.Min(buffer.Length, partialContent.Length);
@@ -1919,8 +1946,21 @@ namespace MDriveSync.Core.Services
             // diskSpaceInfo.FreeSpace - 云盘的剩余空间
 
             totalNumberOfBytes = _driveConfig?.Metadata?.TotalSize ?? long.MaxValue;
-            totalNumberOfFreeBytes = _driveConfig?.Metadata?.UsedSize ?? 0;
-            freeBytesAvailable = totalNumberOfBytes > 0 ? totalNumberOfBytes - totalNumberOfFreeBytes : long.MaxValue;
+
+            // 如果显示真实使用量，则根据文件计算
+            if (_isRealSize)
+            {
+                totalNumberOfFreeBytes = _driveFiles.Sum(x => x.Value.Size ?? 0);
+                freeBytesAvailable = totalNumberOfBytes > 0 ? totalNumberOfBytes - totalNumberOfFreeBytes : long.MaxValue;
+
+                _log.Information($"真实大小 {totalNumberOfFreeBytes}");
+            }
+            else
+            {
+                totalNumberOfFreeBytes = _driveConfig?.Metadata?.UsedSize ?? 0;
+                freeBytesAvailable = totalNumberOfBytes > 0 ? totalNumberOfBytes - totalNumberOfFreeBytes : long.MaxValue;
+            }
+
 
             return NtStatus.Success;
         }
@@ -1938,6 +1978,11 @@ namespace MDriveSync.Core.Services
         {
             // 设置卷标，这个标签可以根据您的需求自定义，例如"我的云盘"
             volumeLabel = _driveConfig?.Name ?? "我的云盘";
+
+            if (!string.IsNullOrWhiteSpace(_alias))
+            {
+                volumeLabel += $"（{_alias}）";
+            }
 
             // 设置文件系统的特性。这些特性描述了文件系统支持的不同功能。
             // 例如，可以设置为支持Unicode文件名、持久ACLs(访问控制列表)、大文件等

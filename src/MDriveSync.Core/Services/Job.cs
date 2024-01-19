@@ -1154,6 +1154,18 @@ namespace MDriveSync.Core
                 throw new LogicException("作业标识错误");
             }
 
+            var drive = DriveDb.Instacne.GetAll().Where(c => c.Id == _driveConfig.Id).FirstOrDefault();
+            if (drive == null)
+            {
+                throw new LogicException("配置配置错误，请重启程序");
+            }
+
+            // 禁止作业指向同一目标
+            if (!string.IsNullOrWhiteSpace(cfg.Target) && drive.Jobs.Any(x => x.Target == cfg.Target))
+            {
+                throw new LogicException("多个作业禁止指向云盘同一个目标目录");
+            }
+
             // 清除表达式所有作业
             _schedulers.Clear();
 
@@ -2938,7 +2950,7 @@ namespace MDriveSync.Core
             //_mountDrive = new AliyunDriveMounterByJob(mountPoint, this, _driveFolders, _driveFiles);
             //_mountDrive.Mount();
 
-            _mountDrive = new AliyunDriveMounter(_driveConfig, _jobConfig.MountConfig);
+            _mountDrive = new AliyunDriveMounter(_driveConfig, _jobConfig.MountConfig, _jobConfig.Name);
             _mountDrive.Mount();
         }
 

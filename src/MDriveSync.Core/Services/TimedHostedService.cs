@@ -176,6 +176,13 @@ namespace MDriveSync.Core
             cfg.Id = Guid.NewGuid().ToString("N");
 
             drive.Jobs ??= new List<JobConfig>();
+
+            // 禁止作业指向同一目标
+            if (!string.IsNullOrWhiteSpace(cfg.Target) && drive.Jobs.Any(x => x.Target == cfg.Target))
+            {
+                throw new LogicException("多个作业禁止指向云盘同一个目标目录");
+            }
+
             drive.Jobs.Add(cfg);
 
             // 持久化
