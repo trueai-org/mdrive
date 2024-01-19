@@ -14,4 +14,6 @@ services:
     restart: always
     volumes:
       - /home/server-api/logs:/app/logs
+      - /home/server-api/appsettings.Production.json:/app/appsettings.Production.json
+      - /home/server-api/appsettings.json:/app/appsettings.json
       - /etc/localtime:/etc/localtime:ro
