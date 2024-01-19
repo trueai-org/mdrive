@@ -530,10 +530,19 @@ docker run --name mdrive -d --restart=always \
 
 ## 贡献者
 
-[![616734202](https://github.com/616734202.png?size=50)](https://github.com/616734202)
-[![tdsszz](https://github.com/tdsszz.png?size=50)](https://github.com/tdsszz)
+感谢以下所有的贡献者！
 
-![GitHub Contributors Image](https://contrib.rocks/image?repo=https://github.com/trueai-org/MDriveSync)
+<a href="https://github.com/616734202">
+    <img src="https://github.com/616734202.png" width="68" height="68" />
+</a>
+<a href="https://github.com/tdsszz">
+    <img src="https://github.com/tdsszz.png" width="68" height="68" />
+</a>
+<a href="https://github.com/Fingerbb">
+    <img src="https://github.com/Fingerbb.png" width="68" height="68" />
+</a>
+
+<a href="https://github.com/trueai-org/MDriveSync/graphs/contributors"><img src="https://opencollective.com/MDriveSync/contributors.svg?width=890" /></a>
 
 ## 示例
 
