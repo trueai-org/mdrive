@@ -50,8 +50,9 @@ namespace MDriveSync.Client.API
             if (env.IsDevelopment())
             {
                 logger.MinimumLevel.Debug()
-                      .Enrich.FromLogContext()
-                      .WriteTo.Console();
+                      .Enrich.FromLogContext();
+
+                      //.WriteTo.Console();
 
                 // 使用 Serilog.Debugging.SelfLog.Enable(Console.Error) 来启用 Serilog 的自我诊断，这将帮助诊断配置问题。
                 SelfLog.Enable(Console.Error);
