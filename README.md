@@ -533,7 +533,7 @@ docker run --name mdrive -d --restart=always \
 [![616734202](https://github.com/616734202.png?size=50)](https://github.com/616734202)
 [![tdsszz](https://github.com/tdsszz.png?size=50)](https://github.com/tdsszz)
 
-![GitHub Contributors Image](https://contrib.rocks/image?repo=/trueai-org/MDriveSync)
+![GitHub Contributors Image](https://contrib.rocks/image?repo=https://github.com/trueai-org/MDriveSync)
 
 ## 示例
 
