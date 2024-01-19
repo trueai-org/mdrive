@@ -430,6 +430,7 @@ docker run --name mdrive -d --restart=always \
 - [新增] 增加 linux/unix/mac 磁盘挂载支持
 - [优化] 增加一键安装为 windows 服务的脚本、或作业计划的脚本。
 - [BUG] 多个源文件夹名称一致校验
+- [优化] 关于 MDrive 4 小时链接下载问题优化
 
 ## 客户端路线图
 
@@ -516,17 +517,23 @@ docker run --name mdrive -d --restart=always \
 
 ## 鸣谢
 
-- 阿里云盘
+- 阿里云盘共创团。
+- 感谢 Duplicati 对本产品初期的支持。
+- MDrive 向阿里云产品申请了新的产品线，MDrive 将独立运行，不再依赖 Duplicati。
 - [WinSW](https://github.com/winsw/winsw) 系统服务，将本程序安装作为 Windows 服务运行。 
-
-## 推广
-
-- 推广返现
-- 购买阿里云盘会员返现
 
 ## 赞助
 
-- 感谢！
+- 推广返现
+- 购买阿里云盘会员返现
+- 感谢所有的贡献者
+
+## 贡献者
+
+[![616734202](https://github.com/616734202.png?size=50)](https://github.com/616734202)
+[![tdsszz](https://github.com/tdsszz.png?size=50)](https://github.com/tdsszz)
+
+![GitHub Contributors Image](https://contrib.rocks/image?repo=/trueai-org/MDriveSync)
 
 ## 示例
 
