@@ -104,6 +104,7 @@ namespace MDriveSync.Client.API.Controllers
                     j.Metadata ??= new();
                     j.Metadata.Message = c.ProcessMessage;
                     j.IsMount = c.DriveIsMount();
+
                     return j;
                 }).ToList();
             return Result.Ok(data);

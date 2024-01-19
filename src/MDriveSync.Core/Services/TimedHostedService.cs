@@ -327,6 +327,17 @@ namespace MDriveSync.Core
 
             if (_jobs.TryGetValue(jobId, out var job) || job != null)
             {
+                if (string.IsNullOrEmpty(job.CurrrentJob?.MountConfig?.MountPoint))
+                {
+                    throw new LogicException("请选择或输入挂载点");
+                }
+
+                var pints = Filesystem.GetAvailableMountPoints().ToList();
+                if (pints.Count > 0 && !pints.Contains(job.CurrrentJob?.MountConfig?.MountPoint))
+                {
+                    throw new LogicException("选择的挂载点不存在或被占用，不允许挂载");
+                }
+
                 job.DriveMount();
             }
         }
@@ -368,6 +379,12 @@ namespace MDriveSync.Core
             if (string.IsNullOrEmpty(drive.MountConfig.MountPoint))
             {
                 throw new LogicException("请选择或输入挂载点");
+            }
+
+            var pints = Filesystem.GetAvailableMountPoints().ToList();
+            if (pints.Count > 0 && !pints.Contains(drive.MountConfig.MountPoint))
+            {
+                throw new LogicException("选择的挂载点不存在或被占用，不允许挂载");
             }
 
             if (!_mounter.TryGetValue(drive.Id, out var mt) || mt == null)
