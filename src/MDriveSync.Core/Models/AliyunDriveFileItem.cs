@@ -8,6 +8,16 @@ namespace MDriveSync.Core
     public class AliyunDriveFileItem
     {
         /// <summary>
+        /// 当前文件绝对路径 key
+        /// </summary>
+        public string Key { get; set; }
+
+        /// <summary>
+        /// 父级文件绝对路径 key
+        /// </summary>
+        public string ParentKey { get; set; }
+
+        /// <summary>
         /// 驱动器ID。
         /// </summary>
         [JsonPropertyName("drive_id")]
