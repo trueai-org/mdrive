@@ -13,6 +13,87 @@ namespace MDriveSync.Core.Services
     /// </summary>
     public partial class AliyunDriveMounter
     {
+        /// <summary>
+        /// 查找文件列表
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="searchPattern"></param>
+        /// <returns></returns>
+        private IList<FileInformation> FindFilesHelper(string fileName, string searchPattern)
+        {
+            var files = new List<FileInformation>();
+
+            var parentId = _driveRootId;
+            if (fileName != "\\")
+            {
+                var key = GetPathKey(fileName);
+                if (_files.TryGetValue(key, out var p) && p != null)
+                {
+                    parentId = p.FileId;
+                }
+                else
+                {
+                    // 如果没有找到父级，则返回空
+                    return files;
+                }
+            }
+
+            // 加载文件
+            var fs = _files.Values.Where(c => c.ParentFileId == parentId);
+            foreach (var file in fs)
+            {
+                files.Add(new FileInformation()
+                {
+                    CreationTime = file.CreatedAt?.DateTime.ToLocalTime() ?? DateTime.Now,
+                    LastAccessTime = file.UpdatedAt?.DateTime.ToLocalTime() ?? DateTime.Now,
+                    LastWriteTime = file.UpdatedAt?.DateTime.ToLocalTime(),
+                    FileName = file.Name ?? file.FileName,
+                    Length = file.Size ?? 0,
+                    Attributes = file.IsFolder ? FileAttributes.Directory : FileAttributes.Normal,
+                });
+            }
+
+            // 注意过滤 searchPattern 否则可能导致创建文件夹显示不出来
+            return files.Where(c => DokanHelper.DokanIsNameInExpression(searchPattern, c.FileName, true))
+                .Select(c => new FileInformation
+                {
+                    Attributes = c.Attributes,
+                    CreationTime = c.CreationTime,
+                    LastAccessTime = c.LastAccessTime,
+                    LastWriteTime = c.LastWriteTime,
+                    Length = c.Length,
+                    FileName = c.FileName
+                }).ToList();
+        }
+
+        /// <summary>
+        /// 写文件到本地
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <param name="buffer"></param>
+        /// <param name="bufferOffset"></param>
+        /// <param name="writeSize"></param>
+        /// <param name="fileOffset"></param>
+        private void WriteToFile(string filePath, byte[] buffer, int bufferOffset, int writeSize, int fileOffset)
+        {
+            lock (_lock)
+            {
+                if (!Directory.Exists(Path.GetDirectoryName(filePath)))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                }
+            }
+
+            using (_lockV2.Lock(filePath))
+            {
+                using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate, System.IO.FileAccess.Write))
+                {
+                    fileStream.Position = fileOffset;
+                    fileStream.Write(buffer, bufferOffset, writeSize);
+                }
+            }
+        }
+
         #region 已实现
 
         /// <summary>
@@ -72,63 +153,17 @@ namespace MDriveSync.Core.Services
             //return DokanResult.FileExists;
         }
 
+        /// <summary>
+        ///
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="files"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
         public NtStatus FindFiles(string fileName, out IList<FileInformation> files, IDokanFileInfo info)
         {
             files = FindFilesHelper(fileName, "*");
             return DokanResult.Success;
-        }
-
-        /// <summary>
-        /// 查找文件列表
-        /// </summary>
-        /// <param name="fileName"></param>
-        /// <param name="searchPattern"></param>
-        /// <returns></returns>
-        public IList<FileInformation> FindFilesHelper(string fileName, string searchPattern)
-        {
-            var files = new List<FileInformation>();
-
-            var parentId = _driveRootId;
-            if (fileName != "\\")
-            {
-                var key = GetPathKey(fileName);
-                if (_files.TryGetValue(key, out var p) && p != null)
-                {
-                    parentId = p.FileId;
-                }
-                else
-                {
-                    // 如果没有找到父级，则返回空
-                    return files;
-                }
-            }
-
-            // 加载文件
-            var fs = _files.Values.Where(c => c.ParentFileId == parentId);
-            foreach (var file in fs)
-            {
-                files.Add(new FileInformation()
-                {
-                    CreationTime = file.CreatedAt?.DateTime.ToLocalTime() ?? DateTime.Now,
-                    LastAccessTime = file.UpdatedAt?.DateTime.ToLocalTime() ?? DateTime.Now,
-                    LastWriteTime = file.UpdatedAt?.DateTime.ToLocalTime(),
-                    FileName = file.Name ?? file.FileName,
-                    Length = file.Size ?? 0,
-                    Attributes = file.IsFolder ? FileAttributes.Directory : FileAttributes.Normal,
-                });
-            }
-
-            // 注意过滤 searchPattern 否则可能导致创建文件夹显示不出来
-            return files.Where(c => DokanHelper.DokanIsNameInExpression(searchPattern, c.FileName, true))
-                .Select(c => new FileInformation
-                {
-                    Attributes = c.Attributes,
-                    CreationTime = c.CreationTime,
-                    LastAccessTime = c.LastAccessTime,
-                    LastWriteTime = c.LastWriteTime,
-                    Length = c.Length,
-                    FileName = c.FileName
-                }).ToList();
         }
 
         /// <summary>
@@ -839,38 +874,15 @@ namespace MDriveSync.Core.Services
             return NtStatus.Success;
         }
 
-        private void WriteToFile(string filePath, byte[] buffer, int bufferOffset, int writeSize, int fileOffset)
-        {
-            lock (_lock)
-            {
-                if (!Directory.Exists(Path.GetDirectoryName(filePath)))
-                {
-                    Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                }
-            }
-
-            using (_lockV2.Lock(filePath))
-            {
-                using (var fileStream = new FileStream(filePath, FileMode.OpenOrCreate, System.IO.FileAccess.Write))
-                {
-                    fileStream.Position = fileOffset;
-                    fileStream.Write(buffer, bufferOffset, writeSize);
-                }
-            }
-
-            //using (var stream = new FileStream(filePath,  FileMode.OpenOrCreate, System.IO.FileAccess.Write))
-            //{
-            //    if (!append) // Offset of -1 is an APPEND: https://docs.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-writefile
-            //    {
-            //        stream.Position = offset;
-            //    }
-            //    var bytesToCopy = GetNumOfBytesToCopy(buffer.Length, offset, info, stream);
-            //    stream.Write(buffer, 0, bytesToCopy);
-            //    bytesWritten = bytesToCopy;
-            //}
-        }
-
-        // 重写 WriteFile 方法以包含上传逻辑
+        /// <summary>
+        /// 写文件
+        /// </summary>
+        /// <param name="fileName"></param>
+        /// <param name="buffer"></param>
+        /// <param name="bytesWritten"></param>
+        /// <param name="offset"></param>
+        /// <param name="info"></param>
+        /// <returns></returns>
         public NtStatus WriteFile(string fileName, byte[] buffer, out int bytesWritten, long offset, IDokanFileInfo info)
         {
             try
@@ -1076,10 +1088,6 @@ namespace MDriveSync.Core.Services
             return NtStatus.Success;
         }
 
-        #endregion 无需实现
-
-        #region 暂不实现
-
         public NtStatus SetAllocationSize(string fileName, long length, IDokanFileInfo info)
         {
             // 用于预先分配文件空间。这不一定改变文件的大小，但它保留了文件可能需要的空间。
@@ -1126,6 +1134,6 @@ namespace MDriveSync.Core.Services
             return NtStatus.Success;
         }
 
-        #endregion 暂不实现
+        #endregion 无需实现
     }
 }
