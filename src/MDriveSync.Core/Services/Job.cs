@@ -2950,6 +2950,8 @@ namespace MDriveSync.Core
             //_mountDrive = new AliyunDriveMounterByJob(mountPoint, this, _driveFolders, _driveFiles);
             //_mountDrive.Mount();
 
+
+
             _mountDrive = new AliyunDriveMounter(_driveConfig, _jobConfig.MountConfig, _jobConfig.Name);
             _mountDrive.Mount();
         }

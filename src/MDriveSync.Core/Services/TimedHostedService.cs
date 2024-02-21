@@ -103,18 +103,22 @@ namespace MDriveSync.Core
                 foreach (var ad in ds)
                 {
                     // 云盘自动挂载
-                    if (ad?.MountConfig?.MountOnStartup == true && !string.IsNullOrWhiteSpace(ad?.MountConfig?.MountPoint))
+                    if(Platform.IsClientWindows)
                     {
-                        if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                        if (ad?.MountConfig?.MountOnStartup == true && !string.IsNullOrWhiteSpace(ad?.MountConfig?.MountPoint))
                         {
-                            mt = new AliyunDriveMounter(ad, ad.MountConfig);
+                            if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                            {
+                                mt = new AliyunDriveMounter(ad, ad.MountConfig);
 
-                            //mt.AliyunDriveInitFiles();
+                                //mt.AliyunDriveInitFiles();
 
-                            mt.Mount();
-                            _mounter[ad.Id] = mt;
+                                mt.Mount();
+                                _mounter[ad.Id] = mt;
+                            }
                         }
                     }
+                   
 
                     // 云盘作业
                     var jobs = ad.Jobs.ToList();
@@ -327,7 +331,7 @@ namespace MDriveSync.Core
         /// <param name="mountPoint"></param>
         public void DriveJobMount(string jobId)
         {
-            if (Platform.IsClientPosix)
+            if (!Platform.IsClientWindows)
             {
                 throw new LogicException("暂不支持非 Windows 系统挂载云盘，请等待下个版本发布！");
             }
@@ -368,7 +372,7 @@ namespace MDriveSync.Core
         /// <param name="mountPoint"></param>
         public void DriveMount(string driveId)
         {
-            if (Platform.IsClientPosix)
+            if (!Platform.IsClientWindows)
             {
                 throw new LogicException("暂不支持非 Windows 系统挂载云盘，请等待下个版本发布！");
             }

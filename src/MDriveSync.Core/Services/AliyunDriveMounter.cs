@@ -1,5 +1,6 @@
 ﻿using DokanNet;
 using DokanNet.Logging;
+using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
 using Microsoft.Extensions.Caching.Memory;
 using Polly;
@@ -1305,6 +1306,12 @@ namespace MDriveSync.Core.Services
         /// </summary>
         public void Mount()
         {
+            // 非 windows 系统暂不支持挂载
+            if (!Platform.IsClientWindows)
+            {
+                return;
+            }
+
             var dokanLogger = new ConsoleLogger("[Dokan] ");
             var dokanInstanceBuilder = new DokanInstanceBuilder(new Dokan(dokanLogger))
                 .ConfigureOptions(options =>
