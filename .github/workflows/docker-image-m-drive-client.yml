@@ -23,7 +23,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v1
         with:
-          images: ghcr.io/trueaiorg/mdrive
+          images: ghcr.io/trueai-org/mdrive
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v2
