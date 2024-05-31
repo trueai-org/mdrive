@@ -28,7 +28,7 @@ namespace MDriveSync.Core.Filters
                 {
                     var error = context.ModelState.Values.FirstOrDefault()?.Errors?.FirstOrDefault()?.ErrorMessage ?? "参数异常";
 
-                    Log.Logger.Warning("模型验证失败 {0}", error);
+                    Log.Logger.Warning("参数异常 {@0} - {@1}", context.HttpContext?.Request?.GetUrl() ?? "", error);
 
                     context.Result = new JsonResult(Result.Fail(error));
                 }

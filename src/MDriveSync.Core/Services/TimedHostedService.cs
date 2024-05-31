@@ -7,6 +7,8 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 
+using ILogger = Microsoft.Extensions.Logging.ILogger;
+
 namespace MDriveSync.Core
 {
     /// <summary>
@@ -103,22 +105,28 @@ namespace MDriveSync.Core
                 foreach (var ad in ds)
                 {
                     // 云盘自动挂载
-                    if(Platform.IsClientWindows)
+                    if (Platform.IsClientWindows)
                     {
-                        if (ad?.MountConfig?.MountOnStartup == true && !string.IsNullOrWhiteSpace(ad?.MountConfig?.MountPoint))
+                        try
                         {
-                            if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                            if (ad?.MountConfig?.MountOnStartup == true && !string.IsNullOrWhiteSpace(ad?.MountConfig?.MountPoint))
                             {
-                                mt = new AliyunDriveMounter(ad, ad.MountConfig);
+                                if (!_mounter.TryGetValue(ad.Id, out var mt) || mt == null)
+                                {
+                                    mt = new AliyunDriveMounter(ad, ad.MountConfig);
 
-                                //mt.AliyunDriveInitFiles();
+                                    //mt.AliyunDriveInitFiles();
 
-                                mt.Mount();
-                                _mounter[ad.Id] = mt;
+                                    mt.Mount();
+                                    _mounter[ad.Id] = mt;
+                                }
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            _logger.LogError(ex, "云盘挂载异常");
+                        }
                     }
-                   
 
                     // 云盘作业
                     var jobs = ad.Jobs.ToList();

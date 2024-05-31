@@ -52,7 +52,7 @@ namespace MDriveSync.Client.API
                 logger.MinimumLevel.Debug()
                       .Enrich.FromLogContext();
 
-                      //.WriteTo.Console();
+                //.WriteTo.Console();
 
                 // 使用 Serilog.Debugging.SelfLog.Enable(Console.Error) 来启用 Serilog 的自我诊断，这将帮助诊断配置问题。
                 SelfLog.Enable(Console.Error);
@@ -77,11 +77,11 @@ namespace MDriveSync.Client.API
                 // 作业客户端配置
                 builder.Services.Configure<ClientOptions>(builder.Configuration.GetSection("Client"));
 
-                // API 视图模型验证 400 错误处理
-                builder.Services.Configure<ApiBehaviorOptions>(options =>
-                {
-                    options.SuppressModelStateInvalidFilter = true;
-                });
+                //// API 视图模型验证 400 错误处理
+                //builder.Services.Configure<ApiBehaviorOptions>(options =>
+                //{
+                //    options.SuppressModelStateInvalidFilter = true;
+                //});
 
                 // API 异常过滤器
                 // API 方法/模型过滤器
@@ -89,6 +89,23 @@ namespace MDriveSync.Client.API
                 {
                     options.Filters.Add<CustomLogicExceptionFilterAttribute>();
                     options.Filters.Add<CustomActionFilterAttribute>();
+                });
+
+                // 自定义配置 API 行为选项
+                // 配置 api 视图模型验证 400 错误处理，需要在 AddControllers 之后配置
+                builder.Services.Configure<ApiBehaviorOptions>(options =>
+                {
+                    // 方法1：禁用 ModelState 自动 400 错误处理，使用自定义方法验证
+                    // 需要在控制器方法中手动调用 ModelState.IsValid，或者在控制器方法中使用 [ApiController] 特性，或者使用 ActionFilterAttribute 过滤器
+                    //options.SuppressModelStateInvalidFilter = true;
+
+                    // 方法2：自定义模型验证错误处理
+                    options.InvalidModelStateResponseFactory = (context) =>
+                    {
+                        var error = context.ModelState.Values.FirstOrDefault()?.Errors?.FirstOrDefault()?.ErrorMessage ?? "参数异常";
+                        Log.Logger.Warning("参数异常 {@0} - {@1}", context.HttpContext?.Request?.GetUrl() ?? "", error);
+                        return new JsonResult(Result.Fail(error));
+                    };
                 });
 
                 // 后台服务
@@ -251,17 +268,19 @@ namespace MDriveSync.Client.API
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
                 {
-                    //Process.Start("xdg-open", url); // Linux
+                    // Process.Start("xdg-open", url); // Linux
                 }
                 else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
                 {
                     Process.Start("open", url); // MacOS
                 }
             }
-            catch
+            catch (Exception ex)
             {
                 // 处理启动浏览器时可能出现的异常
                 // 在这里记录日志或者做其他处理
+
+                Log.Error(ex, "打开默认浏览器异常 {@0}", url);
             }
         }
     }
