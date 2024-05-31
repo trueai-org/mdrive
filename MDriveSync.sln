@@ -14,6 +14,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{0FF6CD64-0
 		build.server.api.sh = build.server.api.sh
 		CHANGELOG.md = CHANGELOG.md
 		docker-compose.yml = docker-compose.yml
+		LICENSE = LICENSE
 		README.md = README.md
 	EndProjectSection
 EndProject
