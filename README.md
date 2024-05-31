@@ -1,13 +1,12 @@
 # MDriveSync
 
-多平台、模块化、可挂载、安全、加密的云盘同步、备份工具，支持百度网盘、阿里云盘、多账号等，集成 Duplicati、Kopia 等多种模块，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
+多平台、模块化、可挂载、安全、加密的云盘同步、备份工具，支持阿里云盘、多账号等，支持加密还原等，支持单向、镜像、双向等同步备份，完全免费开源。
 
-提供 Docker 版、Duplicati 版、Kopia 版、Windows 服务版、Windows 版、手机版、网页版、Linux版、Mac 版等多平台版本。
+提供 Docker、Windows、Linux、Web 等多平台版本。
 
 支持多种算法同步与备份，保证数据的安全性，任何第三方、任何云盘服务商都无法查看或分析你的数据，只有通过你本人设置的安全密钥才能解密数据，保证您的数据安全和隐私。
 
 > 更多版本，敬请期待~~
-
 
 A multi-platform, modular, secure cloud drive synchronization and backup tool that supports Baidu Cloud Disk, Alibaba Cloud Disk, and others. Integrates various modules such as Duplicati and Kopia, with features like encryption and restoration. Offers different types of synchronization and backup, including unidirectional, mirror, and bidirectional. The tool is completely free and open source.
 
@@ -54,6 +53,7 @@ Supports a variety of algorithms for synchronization and backup.
 - 支持将云盘挂载到本地，像管理本地文件一样管理远程文件（BETA）。
 - 支持将备份目录挂载到本地（BETA）。
 - 支持快照，支持快照挂载（BETA）。
+- 支持导入/导出配置（BETA）。
 
 ## 安装与使用
 
@@ -254,7 +254,7 @@ docker run --name mdrive -d --restart=always \
 
 ```
 
-> 默认 `Client` 配置（可选）
+> 默认 `Client` 配置（可选，默认无需配置）
 
 - `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:read,file:all:write&relogin=true)令牌，或登录官网获取授权令牌。
 - `Jobs` 可以配置多个作业，计划中的作业时间可以可以配置多个时间点。
@@ -431,6 +431,12 @@ docker run --name mdrive -d --restart=always \
 - [优化] 增加一键安装为 windows 服务的脚本、或作业计划的脚本。
 - [BUG] 多个源文件夹名称一致校验
 - [优化] 关于 MDrive 4 小时链接下载问题优化
+- Duplicati 版（自动加密）
+- Kopia 版（自动加密）
+- 提供 Mac 版
+- 手机版（Andorid 版、Ios 版）
+- 百度网盘模块
+- Duplicati、Kopia 等多种模块
 
 ## 客户端路线图
 
