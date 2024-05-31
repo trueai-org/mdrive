@@ -1,4 +1,4 @@
-name: Client Docker Image CI
+name: ghcr.io Docker Image CI
 
 on:
   release:
