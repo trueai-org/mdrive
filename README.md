@@ -8,14 +8,6 @@
 
 > 更多版本，敬请期待~~
 
-A multi-platform, modular, secure cloud drive synchronization and backup tool that supports Baidu Cloud Disk, Alibaba Cloud Disk, and others. Integrates various modules such as Duplicati and Kopia, with features like encryption and restoration. Offers different types of synchronization and backup, including unidirectional, mirror, and bidirectional. The tool is completely free and open source.
-
-Available in multiple platform versions including Docker, Duplicati, Kopia, Windows Service, Windows, Mobile, Web, Linux, and Mac.
-
-Supports a variety of algorithms for synchronization and backup.
-
-> More versions, stay tuned!
-
 ## 特性
 
 - 不限速，阿里云盘官方接口支持，上传下载均不限速。
