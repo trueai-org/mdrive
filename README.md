@@ -429,6 +429,7 @@ docker run --name mdrive -d --restart=always \
 - 手机版（Andorid 版、Ios 版）
 - 百度网盘模块
 - Duplicati、Kopia 等多种模块
+- [优化] 添加自定义挂载磁盘名称支持 -> https://github.com/trueai-org/mdrive/issues/15
 
 ## 客户端路线图
 
