@@ -452,6 +452,15 @@ namespace MDriveSync.Core
 
                     watcher.EnableRaisingEvents = true;
                     _localWatchers.Add(watcher);
+
+                    //// 文件夹监听
+                    //var dirFsWatcher = new FileSystemWatcher(localBackupPath)
+                    //{
+                    //    IncludeSubdirectories = true,
+                    //    NotifyFilter = NotifyFilters.DirectoryName
+                    //};
+                    //dirFsWatcher.Deleted += OnCommonFileSystemWatcherDirectoryDeleted;
+                    //dirFsWatcher.EnableRaisingEvents = true;
                 }
             }
 
@@ -1069,9 +1078,18 @@ namespace MDriveSync.Core
 
         public void Dispose()
         {
-            foreach (var watcher in _localWatchers)
+            try
             {
-                watcher.Dispose();
+                foreach (var watcher in _localWatchers)
+                {
+                    watcher.Dispose();
+                }
+
+                GC.SuppressFinalize(this);
+            }
+            catch
+            {
+
             }
         }
 
@@ -1618,7 +1636,8 @@ namespace MDriveSync.Core
                 foreach (var item in _jobConfig.Filters)
                 {
                     // 忽略注释
-                    if (item.StartsWith("#")) continue;
+                    if (item.StartsWith("#"))
+                        continue;
 
                     // 处理其他规则
                     var pattern = ConvertToRegexPattern(item);
@@ -1636,7 +1655,7 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 将Kopia规则转换为正则表达式
+        /// 将 Kopia 规则转换为正则表达式
         /// </summary>
         /// <param name="kopiaPattern"></param>
         /// <returns></returns>
@@ -2818,6 +2837,21 @@ namespace MDriveSync.Core
 
         #region 文件监听事件
 
+        //private string AlterPathToMountPath(string path)
+        //{
+        //    var relativeMirrorPath = path.Substring(_sourcePath.Length).TrimStart('\\');
+
+        //    return Path.Combine(_targetPath, relativeMirrorPath);
+        //}
+
+        //private void OnCommonFileSystemWatcherDirectoryDeleted(object sender, FileSystemEventArgs e)
+        //{
+        //    if (_dokanInstance.IsDisposed) return;
+        //    var fullPath = AlterPathToMountPath(e.FullPath);
+
+        //    Dokan.Notify.Delete(_dokanInstance, fullPath, true);
+        //}
+
         /// <summary>
         /// 文件/文件夹删除事件
         /// </summary>
@@ -2848,6 +2882,8 @@ namespace MDriveSync.Core
                 // 未知
                 _log.LogInformation($"文件夹/文件删除: {e.FullPath}, 类型: {e.ChangeType}");
             }
+
+            //Dokan.Notify.Delete(_dokanInstance, fullPath, false);
         }
 
         /// <summary>
@@ -2878,6 +2914,10 @@ namespace MDriveSync.Core
                 // 文件或文件夹，不处理
                 _log.LogInformation($"文件/文件夹创建: {e.FullPath}, 类型: {e.ChangeType}");
             }
+
+            //var fullPath = AlterPathToMountPath(e.FullPath);
+            //var isDirectory = Directory.Exists(fullPath);
+            //Dokan.Notify.Create(_dokanInstance, fullPath, isDirectory);
         }
 
         /// <summary>
@@ -2888,6 +2928,8 @@ namespace MDriveSync.Core
         private void OnChanged(object source, FileSystemEventArgs e)
         {
             _log.LogInformation($"文件/文件夹更改: {e.FullPath}, 类型: {e.ChangeType}");
+
+            //Dokan.Notify.Update(_dokanInstance, fullPath);
         }
 
         /// <summary>
@@ -2921,6 +2963,17 @@ namespace MDriveSync.Core
                 // 不处理
                 _log.LogInformation($"文件/文件夹夹重命名: {e.OldFullPath} 更改为 {e.FullPath}, 类型: {e.ChangeType}");
             }
+
+            //var oldFullPath = AlterPathToMountPath(e.OldFullPath);
+            //var oldDirectoryName = Path.GetDirectoryName(e.OldFullPath);
+
+            //var fullPath = AlterPathToMountPath(e.FullPath);
+            //var directoryName = Path.GetDirectoryName(e.FullPath);
+
+            //var isDirectory = Directory.Exists(e.FullPath);
+            //var isInSameDirectory = String.Equals(oldDirectoryName, directoryName);
+
+            //Dokan.Notify.Rename(_dokanInstance, oldFullPath, fullPath, isDirectory, isInSameDirectory);
         }
 
         /// <summary>
