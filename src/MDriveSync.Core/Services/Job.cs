@@ -2045,9 +2045,9 @@ namespace MDriveSync.Core
                                     // TODO
                                     // 如果是大文件，则通过下载链接下载文件
                                 }
-                                catch (Exception)
+                                catch (Exception ex)
                                 {
-                                    throw;
+                                    _log.LogError(ex, "双向同步执行异常");
                                 }
                             });
 

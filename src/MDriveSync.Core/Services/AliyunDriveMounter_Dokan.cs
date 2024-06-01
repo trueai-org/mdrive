@@ -824,7 +824,14 @@ namespace MDriveSync.Core.Services
                         {
                             if (!_files.TryGetValue(keyPath, out var f2) || f2 == null)
                             {
-                                AliyunDriveCreateFolders(keyPath);
+                                try
+                                {
+                                    AliyunDriveCreateFolders(keyPath);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _log.Error(ex, "创建文件夹异常");
+                                }
                             }
                         }
                     }

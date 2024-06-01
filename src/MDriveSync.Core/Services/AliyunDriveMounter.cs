@@ -1340,7 +1340,14 @@ namespace MDriveSync.Core.Services
                 // 每 15 分钟更新一次列表
                 var scheduler = new QuartzCronScheduler("0 0/15 * * * ?", () =>
                 {
-                    AliyunDriveSearchFiles();
+                    try
+                    {
+                        AliyunDriveSearchFiles();
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error(ex, "轮询计划作业查询文件异常");
+                    }
                 });
                 scheduler.Start();
 
