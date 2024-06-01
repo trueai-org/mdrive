@@ -37,7 +37,7 @@ f. 使用系统自带的 `任务计划程序`（可选），创建基本任务�
 ![作业](/docs/screenshots/job.gif)
 ![挂载](/docs/screenshots/mount.png)
 
-### Docker 版
+### Docker 部署
 
 https://hub.docker.com/r/trueaiorg/mdrive
 
@@ -101,7 +101,7 @@ docker run --name mdrive -d --restart=always \
  -p 8080:8080 trueaiorg/mdrive
 ```
 
-### Windows 服务版
+### Windows 服务部署
 
 下载 `MDrive` 并解压，运行 `.exe` 程序即可。
 
