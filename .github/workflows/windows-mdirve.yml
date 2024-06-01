@@ -1,4 +1,4 @@
-name: release-windows-client
+name: Release Windows CI
 
 on:
   release:
