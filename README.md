@@ -12,14 +12,18 @@
 
 ### 快速启动
 
+> docker 版本
+
 ```bash
-# 1. docker 启动
 docker pull trueaiorg/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/mdrive
+```
 
-# 2. windows 启动
+> windows 版本
+
+```bash
 a. 通过 https://github.com/trueai-org/mdrive/releases 下载 windows 最新免安装版，例如：MDrvie-SelfContained-x64.zip
 b. 解压并执行 MDriveSync.Client.API.exe
 c. 打开网站 http://localhost:8080/
