@@ -236,6 +236,10 @@ namespace MDriveSync.Client.API
                 var url = builder.Configuration.GetSection("urls")?.Get<string>()?.Replace("*", "localhost");
                 OpenBrowser(url);
 
+                // ∆Ù”√ Windows Service ÷ß≥÷
+                // install Microsoft.Extensions.Hosting.WindowsServices
+                //builder.Host.UseWindowsService();
+
                 app.Run();
             }
             catch (Exception ex)

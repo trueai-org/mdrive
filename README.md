@@ -114,37 +114,6 @@ cd /home/mdirve
 # 创建配置文件（可选）
 vi appsettings.json
 
-# 输入授权令牌，修改备份目录、作业计划时间、目标位置等
-{
-  // ...
-  "Client": {
-    "AliyunDrives": [
-      {
-        "Id": "1",
-        "Name": "云盘",
-        "RefreshToken": "这里输入授权令牌",
-        "Jobs": [
-          {
-            "Id": "1",
-            "Name": "test",
-            "State": 0,
-            "Schedules": [
-              "0 * * * * ?"
-            ],
-            "Sources": [
-               "/data"
-            ],
-            "Target": "backups/test",
-            "RapidUpload": true,
-            "FileWatcher": true,
-            "IsTemporary": true
-          }
-        ]
-      }
-    ]
-  }
-}
-
 # 确保配置具有可写配置权限 appsettings.json
 chmod 666 appsettings.json
 
@@ -178,16 +147,15 @@ docker run --name mdrive -d --restart=always \
 
 ### Windows 服务版
 
-下载 `MDrive` 并解压，修改授权、密钥等配置，运行 `.exe` 程序即可。
+下载 `MDrive` 并解压，运行 `.exe` 程序即可。
 
 - 作为服务后台执行：
   - 可使用系统自带的 `任务计划程序`，创建基本任务，选择 `.exe` 程序即可，请选择`请勿启动多个实例`，保证只有一个任务执行即可。
-  - 可使用其他服务集成，例如：nssm、winsw、iis等。
+  - 可使用其他服务后台启动，例如：nssm、sc、winsw、iis 等。
 
 ## 友情链接
 
 - [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
-- [阿里云盘小白羊版(暂停维护)](https://github.com/liupan1890/aliyunpan) https://github.com/liupan1890/aliyunpan
 - [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
 
 
@@ -198,19 +166,70 @@ docker run --name mdrive -d --restart=always \
 
 ## 系统配置
 
-> 默认 `appsettings.json` 配置
+> 默认 `appsettings.json` 与 `appsettings.Example.json` 示例配置。
+
+> 如果您通过 `Docker` 启动或简单使用则无需关心此配置。
 
 ```json
+# appsettings.Example.json 示例配置
 {
+  // 网站配置为只读模式
   "ReadOnly": null,
+  // 网站登录授权账号密码
   "BasicAuth": {
     "User": "",
     "Password": ""
   },
   "Client": {
+    // 阿里云盘默认启动时加载的配置项（可选）
     "AliyunDrives": [
+      {
+        "Id": "1",
+        "Name": "云盘1",
+        "TokenType": "Bearer",
+        "AccessToken": "",
+        "RefreshToken": "【1】这里输入授权令牌",
+        "ExpiresIn": 7200,
+        "Jobs": [
+          {
+            "Id": "1",
+            "Name": "test",
+            "Description": "",
+            "State": 0,
+            "Schedules": [
+              "【2】这里是备份计划时间，例如每分钟执行：0 * * * * ?"
+            ],
+            "Filters": [
+              "/Recovery/",
+              "/System Volume Information/",
+              "/Boot/",
+              "/$RECYCLE.BIN/",
+              "/@Recycle/",
+              "/@Recently-Snapshot/",
+              "**/node_modules/**",
+              "*.duplicatidownload"
+            ],
+            "Sources": [
+              "【3】这里输入备份的文件夹，可填写多个路径，注意：windows 路径，例如：E:\\test"
+            ],
+            "Target": "【4】这里输入云盘备份目录，例如：backups/test",
+            "Restore": "E:\\kopia_restore",
+            "RapidUpload": true,
+            "DefaultDrive": "backup",
+            "CheckAlgorithm": "sha256",
+            "CheckLevel": 1,
+            "FileWatcher": true,
+            "Order": 0,
+            "IsTemporary": false,
+            "IsRecycleBin": false,
+            "UploadThread": 0,
+            "DownloadThread": 0
+          }
+        ]
+      }
     ]
   },
+  // 日志输出
   "Serilog": {
     "MinimumLevel": {
       "Default": "Information",
@@ -221,6 +240,7 @@ docker run --name mdrive -d --restart=always \
       }
     },
     "WriteTo": [
+      // 是否将日志输出到文件
       {
         "Name": "File",
         "Args": {
@@ -230,12 +250,14 @@ docker run --name mdrive -d --restart=always \
           "rollOnFileSizeLimit": false,
           "retainedFileCountLimit": 31
         }
+      },
+      // 是否将日志输出到控制台
+      {
+        "Name": "Console"
       }
-      //{
-      //  "Name": "Console"
-      //}
     ]
   },
+  // 系统日志配置
   "Logging": {
     "LogLevel": {
       "Default": "Information",
@@ -243,9 +265,8 @@ docker run --name mdrive -d --restart=always \
     }
   },
   "AllowedHosts": "*",
-  "urls": "http://*:8080"
+  "urls": "http://*:8080" // 默认程序启动的端口
 }
-
 ```
 
 > 默认 `Client` 配置（可选，默认无需配置）
@@ -445,7 +466,7 @@ docker run --name mdrive -d --restart=always \
 
 ## 发布
 
-通过 `Github Actions` 自动或生成到 `Docker Hub`、`Window` 安装包等，保证程序的安全。
+通过 `Github Actions` 自动或生成到 `Docker Hub`、`ghci.io`、`Window` 安装包等，保证程序的安全。
 
 ## 性能
 
@@ -555,105 +576,3 @@ docker run --name mdrive -d --restart=always \
 </a>
 
 <a href="https://github.com/trueai-org/MDriveSync/graphs/contributors"><img src="https://opencollective.com/MDriveSync/contributors.svg?width=890" /></a>
-
-## 示例
-
-> `appsettings.json` 示例配置，如果您通过 `Docker` 或简单使用则无需关心此配置。
-
-```
-{
-  // 网站配置为只读模式
-  "ReadOnly": null,
-  // 网站登录授权账号密码
-  "BasicAuth": {
-    "User": "",
-    "Password": ""
-  },
-  "Client": {
-    // 阿里云盘默认启动时加载的配置项（可选）
-    "AliyunDrives": [
-      {
-        "Id": "1",
-        "Name": "云盘1",
-        "TokenType": "Bearer",
-        "AccessToken": "",
-        "RefreshToken": "【1】这里输入授权令牌",
-        "ExpiresIn": 7200,
-        "Jobs": [
-          {
-            "Id": "1",
-            "Name": "test",
-            "Description": "",
-            "State": 0,
-            "Schedules": [
-              "【2】这里是备份计划时间，例如每分钟执行：0 * * * * ?"
-            ],
-            "Filters": [
-              "/Recovery/",
-              "/System Volume Information/",
-              "/Boot/",
-              "/$RECYCLE.BIN/",
-              "/@Recycle/",
-              "/@Recently-Snapshot/",
-              "**/node_modules/**",
-              "*.duplicatidownload"
-            ],
-            "Sources": [
-              "【3】这里输入备份的文件夹，可填写多个路径，注意：windows 路径，例如：E:\\test"
-            ],
-            "Target": "【4】这里输入云盘备份目录，例如：backups/test",
-            "Restore": "E:\\kopia_restore",
-            "RapidUpload": true,
-            "DefaultDrive": "backup",
-            "CheckAlgorithm": "sha256",
-            "CheckLevel": 1,
-            "FileWatcher": true,
-            "Order": 0,
-            "IsTemporary": false,
-            "IsRecycleBin": false,
-            "UploadThread": 0,
-            "DownloadThread": 0
-          }
-        ]
-      }
-    ]
-  },
-  // 日志输出
-  "Serilog": {
-    "MinimumLevel": {
-      "Default": "Information",
-      "Override": {
-        "Default": "Warning",
-        "System": "Warning",
-        "Microsoft": "Warning"
-      }
-    },
-    "WriteTo": [
-      // 是否将日志输出到文件
-      {
-        "Name": "File",
-        "Args": {
-          "path": "logs/log.txt",
-          "rollingInterval": "Day",
-          "fileSizeLimitBytes": null,
-          "rollOnFileSizeLimit": false,
-          "retainedFileCountLimit": 31
-        }
-      },
-      // 是否将日志输出到控制台
-      {
-        "Name": "Console"
-      }
-    ]
-  },
-  // 系统日志配置
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "urls": "http://*:8080" // 默认程序启动的端口
-}
-```
