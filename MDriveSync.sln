@@ -11,10 +11,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.WPF", "src\MDriv
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{0FF6CD64-0E94-4AD4-80C2-369B7019359D}"
 	ProjectSection(SolutionItems) = preProject
-		build.server.api.sh = build.server.api.sh
 		CHANGELOG.md = CHANGELOG.md
-		docker-compose.yml = docker-compose.yml
-		LICENSE = LICENSE
 		README.md = README.md
 	EndProjectSection
 EndProject
@@ -25,6 +22,13 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SeleniumService", "src\Libraries\SeleniumService\SeleniumService.csproj", "{894C26A4-BD81-49A5-9D73-AA68E5BEBDD7}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Client.WinForm", "src\MDriveSync.Client.WinForm\MDriveSync.Client.WinForm.csproj", "{FE8B7D48-5BC8-4DEE-95F5-B7B9DD3F2FDC}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{EE45B944-6991-42CB-8EA5-E9F7FE33DF58}"
+	ProjectSection(SolutionItems) = preProject
+		scripts\build.ps1 = scripts\build.ps1
+		scripts\build.server.api.sh = scripts\build.server.api.sh
+		scripts\docker-compose.yml = scripts\docker-compose.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
