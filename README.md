@@ -268,6 +268,16 @@ docker run --name mdrive -d --restart=always \
 }
 ```
 
+> 注意系统日志路径配置，不同操作系统之间的差异。
+
+```json
+# window
+"path": "logs\\log.txt"
+
+# linux
+"path": "logs/log.txt"
+```
+
 > 默认 `Client` 配置（可选，默认无需配置）
 
 - `RefreshToken` 为必填项，其他不用填写。[点击获取授权](https://openapi.alipan.com/oauth/authorize?client_id=12561ebaf6504bea8a611932684c86f6&redirect_uri=https://api.duplicati.net/api/open/aliyundrive&scope=user:base,file:all:read,file:all:write&relogin=true)令牌，或登录官网获取授权令牌。
@@ -409,18 +419,6 @@ docker run --name mdrive -d --restart=always \
 ```
 
 
-## 注意
-
-> 注意系统日志路径配置，不同操作系统之间的差异。
-
-```json
-# window
-"path": "logs\\log.txt"
-
-# linux
-"path": "logs/log.txt"
-```
-
 ## 路线图
 
 - [2.x 紧急 🆘] 增加还原计划，还原到本地，选择文件/文件夹还原
@@ -476,13 +474,7 @@ docker run --name mdrive -d --restart=always \
 首次同步：0.8秒 + 8秒（列表加载用时 9 秒）
 
 [11:14:01 INF] Current: E:\***\publish
-[11:14:01 INF] 开始例行检查
 [11:14:01 INF] 作业初始化
-[11:14:01 INF] Linux: False
-[11:14:02 INF] 作业初始化完成，用时：1347ms
-[11:14:02 INF] 作业启动中
-[11:14:02 INF] 作业启动完成，用时：0ms
-[11:14:02 INF] 例行检查完成
 [11:14:02 INF] 同步作业开始：12/27/2023 11:14:02
 [11:14:02 INF] 云盘存储根目录初始化完成，用时：194ms
 [11:14:02 INF] 开始加载云盘存储文件列表
@@ -491,20 +483,11 @@ docker run --name mdrive -d --restart=always \
 [11:14:12 INF] 开始执行同步
 [11:14:13 INF] 扫描本地文件，总文件数：1467, 扫描文件用时: 385.6735ms
 [11:14:13 INF] 同步文件夹中 4/3641，用时：1.7352ms，kopia/p6c/f66
-[11:14:13 INF] 同步文件夹中 4/3641，用时：1.7352ms，kopia/xn5/_7b
-[11:14:13 INF] 同步文件夹中 4/3641，用时：1.7354ms，kopia/p37/786
-[11:14:13 INF] 同步文件夹中 1/3641，用时：1.7347ms，kopia/sc4/0e5
-[11:14:13 INF] 同步文件夹中 5/3641，用时：1.9816ms，kopia/p8a/507
 ...
 [11:14:13 INF] 同步文件夹中 3639/3641，用时：796.4739ms，kopia/p8a/032
-[11:14:13 INF] 同步文件夹中 3640/3641，用时：796.6586ms，kopia/p03/79f
-[11:14:13 INF] 同步文件夹中 3641/3641，用时：796.847ms，kopia/pd7/198
 [11:14:13 INF] 同步文件夹完成，总文件夹数：1467，用时：798.2616ms
 [11:14:13 INF] 同步文件中 1/1467，用时：43.6954ms，kopia/p9e/80a/bd40cee2b0538167b1ac0cfe3f3-s9a17ce26b1838062122.f
-[11:14:13 INF] 同步文件中 2/1467，用时：46.7248ms，kopia/p32/927/8072e241b284b964dc4c243be92-s92bdc8b6bce76e0d123.f
-[11:14:13 INF] 同步文件中 3/1467，用时：50.1298ms，kopia/p2b/e06/9d189daea0fd575d1d3af92f095-sddec03db03d4ace5122.f
 ...
-[11:14:30 INF] 同步文件中 1466/1467，用时：17060.3177ms，kopia/pbf/0fb/8035432aee39f4ed142d17b7cca-s9a17ce26b1838062122.f
 [11:14:30 INF] 同步文件中 1467/1467，用时：17063.5177ms，kopia/p65/ef2/046536ebd68a2b0ec57a3f733ff-s9a17ce26b1838062122.f
 [11:14:30 INF] 同步文件完成，总文件数：1467，用时：17063.8004ms
 [11:14:30 INF] 同步作业完成，用时：18250ms
@@ -514,12 +497,9 @@ docker run --name mdrive -d --restart=always \
 第二次同步：总用时 2 秒（列表加载用时 10 秒）
 
 [11:19:01 INF] 开始例行检查
-[11:19:01 INF] 例行检查完成
 [11:20:00 INF] 同步作业开始：12/27/2023 11:20:00
 [11:20:00 INF] 云盘存储根目录初始化完成，用时：367ms
-[11:20:00 INF] 开始加载云盘存储文件列表
-[11:20:01 INF] 开始例行检查
-[11:20:01 INF] 例行检查完成
+...
 [11:20:10 INF] 云盘文件加载完成，包含 1467 个文件，3643 个文件夹。
 [11:20:10 INF] 加载云盘存储文件列表完成，用时：10047ms
 [11:20:10 INF] 开始执行同步
@@ -528,20 +508,12 @@ docker run --name mdrive -d --restart=always \
 ...
 [11:20:12 INF] 同步文件夹完成，总文件夹数：1467，用时：1450.7582ms
 ...
-[11:20:12 INF] 同步文件中 1466/1467，用时：519.4365ms，kopia/p65/ef2/046536ebd68a2b0ec57a3f733ff-s9a17ce26b1838062122.f
 [11:20:12 INF] 同步文件中 1467/1467，用时：519.6538ms，kopia/qd1/275/b7e487081d0ed47ea0638caa116-s3e0aeff9c8243770123.f
 [11:20:12 INF] 同步文件完成，总文件数：1467，用时：520.4528ms
 [11:20:12 INF] 同步作业完成，用时：2295ms
 [11:20:12 INF] 同步作业结束：12/27/2023 11:20:12
 [11:20:12 INF] 同步作业校验完成，用时：1ms
 ```
-
-## 鸣谢
-
-- 阿里云盘共创团。
-- 感谢 Duplicati 对本产品初期的支持。
-- MDrive 向阿里云产品申请了新的产品线，MDrive 将独立运行，不再依赖 Duplicati。
-- [WinSW](https://github.com/winsw/winsw) 系统服务，将本程序安装作为 Windows 服务运行。 
 
 ## 赞助
 
@@ -575,3 +547,10 @@ docker run --name mdrive -d --restart=always \
 </a>
 
 <a href="https://github.com/trueai-org/MDriveSync/graphs/contributors"><img src="https://opencollective.com/MDriveSync/contributors.svg?width=890" /></a>
+
+## 鸣谢
+
+- 阿里云盘共创团。
+- 感谢 Duplicati 对本产品初期的支持。
+- MDrive 向阿里云产品申请了新的产品线，MDrive 将独立运行，不再依赖 Duplicati。
+- [WinSW](https://github.com/winsw/winsw) 系统服务，将本程序安装作为 Windows 服务运行。 
