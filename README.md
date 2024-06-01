@@ -63,6 +63,8 @@ a. 通过 https://github.com/trueai-org/MDriveSync/releases 下载 windows 最�
 b. 解压并执行 MDriveSync.Client.API.exe
 c. 打开网站 http://localhost:8080/
 d. 安装为系统服务（可选），右键文件以管理员身份运行 `一键安装或卸载*.bat`，选择安装或卸载服务。
+e. 部署到 IIS（可选），在 IIS 添加网站，将文件夹部署到 IIS，配置应用程序池为`无托管代码`，启动网站。
+f. 使用系统自带的 `任务计划程序`（可选），创建基本任务，选择 `.exe` 程序即可，请选择`请勿启动多个实例`，保证只有一个任务执行即可。
 ```
 
 ### 在线预览
