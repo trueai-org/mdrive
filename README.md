@@ -38,7 +38,6 @@ f. 使用系统自带的 `任务计划程序`（可选），创建基本任务�
 
 > 截图
 
-![首页](/docs/screenshots/home.jpg)
 ![挂载](/docs/screenshots/mount.png)
 ![作业](/docs/screenshots/job.gif)
 
