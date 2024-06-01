@@ -550,7 +550,6 @@ docker run --name mdrive -d --restart=always \
 
 ## 鸣谢
 
-- 阿里云盘共创团。
+- 感谢阿里云盘共创团对 MDrive 的支持。
 - 感谢 Duplicati 对本产品初期的支持。
-- MDrive 向阿里云产品申请了新的产品线，MDrive 将独立运行，不再依赖 Duplicati。
 - [WinSW](https://github.com/winsw/winsw) 系统服务，将本程序安装作为 Windows 服务运行。 
