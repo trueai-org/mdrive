@@ -30,6 +30,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{EE45
 		scripts\docker-compose.yml = scripts\docker-compose.yml
 	EndProjectSection
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Security", "src\MDriveSync.Security\MDriveSync.Security.csproj", "{25258960-ED11-4C31-8119-E91D7BB33C7C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Security.Test", "src\MDriveSync.Security.Test\MDriveSync.Security.Test.csproj", "{B036CE46-D6BD-45B0-A967-7F866D06FD2B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -60,6 +64,14 @@ Global
 		{FE8B7D48-5BC8-4DEE-95F5-B7B9DD3F2FDC}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{FE8B7D48-5BC8-4DEE-95F5-B7B9DD3F2FDC}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{FE8B7D48-5BC8-4DEE-95F5-B7B9DD3F2FDC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{25258960-ED11-4C31-8119-E91D7BB33C7C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{25258960-ED11-4C31-8119-E91D7BB33C7C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{25258960-ED11-4C31-8119-E91D7BB33C7C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{25258960-ED11-4C31-8119-E91D7BB33C7C}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
