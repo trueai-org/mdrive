@@ -7,6 +7,8 @@ namespace MDriveSync.Security.Models
     /// </summary>
     public class Blockset : IBaseId
     {
+        public Blockset() { }
+
         /// <summary>
         /// 块 ID
         /// </summary>
@@ -26,14 +28,14 @@ namespace MDriveSync.Security.Models
         public int Index { get; set; }
 
         /// <summary>
-        /// 块大小（块加密压缩后）
-        /// </summary>
-        public long Size { get; set; }
-
-        /// <summary>
         /// 块 hash（块加密压缩前 hash）
         /// </summary>
         public string Hash { get; set; }
+
+        /// <summary>
+        /// 块大小（块加密压缩后）
+        /// </summary>
+        public long Size { get; set; }
 
         /// <summary>
         /// 数据的起始位置（块加密压缩后）

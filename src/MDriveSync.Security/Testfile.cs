@@ -1,10 +1,6 @@
-﻿using EasyCompressor;
-using MDriveSync.Security.Models;
+﻿using MDriveSync.Security.Models;
+using ServiceStack;
 using ServiceStack.Text;
-using System;
-using System.Configuration.Internal;
-using System.IO;
-using System.Security.Cryptography;
 
 namespace MDriveSync.Security
 {
@@ -49,7 +45,11 @@ namespace MDriveSync.Security
 
             foreach (var item in files)
             {
-                ProcessFile(item, "Snappy");
+                // 压缩测试
+                //ProcessFile(item, "SHA256", "LZ4");
+
+                // 加密测试
+                ProcessFile(item, "SHA256", "LZ4", "AES256-GCM", "123");
 
                 i++;
                 Console.WriteLine($"{i}/{count}, {item}");
@@ -153,7 +153,7 @@ namespace MDriveSync.Security
                 var restoreDir = Path.Combine(restoreRootDir, pkg.Key);
                 Directory.CreateDirectory(restoreDir);
 
-                RestoreByPackage(packageDbPath, restoreDir, true, false);
+                RestoreByPackage(packageDbPath, restoreDir, true, false, false, "1234");
 
                 i++;
 
@@ -169,25 +169,129 @@ namespace MDriveSync.Security
         /// <param name="sameOverwrite">同名覆盖</param>
         /// <param name="sameRename">同名重命名</param>
         /// <param name="sameJump">同名跳过</param>
-        public static void RestoreByPackage(string packageDbPath, string restorFileDir, bool sameOverwrite = false, bool sameRename = false, bool sameJump = false)
+        public static void RestoreByPackage(string packageDbPath,
+            string restorFileDir,
+            bool sameOverwrite = false,
+            bool sameRename = false,
+            bool sameJump = false,
+            string encryptionKey = null)
         {
-            if (File.Exists(packageDbPath))
+            // 加锁执行
+            var lockKey = packageDbPath;
+            LocalResourceLock.Lock(lockKey, () =>
             {
-                var packagePath = Path.GetDirectoryName(packageDbPath);
-
-                var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
-                var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
-
-                var files = filesetDb.GetAll();
-                var blocksets = blocksetDb.GetAll().OrderBy(b => b.Index).ToList();
-
-                // 循环所有块，并还原到指定目录
-                foreach (var block in blocksets)
+                if (File.Exists(packageDbPath))
                 {
-                    var blockFilePath = Path.Combine(packagePath, $"{block.Index}.f");
-                    if (File.Exists(blockFilePath))
+                    var packagePath = Path.GetDirectoryName(packageDbPath);
+
+                    var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
+                    var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+
+                    var files = filesetDb.GetAll();
+                    var blocksets = blocksetDb.GetAll().OrderBy(b => b.Index).ToList();
+
+                    // 循环所有块，并还原到指定目录
+                    foreach (var block in blocksets)
                     {
-                        var file = files.Single(f => f.Id == block.FilesetId);
+                        var hashAlgorithm = block.HashAlgorithm;
+                        var internalCompression = block.InternalCompression;
+                        var encryptionType = block.EncryptionAlgorithm;
+
+                        var blockFilePath = Path.Combine(packagePath, $"{block.Index}.f");
+                        if (File.Exists(blockFilePath))
+                        {
+                            var file = files.Single(f => f.Id == block.FilesetId);
+                            var sourceKey = file.SourceKey;
+
+                            // 默认还原到原目录
+                            var filePartPath = sourceKey + ".part";
+
+                            // 如果指定了还原目录，则还原到指定目录
+                            if (!string.IsNullOrWhiteSpace(restorFileDir))
+                            {
+                                filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
+                            }
+
+                            var fileDir = Path.GetDirectoryName(filePartPath);
+                            if (fileDir != null)
+                            {
+                                Directory.CreateDirectory(fileDir);
+                            }
+
+                            // 这里需要块的文件流位置，然后写入到文件
+                            if (block.Index == 0 && block.StartIndex == 0 && block.EndIndex == 0)
+                            {
+                                // 0 字节文件
+                                File.Create(filePartPath).Close();
+                            }
+                            else
+                            {
+                                // 当处理第一个块时，直接写入文件
+                                if (block.Index == 0)
+                                {
+                                    using (var fs = new FileStream(filePartPath, FileMode.Create, FileAccess.Write))
+                                    {
+                                        using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                        {
+                                            blockStream.Seek(block.StartIndex, SeekOrigin.Begin);
+                                            byte[] buffer = new byte[block.Size];
+                                            blockStream.Read(buffer, 0, buffer.Length);
+
+                                            // 解压解密 buffer
+                                            buffer = CompressionHelper.Decompress(buffer, internalCompression, encryptionType, encryptionKey);
+
+                                            fs.Write(buffer, 0, buffer.Length);
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // 说明文件有多个快，需要追加写入
+                                    using (var fs = new FileStream(filePartPath, FileMode.Append, FileAccess.Write))
+                                    {
+                                        using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                        {
+                                            blockStream.Seek(0, SeekOrigin.Begin);
+                                            byte[] buffer = new byte[block.Size];
+                                            blockStream.Read(buffer, 0, buffer.Length);
+
+                                            // 解压解密 buffer
+                                            buffer = CompressionHelper.Decompress(buffer, internalCompression, encryptionType, encryptionKey);
+
+                                            fs.Write(buffer, 0, buffer.Length);
+                                        }
+                                    }
+
+                                    //// 说明文件有多个块，需要覆盖写入，而不是追加写入
+                                    //using (var fs = new FileStream(filePartPath, FileMode.Open, FileAccess.Write))
+                                    //{
+                                    //    using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                    //    {
+                                    //        blockStream.Seek(0, SeekOrigin.Begin);
+                                    //        byte[] buffer = new byte[block.Size];
+                                    //        blockStream.Read(buffer, 0, buffer.Length);
+
+                                    //        // 解压解密 buffer
+                                    //        buffer = CompressionHelper.Decompress(buffer, internalCompression, encryptionType, encryptionKey);
+
+                                    //        // 确保文件指针移动到要覆盖的位置
+                                    //        fs.Seek(0, SeekOrigin.Begin);
+                                    //        fs.Write(buffer, 0, buffer.Length);
+                                    //    }
+                                    //}
+                                }
+                            }
+                        }
+                    }
+
+                    // 校验所有 .part 文件的 sha
+                    // 如果校验通过，则重命名为原文件名
+                    // 如果校验不通过，则删除临时 part 文件
+                    foreach (var file in files)
+                    {
+                        var block = blocksets.First(c => c.FilesetId == file.Id);
+                        var hashAlgorithm = block.HashAlgorithm;
+
                         var sourceKey = file.SourceKey;
 
                         // 默认还原到原目录
@@ -199,163 +303,61 @@ namespace MDriveSync.Security
                             filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
                         }
 
-                        var fileDir = Path.GetDirectoryName(filePartPath);
-                        if (fileDir != null)
+                        if (File.Exists(filePartPath))
                         {
-                            Directory.CreateDirectory(fileDir);
-                        }
-
-                        // 这里需要块的文件流位置，然后写入到文件
-                        if (block.Index == 0 && block.StartIndex == 0 && block.EndIndex == 0)
-                        {
-                            // 0 字节文件
-                            File.Create(filePartPath).Close();
-                        }
-                        else
-                        {
-                            // 当处理第一个块时，直接写入文件
-                            if (block.Index == 0)
+                            var partBytes = File.ReadAllBytes(filePartPath);
+                            var hash = HashHelper.ComputeHashHex(partBytes, hashAlgorithm);
+                            if (hash == file.Hash)
                             {
-                                using (var fs = new FileStream(filePartPath, FileMode.Create, FileAccess.Write))
+                                // 校验通过，重命名文件
+                                var fileNewPath = filePartPath.Substring(0, filePartPath.Length - 5);
+
+                                // 如果文件已经存在，根据选项处理
+                                if (File.Exists(fileNewPath))
                                 {
-                                    using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                    // 同名跳过
+                                    if (sameJump)
                                     {
-                                        blockStream.Seek(block.StartIndex, SeekOrigin.Begin);
-                                        byte[] buffer = new byte[block.Size];
-                                        blockStream.Read(buffer, 0, buffer.Length);
+                                        continue;
+                                    }
 
-                                        //// 解压 buffer
-                                        //if (block.InternalCompression == "LZ4")
-                                        //{
-                                        //    buffer = LZ4Compressor.Shared.Decompress(buffer);
+                                    if (sameOverwrite)
+                                    {
+                                        File.Delete(fileNewPath);
+                                    }
+                                    else if (sameRename)
+                                    {
+                                        var fileDir = Path.GetDirectoryName(fileNewPath);
+                                        var fileName = Path.GetFileNameWithoutExtension(fileNewPath);
+                                        var fileExt = Path.GetExtension(fileNewPath);
 
-                                        //    //byte[] buffer2 = File.ReadAllBytes(blockFilePath);
-                                        //    //byte[] compressedBuffer2 = LZ4Compressor.Shared.Decompress(buffer2);
-
-                                        //}
-
-                                        // 解压 buffer
-                                        if (block.InternalCompression == "LZ4")
+                                        for (int i = 1; i < int.MaxValue; i++)
                                         {
-                                            buffer = LZ4Compressor.Shared.Decompress(buffer);
+                                            fileNewPath = Path.Combine(fileDir, $"{fileName} ({i}){fileExt}");
+                                            if (!File.Exists(fileNewPath))
+                                            {
+                                                break;
+                                            }
                                         }
-                                        else if (block.InternalCompression == "Zstd")
-                                        {
-                                            buffer = ZstdSharpCompressor.Shared.Decompress(buffer);
-                                        }
-                                        else if (block.InternalCompression == "Snappy")
-                                        {
-                                            buffer = SnappierCompressor.Shared.Decompress(buffer);
-                                        }
-
-                                        fs.Write(buffer, 0, buffer.Length);
                                     }
                                 }
+
+                                File.Move(filePartPath, fileNewPath, sameOverwrite);
+
+                                // 恢复文件时间
+                                var fileInfo = new FileInfo(fileNewPath);
+                                fileInfo.CreationTime = DateTimeOffset.FromUnixTimeSeconds(file.Created).LocalDateTime;
+                                fileInfo.LastWriteTime = DateTimeOffset.FromUnixTimeSeconds(file.Updated).LocalDateTime;
                             }
                             else
                             {
-                                // 说明文件有多个块，需要覆盖写入，而不是追加写入
-                                using (var fs = new FileStream(filePartPath, FileMode.Open, FileAccess.Write))
-                                {
-                                    using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
-                                    {
-                                        blockStream.Seek(0, SeekOrigin.Begin);
-                                        byte[] buffer = new byte[block.Size];
-                                        blockStream.Read(buffer, 0, buffer.Length);
-
-                                        // 解压 buffer
-                                        if (block.InternalCompression == "LZ4")
-                                        {
-                                            buffer = LZ4Compressor.Shared.Decompress(buffer);
-                                        }
-                                        else if (block.InternalCompression == "Zstd")
-                                        {
-                                            buffer = ZstdSharpCompressor.Shared.Decompress(buffer);
-                                        }
-                                        else if (block.InternalCompression == "Snappy")
-                                        {
-                                            buffer = SnappierCompressor.Shared.Decompress(buffer);
-                                        }
-
-                                        // 确保文件指针移动到要覆盖的位置
-                                        fs.Seek(block.StartIndex, SeekOrigin.Begin);
-                                        fs.Write(buffer, 0, buffer.Length);
-                                    }
-                                }
+                                // 校验不通过，删除临时部分文件
+                                File.Delete(filePartPath);
                             }
                         }
                     }
                 }
-
-                // 校验所有 .part 文件的 sha256
-                // 如果校验通过，则重命名为原文件名
-                // 如果校验不通过，则删除临时 part 文件
-                foreach (var file in files)
-                {
-                    var sourceKey = file.SourceKey;
-
-                    // 默认还原到原目录
-                    var filePartPath = sourceKey + ".part";
-
-                    // 如果指定了还原目录，则还原到指定目录
-                    if (!string.IsNullOrWhiteSpace(restorFileDir))
-                    {
-                        filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
-                    }
-
-                    if (File.Exists(filePartPath))
-                    {
-                        var sha256 = ComputeSha256(filePartPath);
-                        if (sha256 == file.Hash)
-                        {
-                            // 校验通过，重命名文件
-                            var fileNewPath = filePartPath.Substring(0, filePartPath.Length - 5);
-
-                            // 如果文件已经存在，根据选项处理
-                            if (File.Exists(fileNewPath))
-                            {
-                                // 同名跳过
-                                if (sameJump)
-                                {
-                                    continue;
-                                }
-
-                                if (sameOverwrite)
-                                {
-                                    File.Delete(fileNewPath);
-                                }
-                                else if (sameRename)
-                                {
-                                    var fileDir = Path.GetDirectoryName(fileNewPath);
-                                    var fileName = Path.GetFileNameWithoutExtension(fileNewPath);
-                                    var fileExt = Path.GetExtension(fileNewPath);
-
-                                    for (int i = 1; i < int.MaxValue; i++)
-                                    {
-                                        fileNewPath = Path.Combine(fileDir, $"{fileName} ({i}){fileExt}");
-                                        if (!File.Exists(fileNewPath))
-                                        {
-                                            break;
-                                        }
-                                    }
-                                }
-                            }
-
-                            File.Move(filePartPath, fileNewPath, sameOverwrite);
-
-                            // 恢复文件时间
-                            var fileInfo = new FileInfo(fileNewPath);
-                            fileInfo.CreationTime = DateTimeOffset.FromUnixTimeSeconds(file.Created).LocalDateTime;
-                            fileInfo.LastWriteTime = DateTimeOffset.FromUnixTimeSeconds(file.Updated).LocalDateTime;
-                        }
-                        else
-                        {
-                            // 校验不通过，删除临时部分文件
-                            File.Delete(filePartPath);
-                        }
-                    }
-                }
-            }
+            });
         }
 
         /// <summary>
@@ -363,7 +365,11 @@ namespace MDriveSync.Security
         /// </summary>
         /// <param name="filePath"></param>
         /// <param name="internalCompression">在将数据存储到仓库之前，数据是否进行压缩，Zstd、LZ4、Snappy</param>
-        public static void ProcessFile(string filePath, string internalCompression = null)
+        public static void ProcessFile(string filePath,
+            string hashAlgorithm = "SHA256",
+            string internalCompression = null,
+            string encryptionType = null,
+            string encryptionKey = null)
         {
             try
             {
@@ -395,13 +401,14 @@ namespace MDriveSync.Security
                 var fileSize = fileInfo.Length;
                 var category = GetRootCategory(fileSize);
 
-                // 计算文件 SHA256
-                var sha256Hash = ComputeSha256(filePath);
+                // 计算文件 hash
+                var fileBytes = File.ReadAllBytes(filePath);
+                var hash = HashHelper.ComputeHashHex(fileBytes, hashAlgorithm);
 
                 var rootFile = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName.ToUrlPath());
                 if (rootFile != null)
                 {
-                    if (rootFile.FilesetHash == sha256Hash)
+                    if (rootFile.FilesetHash == hash)
                     {
                         return;
                     }
@@ -430,7 +437,7 @@ namespace MDriveSync.Security
                                         {
                                             // 在原本的包基础上进行处理
                                             PackageDeleteFile(package, fileInfo.FullName);
-                                            PackageAddFile(package, fileInfo, sha256Hash, internalCompression);
+                                            PackageAddFile(package, fileInfo, hash, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
 
                                             // 处理完成
                                             return;
@@ -444,7 +451,7 @@ namespace MDriveSync.Security
                             else
                             {
                                 // 单文件包，以滚动的方式验证哪个块需要增长或收缩
-                                PackageShrinkFileBySingle(package, fileInfo.FullName, sha256Hash, rootFile, internalCompression);
+                                PackageShrinkFileBySingle(package, fileInfo.FullName, hash, rootFile, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
                                 return;
                             }
                         }
@@ -550,7 +557,7 @@ namespace MDriveSync.Security
                 Directory.CreateDirectory(packageFullPath);
 
                 // 包加入
-                PackageAddFile(last, fileInfo, sha256Hash, internalCompression);
+                PackageAddFile(last, fileInfo, hash, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
             }
             finally
             {
@@ -728,7 +735,13 @@ namespace MDriveSync.Security
         /// </summary>
         /// <param name="package"></param>
         /// <param name="fileFullName"></param>
-        public static void PackageShrinkFileBySingle(RootPackage package, string fileFullName, string sha256Hash, RootFileset rootFileset, string internalCompression = null)
+        public static void PackageShrinkFileBySingle(RootPackage package, string fileFullName,
+            string sha256Hash,
+            RootFileset rootFileset,
+            string hashAlgorithm = "SHA256",
+            string internalCompression = null,
+            string encryptionType = null,
+            string encryptionKey = null)
         {
             if (package.Multifile)
             {
@@ -760,6 +773,7 @@ namespace MDriveSync.Security
                         using (FileStream fs = new FileStream(fileFullName, FileMode.Open, FileAccess.Read))
                         {
                             var blockIndex = 0;
+
                             var blockStartIndex = 0L;
                             var blockEndIndex = 0L;
                             bool blockMismatch = false;
@@ -777,29 +791,7 @@ namespace MDriveSync.Security
                                 byte[] buffer = new byte[blockLength];
                                 fs.Read(buffer, 0, (int)blockLength);
 
-                                // 解压缩 buffer
-                                if (internalCompression == "LZ4")
-                                {
-                                    // 使用 LZ4 共享实例完成解压缩任务
-                                    buffer = LZ4Compressor.Shared.Decompress(buffer);
-                                }
-                                else if (internalCompression == "Zstd")
-                                {
-                                    // 使用 Zstd 共享实例完成解压缩任务
-                                    buffer = ZstdSharpCompressor.Shared.Decompress(buffer);
-                                }
-                                else if (internalCompression == "Snappy")
-                                {
-                                    // 使用 Snappy 共享实例完成解压缩任务
-                                    buffer = SnappierCompressor.Shared.Decompress(buffer);
-                                }
-
-                                string blockHash;
-                                using (SHA256 sha256 = SHA256.Create())
-                                {
-                                    blockHash = BitConverter.ToString(sha256.ComputeHash(buffer)).Replace("-", "").ToLowerInvariant();
-                                }
-
+                                var blockHash = HashHelper.ComputeHashHex(buffer, hashAlgorithm);
                                 if (block.Hash != blockHash)
                                 {
                                     blockMismatch = true;
@@ -856,39 +848,23 @@ namespace MDriveSync.Security
                                     {
                                         blockEndIndex = fs.Length - 1;
                                     }
-
                                     var blockLength = blockEndIndex - blockStartIndex + 1;
+
                                     byte[] buffer = new byte[blockLength];
                                     fs.Read(buffer, 0, (int)blockLength);
+                                    var filesetSize = buffer.Length;
 
-                                    string blockHash;
-                                    using (SHA256 sha256 = SHA256.Create())
-                                    {
-                                        blockHash = BitConverter.ToString(sha256.ComputeHash(buffer)).Replace("-", "").ToLowerInvariant();
-                                    }
+                                    var blockHash = HashHelper.ComputeHashHex(buffer, hashAlgorithm);
 
-                                    // 压缩 buffer
-                                    if (internalCompression == "LZ4")
-                                    {
-                                        // 使用 LZ4 共享实例完成压缩任务
-                                        buffer = LZ4Compressor.Shared.Compress(buffer);
-                                    }
-                                    else if (internalCompression == "Zstd")
-                                    {
-                                        // 使用 Zstd 共享实例完成压缩任务
-                                        buffer = ZstdSharpCompressor.Shared.Compress(buffer);
-                                    }
-                                    else if (internalCompression == "Snappy")
-                                    {
-                                        // 使用 Snappy 共享实例完成压缩任务
-                                        buffer = SnappierCompressor.Shared.Compress(buffer);
-                                    }
-                                    blockLength = buffer.Length;
+                                    // 读取文件流，根据压缩算法进行压缩、加密等处理
+                                    var compressedBuffer = CompressionHelper.Compress(buffer, internalCompression, encryptionType, encryptionKey);
+                                    blockLength = compressedBuffer.Length;
 
+                                    // 创建块文件
                                     var packageFilePath = Path.Combine(_baseDir, package.Key, $"{blockIndex}.f");
                                     using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Create, FileAccess.Write))
                                     {
-                                        packageStream.Write(buffer, 0, buffer.Length);
+                                        packageStream.Write(compressedBuffer, 0, compressedBuffer.Length);
                                     }
 
                                     // 创建块文件信息
@@ -898,7 +874,7 @@ namespace MDriveSync.Security
                                         Created = fileInfo.CreationTime.ToUnixTime(),
                                         Updated = fileInfo.LastWriteTime.ToUnixTime(),
                                         Hash = sha256Hash,
-                                        Size = fileInfo.Length,
+                                        Size = filesetSize,
                                         Key = $"{package.Key}/{blockIndex}.f"
                                     };
                                     filesetDb.Add(file);
@@ -911,8 +887,11 @@ namespace MDriveSync.Security
                                         Hash = blockHash,
                                         Size = blockLength,
                                         Index = blockIndex,
-                                        StartIndex = blockStartIndex,
-                                        EndIndex = blockEndIndex
+                                        StartIndex = 0,
+                                        EndIndex = blockLength - 1,
+                                        EncryptionAlgorithm = encryptionType,
+                                        HashAlgorithm = hashAlgorithm,
+                                        InternalCompression = internalCompression
                                     };
                                     blocksetDb.Add(newBlock);
                                     blocksets.Add(newBlock);
@@ -920,6 +899,16 @@ namespace MDriveSync.Security
                                     blockIndex++;
                                 }
                             }
+                        }
+
+                        // 了保证数据的一致性，需要更新文件信息
+                        foreach (var item in filesets)
+                        {
+                            item.SourceKey = fileInfo.FullName.ToUrlPath();
+                            item.Created = fileInfo.CreationTime.ToUnixTime();
+                            item.Updated = fileInfo.LastWriteTime.ToUnixTime();
+                            item.Hash = sha256Hash;
+                            filesetDb.Update(item);
                         }
 
                         // 重新计算当前文件大小
@@ -941,7 +930,12 @@ namespace MDriveSync.Security
         /// <param name="fileFullName"></param>
         /// <param name="fileInfo"></param>
         /// <param name="internalCompression">Zstd、LZ4、Snappy</param>
-        public static void PackageAddFile(RootPackage package, FileInfo fileInfo, string sha256Hash, string internalCompression = null)
+        public static void PackageAddFile(RootPackage package, FileInfo fileInfo,
+            string hash,
+            string hashAlgorithm = "SHA256",
+            string internalCompression = null,
+            string encryptionType = null,
+            string encryptionKey = null)
         {
             // 可以不用加锁，应为同一个包只有一个线程在处理
             // 注意更新 root package 和 rootFileset 需要单独加锁更新，因为这两个表是全局的，需要保证数据的一致性
@@ -965,7 +959,7 @@ namespace MDriveSync.Security
                 var oldFile = filesetDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
                 if (oldFile != null)
                 {
-                    if (oldFile.Hash == sha256Hash)
+                    if (oldFile.Hash == hash)
                     {
                         // 处理过且 hash 一致，直接返回
                         return;
@@ -990,77 +984,10 @@ namespace MDriveSync.Security
                     var blockSize = 0L;
                     using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
                     {
-                        byte[] buffer = File.ReadAllBytes(fileInfo.FullName);
-                        byte[] compressedBuffer;
+                        var buffer = File.ReadAllBytes(fileInfo.FullName);
 
                         // 读取文件流，根据压缩算法进行压缩、加密等处理
-                        if (internalCompression == "LZ4")
-                        {
-                            compressedBuffer = LZ4Compressor.Shared.Compress(buffer);
-
-                            //// 使用 LZ4 共享实例完成压缩任务
-                            //// 创建一个新的流接收压缩 Compress 的数据
-                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read))
-                            //using (MemoryStream compressedStream = new MemoryStream())
-                            //{
-                            //    blockStartIndex = packageStream.Length;
-
-                            //    // 将文件流压缩到内存流
-
-                            //    LZ4Compressor.Shared.Compress(fileStream, compressedStream);
-                            //    compressedStream.Position = 0;
-                            //    compressedStream.CopyTo(packageStream);
-
-                            //    blockSize = compressedStream.Length;
-                            //    blockEndIndex = packageStream.Length - 1;
-                            //}
-                        }
-                        else if (internalCompression == "Zstd")
-                        {
-                            compressedBuffer = ZstdSharpCompressor.Shared.Compress(buffer); 
-
-                            // 使用 Zstd 共享实例完成压缩任务
-                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read))
-                            //using (MemoryStream compressedStream = new MemoryStream())
-                            //{
-                            //    blockStartIndex = packageStream.Length;
-                            //    ZstdSharpCompressor.Shared.Compress(fileStream, compressedStream);
-                            //    compressedStream.Position = 0;
-                            //    compressedStream.CopyTo(packageStream);
-                            //    blockSize = compressedStream.Length;
-                            //    blockEndIndex = packageStream.Length - 1;
-                            //}
-                        }
-                        else if (internalCompression == "Snappy")
-                        {
-                            compressedBuffer = SnappierCompressor.Shared.Compress(buffer);
-
-                            // 使用 Snappy 共享实例完成压缩任务
-                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read))
-                            //using (MemoryStream compressedStream = new MemoryStream())
-                            //{
-                            //    blockStartIndex = packageStream.Length;
-                            //    SnappierCompressor.Shared.Compress(fileStream, compressedStream);
-                            //    compressedStream.Position = 0;
-                            //    compressedStream.CopyTo(packageStream);
-                            //    blockSize = compressedStream.Length;
-                            //    blockEndIndex = packageStream.Length - 1;
-                            //}
-                        }
-                        else
-                        {
-                            compressedBuffer = buffer;
-
-                            // 无压缩
-                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.ReadWrite))
-                            //{
-                            //    blockStartIndex = packageStream.Length;
-                            //    fileStream.CopyTo(packageStream);
-                            //    blockSize = fileStream.Length;
-                            //    blockEndIndex = packageStream.Length - 1;
-                            //}
-                        }
-
+                        var compressedBuffer = CompressionHelper.Compress(buffer, internalCompression, encryptionType, encryptionKey);
 
                         blockStartIndex = packageStream.Length;
                         packageStream.Write(compressedBuffer, 0, compressedBuffer.Length);
@@ -1073,7 +1000,7 @@ namespace MDriveSync.Security
                         SourceKey = fileInfo.FullName.ToUrlPath(),
                         Created = fileInfo.CreationTime.ToUnixTime(),
                         Updated = fileInfo.LastWriteTime.ToUnixTime(),
-                        Hash = sha256Hash,
+                        Hash = hash,
                         Size = fileSize,
                         Key = $"{package.Key}/0.f"
                     };
@@ -1084,12 +1011,14 @@ namespace MDriveSync.Security
                     var bs = new Blockset()
                     {
                         FilesetId = file.Id,
-                        Hash = sha256Hash,
+                        Hash = hash,
                         Index = blockIndex,
                         StartIndex = blockStartIndex,
                         EndIndex = blockEndIndex,
                         Size = blockSize,
-                        InternalCompression = internalCompression
+                        InternalCompression = internalCompression,
+                        HashAlgorithm = hashAlgorithm,
+                        EncryptionAlgorithm = encryptionType,
                     };
                     blocksetDb.Add(bs);
                 }
@@ -1114,59 +1043,28 @@ namespace MDriveSync.Security
                             var blockLength = blockEndIndex - blockStartIndex + 1;
                             byte[] buffer = new byte[blockLength];
                             fs.Read(buffer, 0, (int)blockLength);
+                            var filesetSize = buffer.Length;
 
-                            string blockHash;
-                            using (SHA256 sha256 = SHA256.Create())
-                            {
-                                blockHash = BitConverter.ToString(sha256.ComputeHash(buffer)).Replace("-", "").ToLowerInvariant();
-                            }
+                            var blockHash = HashHelper.ComputeHashHex(buffer, hashAlgorithm);
+
+                            // 读取文件流，根据压缩算法进行压缩、加密等处理
+                            var compressedBuffer = CompressionHelper.Compress(buffer, internalCompression, encryptionType, encryptionKey);
+                            var compressedBlockLength = compressedBuffer.Length;
 
                             // 写入包文件
                             var packageFilePath = Path.Combine(_baseDir, package.Key, $"{blockIndex}.f");
-
-                            // 判断是否压缩
-                            if (internalCompression == "LZ4")
+                            using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
                             {
-                                // 使用 LZ4 共享实例完成压缩任务
-                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
-                                {
-                                    LZ4Compressor.Shared.Compress(buffer, packageStream);
-                                }
+                                packageStream.Write(compressedBuffer, 0, compressedBlockLength);
                             }
-                            else if (internalCompression == "Zstd")
-                            {
-                                // 使用 Zstd 共享实例完成压缩任务
-                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
-                                {
-                                    ZstdSharpCompressor.Shared.Compress(buffer, packageStream);
-                                }
-                            }
-                            else if (internalCompression == "Snappy")
-                            {
-                                // 使用 Snappy 共享实例完成压缩任务
-                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
-                                {
-                                    SnappierCompressor.Shared.Compress(buffer, packageStream);
-                                }
-                            }
-                            else
-                            {
-                                // 无压缩
-                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
-                                {
-                                    packageStream.Write(buffer, 0, (int)blockLength);
-                                }
-                            }
-                            blockLength = buffer.Length;
-
 
                             var file = new Fileset()
                             {
                                 SourceKey = fileInfo.FullName.ToUrlPath(),
                                 Created = fileInfo.CreationTime.ToUnixTime(),
                                 Updated = fileInfo.LastWriteTime.ToUnixTime(),
-                                Hash = sha256Hash,
-                                Size = fileSize,
+                                Hash = hash,
+                                Size = filesetSize,
                                 Key = $"{package.Key}/{blockIndex}.f"
                             };
                             filesetDb.Add(file);
@@ -1176,11 +1074,13 @@ namespace MDriveSync.Security
                             {
                                 FilesetId = file.Id,
                                 Hash = blockHash,
-                                Size = blockLength,
+                                Size = compressedBlockLength,
                                 Index = blockIndex,
-                                StartIndex = blockStartIndex,
-                                EndIndex = blockEndIndex,
-                                InternalCompression = internalCompression
+                                StartIndex = 0,
+                                EndIndex = compressedBlockLength - 1,
+                                InternalCompression = internalCompression,
+                                EncryptionAlgorithm = encryptionType,
+                                HashAlgorithm = hashAlgorithm,
                             };
                             blocksetDb.Add(bs);
 
@@ -1198,7 +1098,7 @@ namespace MDriveSync.Security
                 {
                     RootPackageId = package.Id,
                     FilesetSourceKey = fileInfo.FullName.ToUrlPath(),
-                    FilesetHash = sha256Hash
+                    FilesetHash = hash
                 });
                 _rootPackageDb.Update(package);
             });
@@ -1258,22 +1158,7 @@ namespace MDriveSync.Security
             else throw new NotSupportedException("不支持大于 1TB 的文件");
         }
 
-        /// <summary>
-        /// 计算文件的 SHA256 哈希值
-        /// </summary>
-        /// <param name="filePath"></param>
-        /// <returns></returns>
-        public static string ComputeSha256(string filePath)
-        {
-            using (SHA256 sha256 = SHA256.Create())
-            {
-                using (FileStream fileStream = File.OpenRead(filePath))
-                {
-                    byte[] hashBytes = sha256.ComputeHash(fileStream);
-                    return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
-                }
-            }
-        }
+
 
         /// <summary>
         /// 根据包索引获取包的存储路径
