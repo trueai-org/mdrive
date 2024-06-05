@@ -7,25 +7,32 @@ namespace MDriveSync.Security.Test
 {
     internal class Program
     {
-        static void Main(string[] args)
+        private static void Main(string[] args)
         {
             var sw = new Stopwatch();
 
+            /*
+             // 文件加密解密测试
+
             for (int i = 0; i < 120; i++)
             {
+
+                // 文件加密模式，文件名或单个路径不应该超过 120 个字符，否则会导致加密失败
+                // 拆解为2个文件？xxx.1, pxxx ???
+
                 // 生成随机的最大长度文件名（255字符）和扩展名（例如：.txt）
                 // 最大200长度
-                string randomFileName = GenerateRandomString(i + 1) + ".xfdsdf";  // 保留5字符用于扩展名
+                string randomFileName = "萝莉系列[Hello! Project Digital Books]No.100 Risa Niigaki 新垣里沙【96P】 - 激情图片 激情小说 伦理电影 快播电影 QVOD"; //  GenerateRandomString(i + 1) + ".xfdsdf";  // 保留5字符用于扩展名
 
                 // 生成随机的最大长度路径（例如Windows的4096字符或更长）
                 string randomPath = GenerateRandomPath(4096);  // 路径最大长度，可以调整为更长以测试长路径支持
+                //Directory.CreateDirectory(randomPath);
 
                 var x1 = Encoding.UTF8.GetBytes(randomFileName);
 
                 //var x2 = DeflateCompressor.Shared.Compress(x1);
 
-
-                var bytes = CompressionHelper.Compress(x1, "LZ4", "ChaCha20-Poly1305", "12342342SDFSDFAS");
+                var bytes = CompressionHelper.Compress(x1, "LZ4", "AES256-GCM", "123");
 
                 var b2 = CompressionHelper.Compress(bytes, "LZ4");
                 var b3 = CompressionHelper.Decompress(b2, "LZ4");
@@ -33,7 +40,10 @@ namespace MDriveSync.Security.Test
 
                 // bytes 转为转为最小长度的字符串
                 // 转为 base64 字符串
-                var base64 = Convert.ToBase64String(bytes);
+                var base64 = bytes.ToSafeBase64();
+                Directory.CreateDirectory(base64);
+
+                var decodedData = base64.FromSafeBase64();
 
                 //var bbb = Base16384.ConvertFromUtf16BEBytesToString(bytes).ToString();
                 //var resul333t = Base85.Ascii85.Encode(bytes);
@@ -50,10 +60,9 @@ namespace MDriveSync.Security.Test
                 var b10 = BrotliCompressor.Shared.Compress(bytes);
                 //var b10base64 = Convert.ToBase64String(b10);
 
-
                 //var hex = BitConverter.ToString(bytes).Replace("-", "");
 
-                var result = CompressionHelper.Decompress(bytes, "LZ4", "ChaCha20-Poly1305", "12342342SDFSDFAS");
+                var result = CompressionHelper.Decompress(decodedData, "LZ4", "ChaCha20-Poly1305", "12342342SDFSDFAS");
                 var str = Encoding.UTF8.GetString(result);
 
                 //Console.WriteLine($"压缩后: {bytes.Length}, base64: {base64.Length}, cbase64: {b10base64.Length}");
@@ -67,16 +76,16 @@ namespace MDriveSync.Security.Test
             Console.WriteLine("Hello, World!");
             Console.ReadKey();
             return;
+            */
 
+            //sw.Restart();
+            //Testfile.RunRestore();
+            //sw.Stop();
 
-            sw.Restart();
-            Testfile.RunRestore();
-            sw.Stop();
-
-            Console.WriteLine($"还原用时：{sw.ElapsedMilliseconds}ms");
-            Console.WriteLine("Hello, World!");
-            Console.ReadKey();
-            return;
+            //Console.WriteLine($"还原用时：{sw.ElapsedMilliseconds}ms");
+            //Console.WriteLine("Hello, World!");
+            //Console.ReadKey();
+            //return;
 
             sw.Restart();
             Testfile.RunBackup();
@@ -86,14 +95,13 @@ namespace MDriveSync.Security.Test
             Console.WriteLine("Hello, World!");
             Console.ReadKey();
 
-
             //Test2();
 
             //Console.WriteLine("Hello, World!");
             //Console.ReadKey();
         }
 
-        static string GenerateRandomPath(int maxLength)
+        private static string GenerateRandomPath(int maxLength)
         {
             StringBuilder pathBuilder = new StringBuilder();
             pathBuilder.Append(Directory.GetCurrentDirectory());  // 从当前工作目录开始
@@ -115,10 +123,10 @@ namespace MDriveSync.Security.Test
             return pathBuilder.ToString();
         }
 
-        static Random random = new Random();
-        static string GenerateRandomString(int length)
-        {
+        private static Random random = new Random();
 
+        private static string GenerateRandomString(int length)
+        {
             StringBuilder stringBuilder = new StringBuilder(length);
             for (int i = 0; i < length; i++)
             {
@@ -128,11 +136,10 @@ namespace MDriveSync.Security.Test
             return stringBuilder.ToString();
         }
 
-
         /// <summary>
         /// 测试加密时间
         /// </summary>
-        static void Test2()
+        private static void Test2()
         {
             int[] sizes = { 10 * 1024 * 1024, 20 * 1024 * 1024, 30 * 1024 * 1024, 100 * 1024 * 1024 };
             int iterations = 10;
@@ -151,8 +158,6 @@ namespace MDriveSync.Security.Test
                 Console.WriteLine();
             }
         }
-
-
 
         public static TimeSpan ComputeSha1(byte[] data, int iterations)
         {

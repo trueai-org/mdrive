@@ -361,7 +361,7 @@ namespace MDriveSync.Security
         }
 
         /// <summary>
-        /// 
+        ///
         /// </summary>
         /// <param name="filePath"></param>
         /// <param name="internalCompression">在将数据存储到仓库之前，数据是否进行压缩，Zstd、LZ4、Snappy</param>
@@ -1157,8 +1157,6 @@ namespace MDriveSync.Security
             else if (fileSize <= 1024 * 1024 * 1024 * 1024L) return "k";
             else throw new NotSupportedException("不支持大于 1TB 的文件");
         }
-
-
 
         /// <summary>
         /// 根据包索引获取包的存储路径
