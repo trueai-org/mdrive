@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Security.Models;
+using Org.BouncyCastle.Math.Field;
 using ServiceStack;
 using ServiceStack.Text;
 
@@ -289,70 +290,131 @@ namespace MDriveSync.Security
                     // 如果校验不通过，则删除临时 part 文件
                     foreach (var file in files)
                     {
-                        var block = blocksets.First(c => c.FilesetId == file.Id);
-                        var hashAlgorithm = block.HashAlgorithm;
-
-                        var sourceKey = file.SourceKey;
-
-                        // 默认还原到原目录
-                        var filePartPath = sourceKey + ".part";
-
-                        // 如果指定了还原目录，则还原到指定目录
-                        if (!string.IsNullOrWhiteSpace(restorFileDir))
+                        var block = blocksets.FirstOrDefault(c => c.FilesetId == file.Id);
+                        if (block == null && file.Size == 0)
                         {
-                            filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
-                        }
+                            var sourceKey = file.SourceKey;
 
-                        if (File.Exists(filePartPath))
-                        {
-                            var partBytes = File.ReadAllBytes(filePartPath);
-                            var hash = HashHelper.ComputeHashHex(partBytes, hashAlgorithm);
-                            if (hash == file.Hash)
+                            // 默认还原到原目录
+                            var filePartPath = sourceKey + ".part";
+
+                            // 如果指定了还原目录，则还原到指定目录
+                            if (!string.IsNullOrWhiteSpace(restorFileDir))
                             {
-                                // 校验通过，重命名文件
-                                var fileNewPath = filePartPath.Substring(0, filePartPath.Length - 5);
+                                filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
+                            }
 
-                                // 如果文件已经存在，根据选项处理
-                                if (File.Exists(fileNewPath))
+                            Directory.CreateDirectory(Path.GetDirectoryName(filePartPath));
+
+                            // 如果是 0 字节文件，直接创建文件
+                            File.Create(filePartPath).Close();
+
+                            // 校验通过，重命名文件
+                            var fileNewPath = filePartPath.Substring(0, filePartPath.Length - 5);
+
+                            // 如果文件已经存在，根据选项处理
+                            if (File.Exists(fileNewPath))
+                            {
+                                // 同名跳过
+                                if (sameJump)
                                 {
-                                    // 同名跳过
-                                    if (sameJump)
-                                    {
-                                        continue;
-                                    }
+                                    continue;
+                                }
 
-                                    if (sameOverwrite)
-                                    {
-                                        File.Delete(fileNewPath);
-                                    }
-                                    else if (sameRename)
-                                    {
-                                        var fileDir = Path.GetDirectoryName(fileNewPath);
-                                        var fileName = Path.GetFileNameWithoutExtension(fileNewPath);
-                                        var fileExt = Path.GetExtension(fileNewPath);
+                                if (sameOverwrite)
+                                {
+                                    File.Delete(fileNewPath);
+                                }
+                                else if (sameRename)
+                                {
+                                    var fileDir = Path.GetDirectoryName(fileNewPath);
+                                    var fileName = Path.GetFileNameWithoutExtension(fileNewPath);
+                                    var fileExt = Path.GetExtension(fileNewPath);
 
-                                        for (int i = 1; i < int.MaxValue; i++)
+                                    for (int i = 1; i < int.MaxValue; i++)
+                                    {
+                                        fileNewPath = Path.Combine(fileDir, $"{fileName} ({i}){fileExt}");
+                                        if (!File.Exists(fileNewPath))
                                         {
-                                            fileNewPath = Path.Combine(fileDir, $"{fileName} ({i}){fileExt}");
-                                            if (!File.Exists(fileNewPath))
-                                            {
-                                                break;
-                                            }
+                                            break;
                                         }
                                     }
                                 }
-
-                                File.Move(filePartPath, fileNewPath, sameOverwrite);
-
-                                // 恢复文件时间
-                                var fileInfo = new FileInfo(fileNewPath);
-                                fileInfo.CreationTime = DateTimeOffset.FromUnixTimeSeconds(file.Created).LocalDateTime;
-                                fileInfo.LastWriteTime = DateTimeOffset.FromUnixTimeSeconds(file.Updated).LocalDateTime;
                             }
-                            else
+
+                            File.Move(filePartPath, fileNewPath, sameOverwrite);
+
+                            // 恢复文件时间
+                            var fileInfo = new FileInfo(fileNewPath);
+                            fileInfo.CreationTime = DateTimeOffset.FromUnixTimeSeconds(file.Created).LocalDateTime;
+                            fileInfo.LastWriteTime = DateTimeOffset.FromUnixTimeSeconds(file.Updated).LocalDateTime;
+                        }
+                        else
+                        {
+                            var hashAlgorithm = block.HashAlgorithm;
+
+                            var sourceKey = file.SourceKey;
+
+                            // 默认还原到原目录
+                            var filePartPath = sourceKey + ".part";
+
+                            // 如果指定了还原目录，则还原到指定目录
+                            if (!string.IsNullOrWhiteSpace(restorFileDir))
                             {
-                                // 校验不通过，删除临时部分文件
-                                File.Delete(filePartPath);
+                                filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
+                            }
+
+                            if (File.Exists(filePartPath))
+                            {
+                                var partBytes = File.ReadAllBytes(filePartPath);
+                                var hash = HashHelper.ComputeHashHex(partBytes, hashAlgorithm);
+                                if (hash == file.Hash)
+                                {
+                                    // 校验通过，重命名文件
+                                    var fileNewPath = filePartPath.Substring(0, filePartPath.Length - 5);
+
+                                    // 如果文件已经存在，根据选项处理
+                                    if (File.Exists(fileNewPath))
+                                    {
+                                        // 同名跳过
+                                        if (sameJump)
+                                        {
+                                            continue;
+                                        }
+
+                                        if (sameOverwrite)
+                                        {
+                                            File.Delete(fileNewPath);
+                                        }
+                                        else if (sameRename)
+                                        {
+                                            var fileDir = Path.GetDirectoryName(fileNewPath);
+                                            var fileName = Path.GetFileNameWithoutExtension(fileNewPath);
+                                            var fileExt = Path.GetExtension(fileNewPath);
+
+                                            for (int i = 1; i < int.MaxValue; i++)
+                                            {
+                                                fileNewPath = Path.Combine(fileDir, $"{fileName} ({i}){fileExt}");
+                                                if (!File.Exists(fileNewPath))
+                                                {
+                                                    break;
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    File.Move(filePartPath, fileNewPath, sameOverwrite);
+
+                                    // 恢复文件时间
+                                    var fileInfo = new FileInfo(fileNewPath);
+                                    fileInfo.CreationTime = DateTimeOffset.FromUnixTimeSeconds(file.Created).LocalDateTime;
+                                    fileInfo.LastWriteTime = DateTimeOffset.FromUnixTimeSeconds(file.Updated).LocalDateTime;
+                                }
+                                else
+                                {
+                                    // 校验不通过，删除临时部分文件
+                                    File.Delete(filePartPath);
+                                }
                             }
                         }
                     }
@@ -401,6 +463,84 @@ namespace MDriveSync.Security
                 var fileSize = fileInfo.Length;
                 var category = GetRootCategory(fileSize);
 
+                // 0字节文件处理
+                if (category == "0" && fileSize == 0)
+                {
+                    // 如果历史文件不为 0 字节，则删除
+                    var rf = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName.ToUrlPath());
+                    if (rf != null)
+                    {
+                        if (!string.IsNullOrWhiteSpace(rf.FilesetHash))
+                        {
+                            // 如果原文件存在 hash，则删除
+                            var package = _rootPackageDb.Get(rf.RootPackageId);
+                            PackageDeleteFile(package, fileInfo.FullName);
+                        }
+                        else
+                        {
+                            // 0 字节文件没有 hash
+                            return;
+                        }
+                    }
+
+                    // 0 字节文件
+                    var pkg = _rootPackageDb.Where(c => c.Category == category).FirstOrDefault();
+                    if (pkg == null)
+                    {
+                        pkg = new RootPackage()
+                        {
+                            Category = category,
+                            Index = 0,
+                            Key = category + $"{0 % 256:x2}/{0}",
+                            Size = 0,
+                            Multifile = true
+                        };
+                        _rootPackageDb.Add(pkg);
+                    }
+
+                    // 加锁执行
+                    LocalResourceLock.Lock(pkg.Key, () =>
+                    {
+                        var pkgPath = Path.Combine(GetPackagePathByIndex(category, 0), $"{0}");
+                        Directory.CreateDirectory(pkgPath);
+
+                        var fileSize = fileInfo.Length;
+
+                        var packageDbPath = Path.Combine(_baseDir, pkg.Key, "0.d");
+
+                        // 判断是文件是否处理过
+                        var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+
+                        var oldFile = filesetDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
+                        if (oldFile != null)
+                        {
+                            if (string.IsNullOrWhiteSpace(oldFile.Hash))
+                            {
+                                // 处理过返回
+                                return;
+                            }
+                        }
+
+                        var file = new Fileset()
+                        {
+                            SourceKey = fileInfo.FullName.ToUrlPath(),
+                            Created = fileInfo.CreationTime.ToUnixTime(),
+                            Updated = fileInfo.LastWriteTime.ToUnixTime(),
+                            Size = fileSize,
+                            Key = $"{pkg.Key}/0.f"
+                        };
+                        filesetDb.Add(file);
+
+                        _rootFilesetDb.Add(new RootFileset()
+                        {
+                            RootPackageId = pkg.Id,
+                            FilesetSourceKey = fileInfo.FullName.ToUrlPath(),
+                        });
+                    });
+
+                    return;
+                }
+
                 // 计算文件 hash
                 var fileBytes = File.ReadAllBytes(filePath);
                 var hash = HashHelper.ComputeHashHex(fileBytes, hashAlgorithm);
@@ -419,40 +559,50 @@ namespace MDriveSync.Security
                         var package = _rootPackageDb.Get(rootFile.RootPackageId);
                         if (package != null)
                         {
-                            if (package.Multifile)
+                            // 说明是0字节文件变更了
+                            if (package.Key == "000/0")
                             {
-                                // 多文件包
-                                var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
-                                if (File.Exists(dbPath))
-                                {
-                                    var blocksetDb = new SqliteRepository<Blockset>(dbPath);
-                                    var fileDb = new SqliteRepository<Fileset>(dbPath);
-
-                                    var fileset = fileDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
-                                    if (fileset != null)
-                                    {
-                                        // 判断文件是增长还是收缩
-                                        // 如果文件被缩小，或者包大小 + 文件大小 < MAX_PACKAGE_SIZE，则直接还是更新次包
-                                        if (fileSize <= fileset.Size || (package.Size - fileset.Size + fileSize) <= MAX_PACKAGE_SIZE)
-                                        {
-                                            // 在原本的包基础上进行处理
-                                            PackageDeleteFile(package, fileInfo.FullName);
-                                            PackageAddFile(package, fileInfo, hash, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
-
-                                            // 处理完成
-                                            return;
-                                        }
-                                    }
-
-                                    // 删除并收缩包，然后在新的包中处理
-                                    PackageDeleteFile(package, fileInfo.FullName);
-                                }
+                                // 删除并收缩包，然后在新的包中处理
+                                // 删除重新处理
+                                PackageDeleteFile(package, fileInfo.FullName);
                             }
                             else
                             {
-                                // 单文件包，以滚动的方式验证哪个块需要增长或收缩
-                                PackageShrinkFileBySingle(package, fileInfo.FullName, hash, rootFile, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
-                                return;
+                                if (package.Multifile)
+                                {
+                                    // 多文件包
+                                    var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
+                                    if (File.Exists(dbPath))
+                                    {
+                                        var blocksetDb = new SqliteRepository<Blockset>(dbPath);
+                                        var fileDb = new SqliteRepository<Fileset>(dbPath);
+
+                                        var fileset = fileDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
+                                        if (fileset != null)
+                                        {
+                                            // 判断文件是增长还是收缩
+                                            // 如果文件被缩小，或者包大小 + 文件大小 < MAX_PACKAGE_SIZE，则直接还是更新次包
+                                            if (fileSize <= fileset.Size || (package.Size - fileset.Size + fileSize) <= MAX_PACKAGE_SIZE)
+                                            {
+                                                // 在原本的包基础上进行处理
+                                                PackageDeleteFile(package, fileInfo.FullName);
+                                                PackageAddFile(package, fileInfo, hash, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
+
+                                                // 处理完成
+                                                return;
+                                            }
+                                        }
+
+                                        // 删除并收缩包，然后在新的包中处理
+                                        PackageDeleteFile(package, fileInfo.FullName);
+                                    }
+                                }
+                                else
+                                {
+                                    // 单文件包，以滚动的方式验证哪个块需要增长或收缩
+                                    PackageShrinkFileBySingle(package, fileInfo.FullName, hash, rootFile, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
+                                    return;
+                                }
                             }
                         }
                     }
@@ -574,6 +724,11 @@ namespace MDriveSync.Security
         /// <param name="fileFullName"></param>
         public static void PackageDeleteFile(RootPackage package, string fileFullName)
         {
+            if (package == null || string.IsNullOrWhiteSpace(fileFullName))
+            {
+                return;
+            }
+
             // 加锁执行
             LocalResourceLock.Lock(package.Key, () =>
             {
@@ -1144,14 +1299,15 @@ namespace MDriveSync.Security
         /// <exception cref="NotSupportedException"></exception>
         public static string GetRootCategory(long fileSize)
         {
-            if (fileSize <= 1024) return "a";
+            if (fileSize <= 0) return "0"; // 0 字节文件
+            else if (fileSize <= 1024) return "a";
             else if (fileSize <= 10 * 1024) return "b";
             else if (fileSize <= 100 * 1024) return "c";
             else if (fileSize <= 1024 * 1024) return "d";
             else if (fileSize <= 10 * 1024 * 1024) return "e";
-            else if (fileSize <= PACKAGE_SIZE) return "f";
+            else if (fileSize <= PACKAGE_SIZE) return "f"; // <= 16MB 包大小为多个文件一个包
             else if (fileSize <= 100 * 1024 * 1024) return "g";
-            else if (fileSize <= 1024 * 1024 * 1024) return "gh";
+            else if (fileSize <= 1024 * 1024 * 1024) return "h";
             else if (fileSize <= 10 * 1024 * 1024 * 1024L) return "i";
             else if (fileSize <= 100 * 1024 * 1024 * 1024L) return "j";
             else if (fileSize <= 1024 * 1024 * 1024 * 1024L) return "k";

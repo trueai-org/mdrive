@@ -29,6 +29,7 @@ namespace MDriveSync.Security.Models
 
         /// <summary>
         /// 源文件 hash
+        /// 0 字节文件没有 hash
         /// </summary>
         public string FilesetHash { get; set; }
     }
