@@ -6,8 +6,12 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="EasyCompressor.LZ4" Version="2.0.2" />
+		<PackageReference Include="EasyCompressor.Snappier" Version="2.0.2" />
+		<PackageReference Include="EasyCompressor.ZstdSharp" Version="2.0.2" />
 		<PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="8.0.0" />
 		<PackageReference Include="FastMember" Version="1.5.0" />
 		<PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
+		<PackageReference Include="Blake3" Version="1.1.0" />
 	</ItemGroup>
 </Project>

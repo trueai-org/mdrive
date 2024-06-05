@@ -22,6 +22,7 @@ namespace MDriveSync.Security.Models
 
         /// <summary>
         /// 源文件 key
+        /// E:/gits/xxx/xxx/xx.xx
         /// </summary>
         [Index]
         public string FilesetSourceKey { get; set; }

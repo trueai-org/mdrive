@@ -1,5 +1,9 @@
-﻿using MDriveSync.Security.Models;
+﻿using EasyCompressor;
+using MDriveSync.Security.Models;
 using ServiceStack.Text;
+using System;
+using System.Configuration.Internal;
+using System.IO;
 using System.Security.Cryptography;
 
 namespace MDriveSync.Security
@@ -7,7 +11,7 @@ namespace MDriveSync.Security
     public class Testfile
     {
         /// <summary>
-        /// 默认包大小（用于首次打包计算）
+        /// 默认包大小（用于首次打包计算，必须 > 10MB 且 < 100MB）
         /// </summary>
         private const long PACKAGE_SIZE = 16 * 1024 * 1024;
 
@@ -29,190 +33,531 @@ namespace MDriveSync.Security
         /// <summary>
         /// 根目录
         /// </summary>
-        private const string _baseDir = "E:\\_test";
+        private static string _baseDir = "E:\\_test";
 
-        public static void Run()
+        /// <summary>
+        /// 开始备份
+        /// </summary>
+        public static void RunBackup()
         {
             _rootPackageDb = new(Path.Combine(_baseDir, "root.d"));
             _rootFilesetDb = new(Path.Combine(_baseDir, "root.d"));
 
             var files = Directory.GetFiles("E:\\_test\\imgs", "*.*", SearchOption.TopDirectoryOnly);
+            var count = files.Length;
+            var i = 0;
+
             foreach (var item in files)
             {
-                ProcessFile(item);
+                ProcessFile(item, "Snappy");
+
+                i++;
+                Console.WriteLine($"{i}/{count}, {item}");
             }
         }
 
-        public static void ProcessFile(string filePath)
+        /// <summary>
+        /// 开始还原
+        /// </summary>
+        public static void RunRestore2()
         {
-            // 获取文件大小，计算根分类
-            var fileInfo = new FileInfo(filePath);
-            var fileSize = fileInfo.Length;
-            var category = GetRootCategory(fileSize);
+            _rootPackageDb = new(Path.Combine(_baseDir, "root.d"));
+            _rootFilesetDb = new(Path.Combine(_baseDir, "root.d"));
 
-            // 计算文件 SHA256
-            var sha256Hash = ComputeSha256(filePath);
+            // 还原目录
+            var restoreDir = "E:\\_test\\imgs_restore";
 
-            RootPackage last = null;
+            // 获取所有的包和文件
 
-            var rootFile = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName);
-            if (rootFile != null)
+            var files = _rootFilesetDb.GetAll();
+            var pkgs = _rootPackageDb.GetAll();
+
+            var count = files.Count;
+            var i = 0;
+
+            foreach (var pkg in pkgs)
             {
-                if (rootFile.FilesetHash == sha256Hash)
+                // 包还原到指定目录
+
+                // 获取包路径
+                var packagePath = Path.Combine(_baseDir, pkg.Key);
+                var packageDbPath = Path.Combine(packagePath, "0.d");
+
+                if (File.Exists(packageDbPath))
                 {
-                    return;
-                }
-                else
-                {
-                    // 文件 hash 不一致，重新处理
-                    // 计算在原本块中增长或收缩文件
-                    var package = _rootPackageDb.Get(rootFile.RootPackageId);
-                    if (package != null)
+                    var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
+                    var blocksets = blocksetDb.GetAll().OrderBy(b => b.Index).ToList();
+
+                    foreach (var file in files.Where(f => f.RootPackageId == pkg.Id))
                     {
-                        if (package.Multifile)
+                        var sourceKey = file.FilesetSourceKey;
+                        // 移除源文件的根目录或盘符
+                        sourceKey = sourceKey.Substring(sourceKey.IndexOf('\\') + 1);
+
+                        var filePath = Path.Combine(restoreDir, sourceKey);
+                        var fileDir = Path.GetDirectoryName(filePath);
+                        if (fileDir != null)
+                        {
+                            Directory.CreateDirectory(fileDir);
+                        }
+
+                        using (var fs = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+                        {
+                            foreach (var block in blocksets.Where(b => b.FilesetId == file.Id))
+                            {
+                                var blockFilePath = Path.Combine(packagePath, $"{block.Index}.f");
+                                if (File.Exists(blockFilePath))
+                                {
+                                    using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                    {
+                                        blockStream.CopyTo(fs);
+                                    }
+                                }
+                            }
+                        }
+
+                        i++;
+                        Console.WriteLine($"{i}/{count}, {filePath}");
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 开始还原
+        ///   TODO 还原时，覆盖选项，还原到原目录，还是新目录
+        ///   TODO 恢复权限
+        /// </summary>
+        public static void RunRestore()
+        {
+            _rootPackageDb = new SqliteRepository<RootPackage>(Path.Combine(_baseDir, "root.d"));
+            _rootFilesetDb = new SqliteRepository<RootFileset>(Path.Combine(_baseDir, "root.d"));
+
+            // 还原目录
+            var restoreRootDir = "E:\\_test\\imgs_restore";
+            Directory.CreateDirectory(restoreRootDir); // 确保还原目录存在
+
+            // 获取所有的包和文件
+            var pkgs = _rootPackageDb.GetAll();
+
+            var count = pkgs.Count;
+            var i = 0;
+
+            foreach (var pkg in pkgs)
+            {
+                // 包还原到指定目录
+                // 获取包路径
+                var packagePath = Path.Combine(_baseDir, pkg.Key);
+                var packageDbPath = Path.Combine(packagePath, "0.d");
+
+                var restoreDir = Path.Combine(restoreRootDir, pkg.Key);
+                Directory.CreateDirectory(restoreDir);
+
+                RestoreByPackage(packageDbPath, restoreDir, true, false);
+
+                i++;
+
+                Console.WriteLine($"{i}/{count}, {pkg.Key}");
+            }
+        }
+
+        /// <summary>
+        /// 根据单个包信息还原文件（不依赖根文件 root.d ）
+        /// </summary>
+        /// <param name="packageDbPath">cell 包信息</param>
+        /// <param name="restorFileDir">还原文件目录位置，如果目录为空则为原目录</param>
+        /// <param name="sameOverwrite">同名覆盖</param>
+        /// <param name="sameRename">同名重命名</param>
+        /// <param name="sameJump">同名跳过</param>
+        public static void RestoreByPackage(string packageDbPath, string restorFileDir, bool sameOverwrite = false, bool sameRename = false, bool sameJump = false)
+        {
+            if (File.Exists(packageDbPath))
+            {
+                var packagePath = Path.GetDirectoryName(packageDbPath);
+
+                var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
+                var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+
+                var files = filesetDb.GetAll();
+                var blocksets = blocksetDb.GetAll().OrderBy(b => b.Index).ToList();
+
+                // 循环所有块，并还原到指定目录
+                foreach (var block in blocksets)
+                {
+                    var blockFilePath = Path.Combine(packagePath, $"{block.Index}.f");
+                    if (File.Exists(blockFilePath))
+                    {
+                        var file = files.Single(f => f.Id == block.FilesetId);
+                        var sourceKey = file.SourceKey;
+
+                        // 默认还原到原目录
+                        var filePartPath = sourceKey + ".part";
+
+                        // 如果指定了还原目录，则还原到指定目录
+                        if (!string.IsNullOrWhiteSpace(restorFileDir))
+                        {
+                            filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
+                        }
+
+                        var fileDir = Path.GetDirectoryName(filePartPath);
+                        if (fileDir != null)
+                        {
+                            Directory.CreateDirectory(fileDir);
+                        }
+
+                        // 这里需要块的文件流位置，然后写入到文件
+                        if (block.Index == 0 && block.StartIndex == 0 && block.EndIndex == 0)
+                        {
+                            // 0 字节文件
+                            File.Create(filePartPath).Close();
+                        }
+                        else
+                        {
+                            // 当处理第一个块时，直接写入文件
+                            if (block.Index == 0)
+                            {
+                                using (var fs = new FileStream(filePartPath, FileMode.Create, FileAccess.Write))
+                                {
+                                    using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                    {
+                                        blockStream.Seek(block.StartIndex, SeekOrigin.Begin);
+                                        byte[] buffer = new byte[block.Size];
+                                        blockStream.Read(buffer, 0, buffer.Length);
+
+                                        //// 解压 buffer
+                                        //if (block.InternalCompression == "LZ4")
+                                        //{
+                                        //    buffer = LZ4Compressor.Shared.Decompress(buffer);
+
+                                        //    //byte[] buffer2 = File.ReadAllBytes(blockFilePath);
+                                        //    //byte[] compressedBuffer2 = LZ4Compressor.Shared.Decompress(buffer2);
+
+                                        //}
+
+                                        // 解压 buffer
+                                        if (block.InternalCompression == "LZ4")
+                                        {
+                                            buffer = LZ4Compressor.Shared.Decompress(buffer);
+                                        }
+                                        else if (block.InternalCompression == "Zstd")
+                                        {
+                                            buffer = ZstdSharpCompressor.Shared.Decompress(buffer);
+                                        }
+                                        else if (block.InternalCompression == "Snappy")
+                                        {
+                                            buffer = SnappierCompressor.Shared.Decompress(buffer);
+                                        }
+
+                                        fs.Write(buffer, 0, buffer.Length);
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // 说明文件有多个块，需要覆盖写入，而不是追加写入
+                                using (var fs = new FileStream(filePartPath, FileMode.Open, FileAccess.Write))
+                                {
+                                    using (var blockStream = new FileStream(blockFilePath, FileMode.Open, FileAccess.Read))
+                                    {
+                                        blockStream.Seek(0, SeekOrigin.Begin);
+                                        byte[] buffer = new byte[block.Size];
+                                        blockStream.Read(buffer, 0, buffer.Length);
+
+                                        // 解压 buffer
+                                        if (block.InternalCompression == "LZ4")
+                                        {
+                                            buffer = LZ4Compressor.Shared.Decompress(buffer);
+                                        }
+                                        else if (block.InternalCompression == "Zstd")
+                                        {
+                                            buffer = ZstdSharpCompressor.Shared.Decompress(buffer);
+                                        }
+                                        else if (block.InternalCompression == "Snappy")
+                                        {
+                                            buffer = SnappierCompressor.Shared.Decompress(buffer);
+                                        }
+
+                                        // 确保文件指针移动到要覆盖的位置
+                                        fs.Seek(block.StartIndex, SeekOrigin.Begin);
+                                        fs.Write(buffer, 0, buffer.Length);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 校验所有 .part 文件的 sha256
+                // 如果校验通过，则重命名为原文件名
+                // 如果校验不通过，则删除临时 part 文件
+                foreach (var file in files)
+                {
+                    var sourceKey = file.SourceKey;
+
+                    // 默认还原到原目录
+                    var filePartPath = sourceKey + ".part";
+
+                    // 如果指定了还原目录，则还原到指定目录
+                    if (!string.IsNullOrWhiteSpace(restorFileDir))
+                    {
+                        filePartPath = Path.Combine(restorFileDir, Path.GetFileName(sourceKey) + ".part");
+                    }
+
+                    if (File.Exists(filePartPath))
+                    {
+                        var sha256 = ComputeSha256(filePartPath);
+                        if (sha256 == file.Hash)
+                        {
+                            // 校验通过，重命名文件
+                            var fileNewPath = filePartPath.Substring(0, filePartPath.Length - 5);
+
+                            // 如果文件已经存在，根据选项处理
+                            if (File.Exists(fileNewPath))
+                            {
+                                // 同名跳过
+                                if (sameJump)
+                                {
+                                    continue;
+                                }
+
+                                if (sameOverwrite)
+                                {
+                                    File.Delete(fileNewPath);
+                                }
+                                else if (sameRename)
+                                {
+                                    var fileDir = Path.GetDirectoryName(fileNewPath);
+                                    var fileName = Path.GetFileNameWithoutExtension(fileNewPath);
+                                    var fileExt = Path.GetExtension(fileNewPath);
+
+                                    for (int i = 1; i < int.MaxValue; i++)
+                                    {
+                                        fileNewPath = Path.Combine(fileDir, $"{fileName} ({i}){fileExt}");
+                                        if (!File.Exists(fileNewPath))
+                                        {
+                                            break;
+                                        }
+                                    }
+                                }
+                            }
+
+                            File.Move(filePartPath, fileNewPath, sameOverwrite);
+
+                            // 恢复文件时间
+                            var fileInfo = new FileInfo(fileNewPath);
+                            fileInfo.CreationTime = DateTimeOffset.FromUnixTimeSeconds(file.Created).LocalDateTime;
+                            fileInfo.LastWriteTime = DateTimeOffset.FromUnixTimeSeconds(file.Updated).LocalDateTime;
+                        }
+                        else
+                        {
+                            // 校验不通过，删除临时部分文件
+                            File.Delete(filePartPath);
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="filePath"></param>
+        /// <param name="internalCompression">在将数据存储到仓库之前，数据是否进行压缩，Zstd、LZ4、Snappy</param>
+        public static void ProcessFile(string filePath, string internalCompression = null)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    // 文件被删除了
+                    var rf = _rootFilesetDb.Single(c => c.FilesetSourceKey == filePath.ToUrlPath());
+                    if (rf != null)
+                    {
+                        // 文件 hash 不一致，重新处理
+                        // 计算在原本块中增长或收缩文件
+                        var package = _rootPackageDb.Get(rf.RootPackageId);
+                        if (package != null)
                         {
                             // 多文件包
                             var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
                             if (File.Exists(dbPath))
                             {
-                                var blocksetDb = new SqliteRepository<Blockset>(dbPath);
-                                var fileDb = new SqliteRepository<Fileset>(dbPath);
-
-                                var fileset = fileDb.Single(c => c.SourceKey == fileInfo.FullName);
-                                if (fileset != null)
-                                {
-                                    // 判断文件是增长还是收缩
-                                    // 如果文件被缩小，或者包大小 + 文件大小 < MAX_PACKAGE_SIZE，则直接还是更新次包
-                                    if (fileSize <= fileset.Size || (package.Size - fileset.Size + fileSize) <= MAX_PACKAGE_SIZE)
-                                    {
-                                        // 在原本的包基础上进行处理
-                                        PackageDeleteFile(package, fileInfo.FullName);
-                                        PackageAddFile(package, fileInfo, sha256Hash);
-
-                                        // 处理完成
-                                        return;
-                                    }
-                                }
-
-                                // 删除并收缩包，然后在新的包中处理
-                                PackageDeleteFile(package, fileInfo.FullName);
+                                PackageDeleteFile(package, filePath);
                             }
                         }
-                        else
+
+                        return;
+                    }
+                }
+
+                // 获取文件大小，计算根分类
+                var fileInfo = new FileInfo(filePath);
+                var fileSize = fileInfo.Length;
+                var category = GetRootCategory(fileSize);
+
+                // 计算文件 SHA256
+                var sha256Hash = ComputeSha256(filePath);
+
+                var rootFile = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName.ToUrlPath());
+                if (rootFile != null)
+                {
+                    if (rootFile.FilesetHash == sha256Hash)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        // 文件 hash 不一致，重新处理
+                        // 计算在原本块中增长或收缩文件
+                        var package = _rootPackageDb.Get(rootFile.RootPackageId);
+                        if (package != null)
                         {
-                            // 单文件包，以滚动的方式验证哪个块需要增长或收缩
-                            PackageShrinkFileBySingle(package, fileInfo.FullName, sha256Hash, rootFile);
-                            return;
+                            if (package.Multifile)
+                            {
+                                // 多文件包
+                                var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
+                                if (File.Exists(dbPath))
+                                {
+                                    var blocksetDb = new SqliteRepository<Blockset>(dbPath);
+                                    var fileDb = new SqliteRepository<Fileset>(dbPath);
+
+                                    var fileset = fileDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
+                                    if (fileset != null)
+                                    {
+                                        // 判断文件是增长还是收缩
+                                        // 如果文件被缩小，或者包大小 + 文件大小 < MAX_PACKAGE_SIZE，则直接还是更新次包
+                                        if (fileSize <= fileset.Size || (package.Size - fileset.Size + fileSize) <= MAX_PACKAGE_SIZE)
+                                        {
+                                            // 在原本的包基础上进行处理
+                                            PackageDeleteFile(package, fileInfo.FullName);
+                                            PackageAddFile(package, fileInfo, sha256Hash, internalCompression);
+
+                                            // 处理完成
+                                            return;
+                                        }
+                                    }
+
+                                    // 删除并收缩包，然后在新的包中处理
+                                    PackageDeleteFile(package, fileInfo.FullName);
+                                }
+                            }
+                            else
+                            {
+                                // 单文件包，以滚动的方式验证哪个块需要增长或收缩
+                                PackageShrinkFileBySingle(package, fileInfo.FullName, sha256Hash, rootFile, internalCompression);
+                                return;
+                            }
                         }
                     }
                 }
-            }
 
-            // 获取最后一个包
-            if (last == null)
-            {
+                // 获取最后一个包
                 // 计算包 index
                 // 读取 sqlite 数据库，获取最新包的索引，如果没有则为 0，如果 (包size + 文件size) < PACKAGE_SIZE，则为当前包，否则为新包（index+1）
-                last = _rootPackageDb.Where(c => c.Category == category).OrderByDescending(c => c.Index).FirstOrDefault();
-            }
 
-            var lastPackageIndex = 0;
-            if (last == null)
-            {
-                last = new RootPackage()
+                RootPackage last = null;
+                var lastPackageIndex = 0;
+
+                // 一定是小于等于 PACKAGE_SIZE 的文件
+                // 即相同类别 Category 的文件大小一定是相同 Multifile
+                if (fileSize <= PACKAGE_SIZE)
                 {
-                    Category = category,
-                    Index = lastPackageIndex,
-                    Key = category + $"{lastPackageIndex % 256:x2}/{lastPackageIndex}",
-                    Size = 0,
-                    Multifile = fileSize < PACKAGE_SIZE
-                };
-                _rootPackageDb.Add(last);
-            }
-            else if (fileSize < PACKAGE_SIZE && last.Multifile && (last.Size + fileSize <= PACKAGE_SIZE))
-            {
-                // 如果是多文件包，且文件大小小于包大小，且包大小 + 文件大小小于包大小，则加入当前包
-                lastPackageIndex = last.Index;
-            }
-            else
-            {
-                lastPackageIndex = last.Index + 1;
-                last = new RootPackage()
+                    // 文件较小，打包处理
+                    // 读取一个数据较少的包
+                    last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category && (c.Size + fileSize) < PACKAGE_SIZE)
+                       .OrderBy(c => c.Size)
+                       .FirstOrDefault();
+
+                    if (last == null)
+                    {
+                        // 最后一个包
+                        last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category)
+                            .OrderByDescending(c => c.Index)
+                            .FirstOrDefault();
+                    }
+
+                    if (last == null)
+                    {
+                        last = new RootPackage()
+                        {
+                            Category = category,
+                            Index = lastPackageIndex,
+                            Key = category + $"{lastPackageIndex % 256:x2}/{lastPackageIndex}",
+                            Size = 0,
+                            Multifile = true
+                        };
+                        _rootPackageDb.Add(last);
+                    }
+                    else if (last.Size + fileSize <= PACKAGE_SIZE)
+                    {
+                        // 如果是多文件包，且文件大小小于包大小，且包大小 + 文件大小小于包大小，则加入当前包
+                        lastPackageIndex = last.Index;
+                    }
+                    else
+                    {
+                        lastPackageIndex = last.Index + 1;
+                        last = new RootPackage()
+                        {
+                            Category = category,
+                            Index = lastPackageIndex,
+                            Key = category + $"{lastPackageIndex % 256:x2}/{lastPackageIndex}",
+                            Size = 0,
+                            Multifile = true
+                        };
+                        _rootPackageDb.Add(last);
+                    }
+                }
+                else
                 {
-                    Category = category,
-                    Index = lastPackageIndex,
-                    Key = category + $"{lastPackageIndex % 256:x2}/{lastPackageIndex}",
-                    Size = 0,
-                    Multifile = fileSize < PACKAGE_SIZE
-                };
-                _rootPackageDb.Add(last);
+                    // 文件较大，分块处理
+                    last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category)
+                        .OrderByDescending(c => c.Index)
+                        .FirstOrDefault();
+
+                    if (last == null)
+                    {
+                        last = new RootPackage()
+                        {
+                            Category = category,
+                            Index = lastPackageIndex,
+                            Key = category + $"{lastPackageIndex % 256:x2}/{lastPackageIndex}",
+                            Size = 0,
+                            Multifile = false
+                        };
+                        _rootPackageDb.Add(last);
+                    }
+                    else
+                    {
+                        lastPackageIndex = last.Index + 1;
+                        last = new RootPackage()
+                        {
+                            Category = category,
+                            Index = lastPackageIndex,
+                            Key = category + $"{lastPackageIndex % 256:x2}/{lastPackageIndex}",
+                            Size = 0,
+                            Multifile = false
+                        };
+                        _rootPackageDb.Add(last);
+                    }
+                }
+
+                // 根据包索引获取包的存储路径
+                // 包根路径
+                var packageRootPath = GetPackagePathByIndex(category, lastPackageIndex);
+
+                // 包完整路径
+                var packageFullPath = Path.Combine(packageRootPath, $"{lastPackageIndex}");
+                Directory.CreateDirectory(packageFullPath);
+
+                // 包加入
+                PackageAddFile(last, fileInfo, sha256Hash, internalCompression);
             }
-
-            // 根据包索引获取包的存储路径
-            // 包根路径
-            var packageRootPath = GetPackagePathByIndex(category, lastPackageIndex);
-
-            // 包完整路径
-            var packageFullPath = Path.Combine(packageRootPath, $"{lastPackageIndex}");
-            Directory.CreateDirectory(packageFullPath);
-
-            // 包加入
-            PackageAddFile(last, fileInfo, sha256Hash);
-
-            // TODO
-            // 单文件包和多文件包
-
-            //if (fileSize > PACKAGE_SIZE)
-            //{
-            //    // 拆包
-            //}
-            //else
-            //{
-            //}
-            //if (fileSize <= PACKAGE_SIZE)
-            //{
-            //    // 文件大小小于包大小，直接加入包
-            //    CombineIntoPackage(filePath, packageFilePath);
-            //}
-            //else
-            //{
-            //    // 文件大小大于包大小，需要分包
-            //    // 1. 读取包文件，计算包大小
-            //    var packageSize = new FileInfo(packageFilePath).Length;
-
-            //    // 2. 判断是否需要新建包
-            //    if (packageSize + fileSize > MAX_PACKAGE_SIZE)
-            //    {
-            //        // 3. 新建包
-            //        index++;
-            //        last = new RootPackage()
-            //        {
-            //            Category = category,
-            //            Index = index,
-            //            Key = category + $"{index % 256:x2}",
-            //            Size = 0
-            //        };
-            //        _rootIndexDb.Add(last);
-
-            //        // 4. 更新包路径
-            //        packageFullPath = Path.Combine(packageRootPath, $"{index}");
-            //        Directory.CreateDirectory(packageFullPath);
-
-            //        // 5. 更新包数据库文件路径
-            //        packageDbPath = Path.Combine(packageFullPath, $"{index}.d");
-
-            //        // 6. 更新包文件路径
-            //        packageFilePath = Path.Combine(packageFullPath, $"{index}.f");
-            //    }
-
-            //    // 7. 加入包
-            //    CombineIntoPackage(filePath, packageFilePath);
-            //}
-
-            //var cellDb = new SqliteRepository<Cell, string>(packageDbPath);
-
-            // 更新索引和校验
-            //UpdateIndexAndVerify(packagePath, category);
+            finally
+            {
+                // TODO
+                // 更新索引和校验
+                //UpdateIndexAndVerify(packagePath, category);
+            }
         }
 
         /// <summary>
@@ -227,7 +572,8 @@ namespace MDriveSync.Security
             {
                 var packageDbPath = Path.Combine(_baseDir, package.Key, "0.d");
 
-                if (File.Exists(fileFullName) && File.Exists(packageDbPath))
+                // 不判断源文件是否存在，因为文件可能被删除
+                if (File.Exists(packageDbPath))
                 {
                     var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
                     var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
@@ -237,7 +583,7 @@ namespace MDriveSync.Security
                     {
                         var packageFilePath = Path.Combine(_baseDir, package.Key, "0.f");
 
-                        var fileset = filesetDb.Single(c => c.SourceKey == fileFullName);
+                        var fileset = filesetDb.Single(c => c.SourceKey == fileFullName.ToUrlPath());
                         if (fileset != null)
                         {
                             var blocksets = blocksetDb.Where(c => c.FilesetId == fileset.Id);
@@ -247,7 +593,7 @@ namespace MDriveSync.Security
 
                             package.Size -= fileset.Size;
                             _rootPackageDb.Update(package);
-                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == fileFullName);
+                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == fileFullName.ToUrlPath());
 
                             // 收缩包
                             if (blocksets.Count > 0 && File.Exists(packageFilePath))
@@ -296,7 +642,7 @@ namespace MDriveSync.Security
                     else
                     {
                         // 只有一个文件的包，包含 1 个或多个块
-                        var filesets = filesetDb.Where(c => c.SourceKey == fileFullName);
+                        var filesets = filesetDb.Where(c => c.SourceKey == fileFullName.ToUrlPath());
                         var filesetIds = filesets.Select(f => f.Id).ToList();
                         var blocksets = blocksetDb.Where(c => filesetIds.Contains(c.FilesetId));
 
@@ -310,7 +656,7 @@ namespace MDriveSync.Security
 
                             package.Size -= filesets.Sum(c => c.Size);
                             _rootPackageDb.Update(package);
-                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == fileFullName);
+                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == fileFullName.ToUrlPath());
 
                             // 删除包
                             if (blocksets.Count > 0)
@@ -382,7 +728,7 @@ namespace MDriveSync.Security
         /// </summary>
         /// <param name="package"></param>
         /// <param name="fileFullName"></param>
-        public static void PackageShrinkFileBySingle(RootPackage package, string fileFullName, string sha256Hash, RootFileset rootFileset)
+        public static void PackageShrinkFileBySingle(RootPackage package, string fileFullName, string sha256Hash, RootFileset rootFileset, string internalCompression = null)
         {
             if (package.Multifile)
             {
@@ -405,15 +751,12 @@ namespace MDriveSync.Security
                     var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
                     var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
 
-                    var filesets = filesetDb.Where(c => c.SourceKey == fileFullName).ToList();
+                    var filesets = filesetDb.Where(c => c.SourceKey == fileFullName.ToUrlPath()).ToList();
                     var filesetIds = filesets.Select(f => f.Id).ToList();
                     var blocksets = blocksetDb.Where(c => filesetIds.Contains(c.FilesetId)).OrderBy(c => c.Index).ToList();
 
                     if (filesets.Count > 0)
                     {
-                        // 减去历史块文件大小
-                        package.Size -= filesets.Sum(c => c.Size);
-
                         using (FileStream fs = new FileStream(fileFullName, FileMode.Open, FileAccess.Read))
                         {
                             var blockIndex = 0;
@@ -434,6 +777,23 @@ namespace MDriveSync.Security
                                 byte[] buffer = new byte[blockLength];
                                 fs.Read(buffer, 0, (int)blockLength);
 
+                                // 解压缩 buffer
+                                if (internalCompression == "LZ4")
+                                {
+                                    // 使用 LZ4 共享实例完成解压缩任务
+                                    buffer = LZ4Compressor.Shared.Decompress(buffer);
+                                }
+                                else if (internalCompression == "Zstd")
+                                {
+                                    // 使用 Zstd 共享实例完成解压缩任务
+                                    buffer = ZstdSharpCompressor.Shared.Decompress(buffer);
+                                }
+                                else if (internalCompression == "Snappy")
+                                {
+                                    // 使用 Snappy 共享实例完成解压缩任务
+                                    buffer = SnappierCompressor.Shared.Decompress(buffer);
+                                }
+
                                 string blockHash;
                                 using (SHA256 sha256 = SHA256.Create())
                                 {
@@ -446,18 +806,11 @@ namespace MDriveSync.Security
 
                                     // 删除所有后续块
                                     var remainingBlocks = blocksets.Skip(block.Index).ToList();
+                                    var remainingBlockFids = remainingBlocks.Select(c => c.FilesetId).ToList();
                                     foreach (var remainingBlock in remainingBlocks)
                                     {
-                                        // 删除块信息
+                                        // 删除分块信息
                                         blocksetDb.Delete(remainingBlock);
-
-                                        // 删除分块文件信息
-                                        var fds = filesets.Where(c => c.Id == remainingBlock.FilesetId).ToList();
-                                        foreach (var fd in fds)
-                                        {
-                                            filesetDb.Delete(fd);
-                                            filesets.Remove(fd);
-                                        }
 
                                         // 删除分块文件
                                         var deleteFile = Path.Combine(_baseDir, package.Key, $"{remainingBlock.Index}.f");
@@ -465,27 +818,24 @@ namespace MDriveSync.Security
                                         {
                                             File.Delete(deleteFile);
                                         }
+
+                                        // 删除分块文件信息
+                                        var fds = filesets.Where(c => c.Id == remainingBlock.FilesetId).ToList();
+                                        foreach (var fd in fds)
+                                        {
+                                            filesetDb.Delete(fd);
+                                        }
                                     }
+
+                                    // 历史块信息删除
+                                    blocksets.RemoveAll(b => b.Index >= block.Index);
+
+                                    // 历史块文件信息删除
+                                    filesets.RemoveAll(f => remainingBlockFids.Contains(f.Id));
 
                                     // 从当前位置开始重新写入包文件
                                     fs.Position = blockStartIndex;
 
-                                    var packageFilePath = Path.Combine(_baseDir, package.Key, $"{block.Index}.f");
-                                    using (FileStream packageStream = new FileStream(packageFilePath, FileMode.OpenOrCreate, FileAccess.Write))
-                                    {
-                                        packageStream.Position = blockStartIndex;
-                                        packageStream.Write(buffer, 0, buffer.Length);
-                                    }
-
-                                    // 更新当前块信息
-                                    block.Hash = blockHash;
-                                    block.Size = blockLength;
-                                    block.EndIndex = blockEndIndex;
-                                    blocksetDb.Update(block);
-
-                                    blockIndex = block.Index + 1;
-
-                                    // 继续处理剩余的块
                                     break;
                                 }
                                 else
@@ -495,9 +845,9 @@ namespace MDriveSync.Security
                                 }
                             }
 
-                            if (!blockMismatch)
+                            if (blockMismatch)
                             {
-                                // 如果没有块不一致，文件的其余部分处理
+                                // 处理文件的其余部分
                                 while (fs.Position < fs.Length)
                                 {
                                     blockStartIndex = fs.Position;
@@ -517,16 +867,34 @@ namespace MDriveSync.Security
                                         blockHash = BitConverter.ToString(sha256.ComputeHash(buffer)).Replace("-", "").ToLowerInvariant();
                                     }
 
-                                    var packageFilePath = Path.Combine(_baseDir, package.Key, $"{blockIndex}.f");
-                                    using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
+                                    // 压缩 buffer
+                                    if (internalCompression == "LZ4")
                                     {
-                                        packageStream.Write(buffer, 0, (int)blockLength);
+                                        // 使用 LZ4 共享实例完成压缩任务
+                                        buffer = LZ4Compressor.Shared.Compress(buffer);
+                                    }
+                                    else if (internalCompression == "Zstd")
+                                    {
+                                        // 使用 Zstd 共享实例完成压缩任务
+                                        buffer = ZstdSharpCompressor.Shared.Compress(buffer);
+                                    }
+                                    else if (internalCompression == "Snappy")
+                                    {
+                                        // 使用 Snappy 共享实例完成压缩任务
+                                        buffer = SnappierCompressor.Shared.Compress(buffer);
+                                    }
+                                    blockLength = buffer.Length;
+
+                                    var packageFilePath = Path.Combine(_baseDir, package.Key, $"{blockIndex}.f");
+                                    using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Create, FileAccess.Write))
+                                    {
+                                        packageStream.Write(buffer, 0, buffer.Length);
                                     }
 
                                     // 创建块文件信息
                                     var file = new Fileset()
                                     {
-                                        SourceKey = fileInfo.FullName,
+                                        SourceKey = fileInfo.FullName.ToUrlPath(),
                                         Created = fileInfo.CreationTime.ToUnixTime(),
                                         Updated = fileInfo.LastWriteTime.ToUnixTime(),
                                         Hash = sha256Hash,
@@ -534,6 +902,7 @@ namespace MDriveSync.Security
                                         Key = $"{package.Key}/{blockIndex}.f"
                                     };
                                     filesetDb.Add(file);
+                                    filesets.Add(file);
 
                                     // 创建新的块记录
                                     var newBlock = new Blockset()
@@ -546,13 +915,15 @@ namespace MDriveSync.Security
                                         EndIndex = blockEndIndex
                                     };
                                     blocksetDb.Add(newBlock);
+                                    blocksets.Add(newBlock);
+
                                     blockIndex++;
                                 }
                             }
                         }
 
                         // 重新计算当前文件大小
-                        package.Size += filesets.Sum(c => c.Size);
+                        package.Size = filesets.Sum(c => c.Size);
                         _rootPackageDb.Update(package);
 
                         // 更新根文件集信息
@@ -563,16 +934,18 @@ namespace MDriveSync.Security
             });
         }
 
-
-        // TODO 注意更新 root package 和 rootFileset 需要单独加锁更新，因为这两个表是全局的，需要保证数据的一致性
-
         /// <summary>
         /// 在指定的包中添加文件
         /// </summary>
         /// <param name="package"></param>
         /// <param name="fileFullName"></param>
-        public static void PackageAddFile(RootPackage package, FileInfo fileInfo, string sha256Hash)
+        /// <param name="fileInfo"></param>
+        /// <param name="internalCompression">Zstd、LZ4、Snappy</param>
+        public static void PackageAddFile(RootPackage package, FileInfo fileInfo, string sha256Hash, string internalCompression = null)
         {
+            // 可以不用加锁，应为同一个包只有一个线程在处理
+            // 注意更新 root package 和 rootFileset 需要单独加锁更新，因为这两个表是全局的，需要保证数据的一致性
+
             if (package == null || !fileInfo.Exists)
             {
                 return;
@@ -589,7 +962,7 @@ namespace MDriveSync.Security
                 var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
                 var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
 
-                var oldFile = filesetDb.Single(c => c.SourceKey == fileInfo.FullName);
+                var oldFile = filesetDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
                 if (oldFile != null)
                 {
                     if (oldFile.Hash == sha256Hash)
@@ -614,19 +987,90 @@ namespace MDriveSync.Security
 
                     var packageFilePath = Path.Combine(_baseDir, package.Key, "0.f");
 
+                    var blockSize = 0L;
                     using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
                     {
-                        using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.ReadWrite))
+                        byte[] buffer = File.ReadAllBytes(fileInfo.FullName);
+                        byte[] compressedBuffer;
+
+                        // 读取文件流，根据压缩算法进行压缩、加密等处理
+                        if (internalCompression == "LZ4")
                         {
-                            blockStartIndex = packageStream.Length;
-                            fileStream.CopyTo(packageStream);
-                            blockEndIndex = packageStream.Length - 1;
+                            compressedBuffer = LZ4Compressor.Shared.Compress(buffer);
+
+                            //// 使用 LZ4 共享实例完成压缩任务
+                            //// 创建一个新的流接收压缩 Compress 的数据
+                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read))
+                            //using (MemoryStream compressedStream = new MemoryStream())
+                            //{
+                            //    blockStartIndex = packageStream.Length;
+
+                            //    // 将文件流压缩到内存流
+
+                            //    LZ4Compressor.Shared.Compress(fileStream, compressedStream);
+                            //    compressedStream.Position = 0;
+                            //    compressedStream.CopyTo(packageStream);
+
+                            //    blockSize = compressedStream.Length;
+                            //    blockEndIndex = packageStream.Length - 1;
+                            //}
                         }
+                        else if (internalCompression == "Zstd")
+                        {
+                            compressedBuffer = ZstdSharpCompressor.Shared.Compress(buffer); 
+
+                            // 使用 Zstd 共享实例完成压缩任务
+                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read))
+                            //using (MemoryStream compressedStream = new MemoryStream())
+                            //{
+                            //    blockStartIndex = packageStream.Length;
+                            //    ZstdSharpCompressor.Shared.Compress(fileStream, compressedStream);
+                            //    compressedStream.Position = 0;
+                            //    compressedStream.CopyTo(packageStream);
+                            //    blockSize = compressedStream.Length;
+                            //    blockEndIndex = packageStream.Length - 1;
+                            //}
+                        }
+                        else if (internalCompression == "Snappy")
+                        {
+                            compressedBuffer = SnappierCompressor.Shared.Compress(buffer);
+
+                            // 使用 Snappy 共享实例完成压缩任务
+                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.Read))
+                            //using (MemoryStream compressedStream = new MemoryStream())
+                            //{
+                            //    blockStartIndex = packageStream.Length;
+                            //    SnappierCompressor.Shared.Compress(fileStream, compressedStream);
+                            //    compressedStream.Position = 0;
+                            //    compressedStream.CopyTo(packageStream);
+                            //    blockSize = compressedStream.Length;
+                            //    blockEndIndex = packageStream.Length - 1;
+                            //}
+                        }
+                        else
+                        {
+                            compressedBuffer = buffer;
+
+                            // 无压缩
+                            //using (FileStream fileStream = new FileStream(fileInfo.FullName, FileMode.Open, FileAccess.ReadWrite))
+                            //{
+                            //    blockStartIndex = packageStream.Length;
+                            //    fileStream.CopyTo(packageStream);
+                            //    blockSize = fileStream.Length;
+                            //    blockEndIndex = packageStream.Length - 1;
+                            //}
+                        }
+
+
+                        blockStartIndex = packageStream.Length;
+                        packageStream.Write(compressedBuffer, 0, compressedBuffer.Length);
+                        blockEndIndex = packageStream.Length - 1;
+                        blockSize = compressedBuffer.Length;
                     }
 
                     var file = new Fileset()
                     {
-                        SourceKey = fileInfo.FullName,
+                        SourceKey = fileInfo.FullName.ToUrlPath(),
                         Created = fileInfo.CreationTime.ToUnixTime(),
                         Updated = fileInfo.LastWriteTime.ToUnixTime(),
                         Hash = sha256Hash,
@@ -641,10 +1085,11 @@ namespace MDriveSync.Security
                     {
                         FilesetId = file.Id,
                         Hash = sha256Hash,
-                        Size = fileSize,
                         Index = blockIndex,
                         StartIndex = blockStartIndex,
-                        EndIndex = blockEndIndex
+                        EndIndex = blockEndIndex,
+                        Size = blockSize,
+                        InternalCompression = internalCompression
                     };
                     blocksetDb.Add(bs);
                 }
@@ -678,14 +1123,46 @@ namespace MDriveSync.Security
 
                             // 写入包文件
                             var packageFilePath = Path.Combine(_baseDir, package.Key, $"{blockIndex}.f");
-                            using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
+
+                            // 判断是否压缩
+                            if (internalCompression == "LZ4")
                             {
-                                packageStream.Write(buffer, 0, (int)blockLength);
+                                // 使用 LZ4 共享实例完成压缩任务
+                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
+                                {
+                                    LZ4Compressor.Shared.Compress(buffer, packageStream);
+                                }
                             }
+                            else if (internalCompression == "Zstd")
+                            {
+                                // 使用 Zstd 共享实例完成压缩任务
+                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
+                                {
+                                    ZstdSharpCompressor.Shared.Compress(buffer, packageStream);
+                                }
+                            }
+                            else if (internalCompression == "Snappy")
+                            {
+                                // 使用 Snappy 共享实例完成压缩任务
+                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
+                                {
+                                    SnappierCompressor.Shared.Compress(buffer, packageStream);
+                                }
+                            }
+                            else
+                            {
+                                // 无压缩
+                                using (FileStream packageStream = new FileStream(packageFilePath, FileMode.Append))
+                                {
+                                    packageStream.Write(buffer, 0, (int)blockLength);
+                                }
+                            }
+                            blockLength = buffer.Length;
+
 
                             var file = new Fileset()
                             {
-                                SourceKey = fileInfo.FullName,
+                                SourceKey = fileInfo.FullName.ToUrlPath(),
                                 Created = fileInfo.CreationTime.ToUnixTime(),
                                 Updated = fileInfo.LastWriteTime.ToUnixTime(),
                                 Hash = sha256Hash,
@@ -702,7 +1179,8 @@ namespace MDriveSync.Security
                                 Size = blockLength,
                                 Index = blockIndex,
                                 StartIndex = blockStartIndex,
-                                EndIndex = blockEndIndex
+                                EndIndex = blockEndIndex,
+                                InternalCompression = internalCompression
                             };
                             blocksetDb.Add(bs);
 
@@ -713,14 +1191,13 @@ namespace MDriveSync.Security
                     }
                 }
 
-
                 // 更新包大小
                 package.Size += fileSize;
 
                 _rootFilesetDb.Add(new RootFileset()
                 {
                     RootPackageId = package.Id,
-                    FilesetSourceKey = fileInfo.FullName,
+                    FilesetSourceKey = fileInfo.FullName.ToUrlPath(),
                     FilesetHash = sha256Hash
                 });
                 _rootPackageDb.Update(package);
@@ -772,11 +1249,12 @@ namespace MDriveSync.Security
             else if (fileSize <= 100 * 1024) return "c";
             else if (fileSize <= 1024 * 1024) return "d";
             else if (fileSize <= 10 * 1024 * 1024) return "e";
-            else if (fileSize <= 100 * 1024 * 1024) return "f";
-            else if (fileSize <= 1024 * 1024 * 1024) return "g";
-            else if (fileSize <= 10 * 1024 * 1024 * 1024L) return "h";
-            else if (fileSize <= 100 * 1024 * 1024 * 1024L) return "i";
-            else if (fileSize <= 1024 * 1024 * 1024 * 1024L) return "j";
+            else if (fileSize <= PACKAGE_SIZE) return "f";
+            else if (fileSize <= 100 * 1024 * 1024) return "g";
+            else if (fileSize <= 1024 * 1024 * 1024) return "gh";
+            else if (fileSize <= 10 * 1024 * 1024 * 1024L) return "i";
+            else if (fileSize <= 100 * 1024 * 1024 * 1024L) return "j";
+            else if (fileSize <= 1024 * 1024 * 1024 * 1024L) return "k";
             else throw new NotSupportedException("不支持大于 1TB 的文件");
         }
 
@@ -812,28 +1290,28 @@ namespace MDriveSync.Security
             return path;
         }
 
-        public static void UpdateIndexAndVerify(string packagePath, string category)
-        {
-            string indexFile = Path.Combine(_baseDir, $"{category}.f");
+        //public static void UpdateIndexAndVerify(string packagePath, string category)
+        //{
+        //    string indexFile = Path.Combine(_baseDir, $"{category}.f");
 
-            // 更新 index 文件
-            File.AppendAllText(indexFile, packagePath + Environment.NewLine);
+        //    // 更新 index 文件
+        //    File.AppendAllText(indexFile, packagePath + Environment.NewLine);
 
-            // 验证 index 文件
-            VerifyIndexFile(indexFile);
-        }
+        //    // 验证 index 文件
+        //    VerifyIndexFile(indexFile);
+        //}
 
-        public static void VerifyIndexFile(string indexFile)
-        {
-            // 简单校验逻辑示例，可以根据实际需求进行更复杂的校验
-            if (!File.Exists(indexFile))
-            {
-                throw new FileNotFoundException("Index file not found");
-            }
-            else
-            {
-                Console.WriteLine("Index file verification passed");
-            }
-        }
+        //public static void VerifyIndexFile(string indexFile)
+        //{
+        //    // 简单校验逻辑示例，可以根据实际需求进行更复杂的校验
+        //    if (!File.Exists(indexFile))
+        //    {
+        //        throw new FileNotFoundException("Index file not found");
+        //    }
+        //    else
+        //    {
+        //        Console.WriteLine("Index file verification passed");
+        //    }
+        //}
     }
 }

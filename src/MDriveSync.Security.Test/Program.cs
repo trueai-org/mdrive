@@ -9,19 +9,31 @@ namespace MDriveSync.Security.Test
     {
         static void Main(string[] args)
         {
+            var sw = new Stopwatch();
+
+
+            sw.Restart();
+            Testfile.RunRestore();
+            sw.Stop();
+
+            Console.WriteLine($"还原用时：{sw.ElapsedMilliseconds}ms");
+            Console.WriteLine("Hello, World!");
+            Console.ReadKey();
+            return;
+
+            sw.Restart();
+            Testfile.RunBackup();
+            sw.Stop();
+
+            Console.WriteLine($"备份用时：{sw.ElapsedMilliseconds}ms");
+            Console.WriteLine("Hello, World!");
+            Console.ReadKey();
+
+
             //Test2();
 
             //Console.WriteLine("Hello, World!");
             //Console.ReadKey();
-
-            var sw = new Stopwatch();
-            sw.Start();
-            Testfile.Run();
-            sw.Stop();
-
-            Console.WriteLine($"用时：{sw.ElapsedMilliseconds}ms");
-            Console.WriteLine("Hello, World!");
-            Console.ReadKey();
         }
 
 
