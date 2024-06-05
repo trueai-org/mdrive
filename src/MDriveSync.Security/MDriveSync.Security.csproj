@@ -6,7 +6,9 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="BouncyCastle.Cryptography" Version="2.4.0" />
 		<PackageReference Include="EasyCompressor.LZ4" Version="2.0.2" />
+		<PackageReference Include="EasyCompressor.LZMA" Version="2.0.2" />
 		<PackageReference Include="EasyCompressor.Snappier" Version="2.0.2" />
 		<PackageReference Include="EasyCompressor.ZstdSharp" Version="2.0.2" />
 		<PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="8.0.0" />

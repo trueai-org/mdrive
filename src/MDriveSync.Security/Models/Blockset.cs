@@ -48,7 +48,7 @@ namespace MDriveSync.Security.Models
         public long EndIndex { get; set; }
 
         /// <summary>
-        /// 加密算法（AES256-GCM、CHACHA20-POLY1305）
+        /// 加密算法（AES256-GCM、ChaCha20-Poly1305）
         /// 用于加密存储在备份仓库中的数据块的算法
         /// 默认：AES256-GCM
         /// </summary>

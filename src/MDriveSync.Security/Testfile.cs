@@ -49,7 +49,7 @@ namespace MDriveSync.Security
                 //ProcessFile(item, "SHA256", "LZ4");
 
                 // 加密测试
-                ProcessFile(item, "SHA256", "LZ4", "AES256-GCM", "123");
+                ProcessFile(item, "BLAKE3", "Zstd", "ChaCha20-Poly1305", "123sdfsdfsdfsdfsdfsdfsdfsdf");
 
                 i++;
                 Console.WriteLine($"{i}/{count}, {item}");
@@ -153,7 +153,7 @@ namespace MDriveSync.Security
                 var restoreDir = Path.Combine(restoreRootDir, pkg.Key);
                 Directory.CreateDirectory(restoreDir);
 
-                RestoreByPackage(packageDbPath, restoreDir, true, false, false, "1234");
+                RestoreByPackage(packageDbPath, restoreDir, true, false, false, "123sdfsdfsdfsdfsdfsdfsdfsdf");
 
                 i++;
 

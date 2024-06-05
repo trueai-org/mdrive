@@ -1,5 +1,4 @@
-﻿using System;
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 
 namespace MDriveSync.Security
@@ -11,6 +10,7 @@ namespace MDriveSync.Security
     {
         // 定义AES256-GCM和ChaCha20-Poly1305使用的Nonce和Tag的长度
         private const int AesGcmTagSize = 16; // 128-bit tag
+
         private const int ChaCha20NonceSize = 12; // 96-bit nonce
         private const int ChaCha20TagSize = 16;   // 128-bit tag
 
@@ -78,27 +78,36 @@ namespace MDriveSync.Security
         /// <returns>加密后的数据，包括nonce、密文和tag</returns>
         public static byte[] EncryptWithChaCha20Poly1305(byte[] plaintext, string key)
         {
-            using ChaCha20Poly1305 chacha = new ChaCha20Poly1305(GenerateKey(key));
+            if (ChaCha20Poly1305.IsSupported)
+            {
+                using ChaCha20Poly1305 chacha = new ChaCha20Poly1305(GenerateKey(key));
 
-            // 生成随机nonce
-            byte[] nonce = new byte[ChaCha20NonceSize];
-            RandomNumberGenerator.Fill(nonce);
+                // 生成随机nonce
+                byte[] nonce = new byte[ChaCha20NonceSize];
+                RandomNumberGenerator.Fill(nonce);
 
-            // 准备存储加密后的密文和tag
-            byte[] ciphertext = new byte[plaintext.Length];
-            byte[] tag = new byte[ChaCha20TagSize];
+                // 准备存储加密后的密文和tag
+                byte[] ciphertext = new byte[plaintext.Length];
+                byte[] tag = new byte[ChaCha20TagSize];
 
-            // 执行加密操作
-            chacha.Encrypt(nonce, plaintext, ciphertext, tag);
+                // 执行加密操作
+                chacha.Encrypt(nonce, plaintext, ciphertext, tag);
 
-            // 合并nonce、密文和tag到一个结果数组
-            byte[] result = new byte[nonce.Length + ciphertext.Length + tag.Length];
-            Buffer.BlockCopy(nonce, 0, result, 0, nonce.Length);
-            Buffer.BlockCopy(ciphertext, 0, result, nonce.Length, ciphertext.Length);
-            Buffer.BlockCopy(tag, 0, result, nonce.Length + ciphertext.Length, tag.Length);
+                // 合并nonce、密文和tag到一个结果数组
+                byte[] result = new byte[nonce.Length + ciphertext.Length + tag.Length];
+                Buffer.BlockCopy(nonce, 0, result, 0, nonce.Length);
+                Buffer.BlockCopy(ciphertext, 0, result, nonce.Length, ciphertext.Length);
+                Buffer.BlockCopy(tag, 0, result, nonce.Length + ciphertext.Length, tag.Length);
 
-            return result;
+                return result;
+            }
+            else
+            {
+                // 使用 BouncyCastle.Cryptography 实现 ChaCha20-Poly1305 算法
+                return BouncyCastleCryptographyHelper.EncryptChaCha20Poly1305(plaintext, GenerateKey(key));
+            }
         }
+
 
         /// <summary>
         /// 使用ChaCha20-Poly1305算法解密数据
@@ -108,21 +117,29 @@ namespace MDriveSync.Security
         /// <returns>解密后的明文数据</returns>
         public static byte[] DecryptWithChaCha20Poly1305(byte[] encryptedData, string key)
         {
-            using ChaCha20Poly1305 chacha = new ChaCha20Poly1305(GenerateKey(key));
+            if (ChaCha20Poly1305.IsSupported)
+            {
+                using ChaCha20Poly1305 chacha = new ChaCha20Poly1305(GenerateKey(key));
 
-            // 提取nonce、密文和tag
-            byte[] nonce = new byte[ChaCha20NonceSize];
-            byte[] tag = new byte[ChaCha20TagSize];
-            byte[] ciphertext = new byte[encryptedData.Length - nonce.Length - tag.Length];
+                // 提取nonce、密文和tag
+                byte[] nonce = new byte[ChaCha20NonceSize];
+                byte[] tag = new byte[ChaCha20TagSize];
+                byte[] ciphertext = new byte[encryptedData.Length - nonce.Length - tag.Length];
 
-            Buffer.BlockCopy(encryptedData, 0, nonce, 0, nonce.Length);
-            Buffer.BlockCopy(encryptedData, nonce.Length, ciphertext, 0, ciphertext.Length);
-            Buffer.BlockCopy(encryptedData, nonce.Length + ciphertext.Length, tag, 0, tag.Length);
+                Buffer.BlockCopy(encryptedData, 0, nonce, 0, nonce.Length);
+                Buffer.BlockCopy(encryptedData, nonce.Length, ciphertext, 0, ciphertext.Length);
+                Buffer.BlockCopy(encryptedData, nonce.Length + ciphertext.Length, tag, 0, tag.Length);
 
-            byte[] decryptedData = new byte[ciphertext.Length];
-            chacha.Decrypt(nonce, ciphertext, tag, decryptedData);
+                byte[] decryptedData = new byte[ciphertext.Length];
+                chacha.Decrypt(nonce, ciphertext, tag, decryptedData);
 
-            return decryptedData;
+                return decryptedData;
+            }
+            else
+            {
+                // 使用 BouncyCastle.Cryptography 实现 ChaCha20-Poly1305 算法
+                return BouncyCastleCryptographyHelper.DecryptChaCha20Poly1305(encryptedData, GenerateKey(key));
+            }
         }
 
         /// <summary>
