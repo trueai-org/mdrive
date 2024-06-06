@@ -5,7 +5,10 @@ using ServiceStack.Text;
 
 namespace MDriveSync.Security
 {
-    public class Testfile
+    /// <summary>
+    /// 本地存储作业
+    /// </summary>
+    public class LocalJob
     {
         /// <summary>
         /// 默认包大小（用于首次打包计算，必须 > 10MB 且 < 100MB）
@@ -1564,7 +1567,7 @@ namespace MDriveSync.Security
             }
             else
             {
-                return new LiteRepository<T>(dbPath, password);
+                return new LiteDBRepository<T>(dbPath, password);
             }
         }
     }

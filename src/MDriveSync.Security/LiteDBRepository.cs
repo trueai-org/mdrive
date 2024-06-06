@@ -8,7 +8,7 @@ namespace MDriveSync.Security
     /// LiteDB 数据库的泛型仓库类。
     /// </summary>
     /// <typeparam name="T">数据实体类型。</typeparam>
-    public class LiteRepository<T> : IRepository<T> where T : IBaseId, new()
+    public class LiteDBRepository<T> : IRepository<T> where T : IBaseId, new()
     {
         private static readonly object _lock = new();
         private readonly LiteDatabase _db;
@@ -18,7 +18,7 @@ namespace MDriveSync.Security
         /// </summary>
         /// <param name="dbName">数据库名称。</param>
         /// <param name="password">数据库密码。</param>
-        public LiteRepository(string dbName, string password)
+        public LiteDBRepository(string dbName, string password)
         {
             var dbPath = Path.Combine(Directory.GetCurrentDirectory(), dbName);
 

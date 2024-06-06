@@ -89,18 +89,6 @@ namespace MDriveSync.Security
             {
                 throw new ArgumentException("Unsupported hash algorithm", nameof(algorithm));
             }
-
-            //byte[] hash = ComputeHash(data, algorithm);
-            //return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-
-            // OR
-            //byte[] hash = ComputeHash(data, algorithm);
-            //StringBuilder sb = new StringBuilder(hash.Length * 2);
-            //foreach (byte b in hash)
-            //{
-            //    sb.Append(b.ToString("x2"));
-            //}
-            //return sb.ToString();
         }
     }
 }

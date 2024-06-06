@@ -108,7 +108,6 @@ namespace MDriveSync.Security
             }
         }
 
-
         /// <summary>
         /// 使用ChaCha20-Poly1305算法解密数据
         /// </summary>
@@ -154,5 +153,4 @@ namespace MDriveSync.Security
             return sha256.ComputeHash(Encoding.UTF8.GetBytes(key.PadRight(32).Substring(0, 32)));
         }
     }
-
 }

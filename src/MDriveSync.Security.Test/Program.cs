@@ -87,7 +87,7 @@ namespace MDriveSync.Security.Test
             //return;
 
             sw.Restart();
-            Testfile.RunBackup();
+            LocalJob.RunBackup();
             sw.Stop();
 
             Console.WriteLine($"备份用时：{sw.ElapsedMilliseconds}ms");
