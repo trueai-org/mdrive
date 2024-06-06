@@ -297,8 +297,7 @@ namespace MDriveSync.Security
 
                             if (File.Exists(filePartPath))
                             {
-                                var partBytes = File.ReadAllBytes(filePartPath);
-                                var hash = HashHelper.ComputeHashHex(partBytes, hashAlgorithm);
+                                var hash = HashHelper.ComputeHashHex(filePartPath, hashAlgorithm);
                                 if (hash == file.Hash)
                                 {
                                     // 校验通过，重命名文件
@@ -474,8 +473,7 @@ namespace MDriveSync.Security
                 }
 
                 // 计算文件 hash
-                var fileBytes = File.ReadAllBytes(filePath);
-                var hash = HashHelper.ComputeHashHex(fileBytes, hashAlgorithm);
+                var hash = HashHelper.ComputeHashHex(filePath, hashAlgorithm);
 
                 var rootFile = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName.ToUrlPath());
                 if (rootFile != null)
