@@ -37,7 +37,7 @@ namespace MDriveSync.Security
         /// </summary>
         public static void RunBackup()
         {
-            var pwd = "123";
+            var pwd = "";
             _rootPackageDb = GetRepository<RootPackage>(Path.Combine(_baseDir, "root.d"), pwd);
             _rootFilesetDb = GetRepository<RootFileset>(Path.Combine(_baseDir, "root.d"), pwd);
 
