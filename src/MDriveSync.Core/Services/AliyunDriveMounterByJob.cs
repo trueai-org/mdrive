@@ -242,6 +242,7 @@ namespace MDriveSync.Core.Services
             }
             catch (Exception ex)
             {
+                
                 // 处理异常情况
                 return DokanResult.Error;
             }

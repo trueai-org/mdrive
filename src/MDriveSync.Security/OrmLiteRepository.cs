@@ -2,8 +2,8 @@
 using ServiceStack;
 using ServiceStack.OrmLite;
 using ServiceStack.OrmLite.Legacy;
+using System.Data.SQLite;
 using System.Linq.Expressions;
-using System.Runtime.Caching;
 
 namespace MDriveSync.Security
 {
@@ -14,29 +14,27 @@ namespace MDriveSync.Security
 
     /// <summary>
     /// SQLite 数据库的泛型仓库类。
-    /// 提供对指定类型的基本 CRUD 操作，并支持缓存功能。
     /// </summary>
     /// <typeparam name="T">数据实体类型。</typeparam>
-    public class SqliteRepository<T> where T : IBaseId, new()
+    public class OrmLiteRepository<T> : IRepository<T> where T : IBaseId, new()
     {
         private static readonly object _lock = new object();
 
         private readonly OrmLiteConnectionFactory _dbFactory;
-        private readonly MemoryCache _cache = new(typeof(T).Name);
-        private readonly string _cacheKey = typeof(T).Name;
-        private readonly bool? _useCache;
 
         private readonly TypeAccessor _accessor = TypeAccessor.Create(typeof(T));
         private readonly MemberSet _members;
 
         /// <summary>
         /// 创建 sqlite
+        /// sqlite 模式默认不支持加密文件数据，使用加密太慢了
         /// </summary>
         /// <param name="dbName">数据库名称，例如：log.db</param>
-        /// <param name="noCache">是否使用缓存</param>
-        public SqliteRepository(string dbName, bool? noCache = null)
+        public OrmLiteRepository(string dbName)
         {
-            _useCache = noCache;
+            // 设置日志回调函数为 null，禁用日志
+            SQLiteLog.Enabled = false;
+
             _members = _accessor.GetMembers();
 
             var dbPath = Path.Combine(Directory.GetCurrentDirectory(), dbName);
@@ -53,6 +51,13 @@ namespace MDriveSync.Security
             db.CreateTableIfNotExists<T>();
         }
 
+
+        // 初始化索引等
+        public void Init()
+        {
+
+        }
+
         // 增加
         public void Add(T entity)
         {
@@ -60,7 +65,6 @@ namespace MDriveSync.Security
             var obj = db.Insert(entity, selectIdentity: true);
             entity.Id = (int)obj;
         }
-
 
         // 批量增加，优化处理超过 10000 条记录的情况
         public void AddRange(IEnumerable<T> entities)
@@ -74,16 +78,6 @@ namespace MDriveSync.Security
             {
                 var batch = entityList.Skip(i).Take(batchSize);
                 db.InsertAll(batch);
-
-                // 更新缓存
-                if (_useCache == true)
-                {
-                    var items = GetCachedDataOrNull();
-                    if (items != null)
-                    {
-                        items.AddRange(batch);
-                    }
-                }
             }
         }
 
@@ -112,18 +106,8 @@ namespace MDriveSync.Security
         // 查询所有
         public List<T> GetAll(bool? useCache = null)
         {
-            if (useCache == null)
-                useCache = _useCache;
-
-            if (useCache == true)
-            {
-                return GetCachedData();
-            }
-            else
-            {
-                using var db = _dbFactory.Open();
-                return db.Select<T>();
-            }
+            using var db = _dbFactory.Open();
+            return db.Select<T>();
         }
 
         // 查询
@@ -133,11 +117,47 @@ namespace MDriveSync.Security
             return db.Select<T>(predicate);
         }
 
+        public List<T> Where(Expression<Func<T, bool>> filter = null, Expression<Func<T, object>> orderBy = null, bool orderByAsc = true)
+        {
+            using var db = _dbFactory.Open();
+            var query = db.From<T>();
+            if (filter != null)
+            {
+                query = query.Where(filter);
+            }
+
+            if (orderBy != null)
+            {
+                query = orderByAsc ? query.OrderBy(orderBy) : query.OrderByDescending(orderBy);
+            }
+
+            return db.Select(query).ToList();
+        }
+
+
         public T Single(Expression<Func<T, bool>> predicate)
         {
             using var db = _dbFactory.Open();
             return db.Single<T>(predicate);
         }
+
+        public T Single(Expression<Func<T, bool>> filter = null, Expression<Func<T, object>> orderBy = null, bool orderByAsc = true)
+        {
+            using var db = _dbFactory.Open();
+            var query = db.From<T>();
+            if (filter != null)
+            {
+                query = query.Where(filter);
+            }
+
+            if (orderBy != null)
+            {
+                query = orderByAsc ? query.OrderBy(orderBy) : query.OrderByDescending(orderBy);
+            }
+
+            return db.Single(query);
+        }
+
 
         public bool Any(Expression<Func<T, bool>> predicate)
         {
@@ -151,17 +171,17 @@ namespace MDriveSync.Security
             return db.Count(predicate);
         }
 
-        public int Delete(T model)
+        public void Delete(T model)
         {
             using var db = _dbFactory.Open();
-            return db.Delete(model);
+            db.Delete(model);
         }
+
         public int Delete(Expression<Func<T, bool>> predicate)
         {
             using var db = _dbFactory.Open();
             return db.Delete(predicate);
         }
-
 
         // 查询
         public T Get(object id)
@@ -170,22 +190,11 @@ namespace MDriveSync.Security
             return db.SingleById<T>(id);
         }
 
-        private List<T> GetCachedDataOrNull()
+        // 收据库收缩/压缩
+        public void Compact()
         {
-            if (_cache.Contains(_cacheKey))
-            {
-                return GetCachedData();
-            }
-            return null;
-        }
-
-        private List<T> GetCachedData()
-        {
-            if (!_cache.Contains(_cacheKey))
-            {
-                var items = GetAll(false);
-            }
-            return (List<T>)_cache.Get(_cacheKey);
+            using var db = _dbFactory.Open();
+            db.ExecuteSql("VACUUM");
         }
 
         /// <summary>
@@ -263,6 +272,24 @@ namespace MDriveSync.Security
                 transaction.Rollback();
                 throw;
             }
+        }
+
+        public void Delete(int id)
+        {
+            using var db = _dbFactory.Open();
+            db.Delete(id);
+        }
+
+        public List<T> GetAll()
+        {
+            using var db = _dbFactory.Open();
+            return db.Select<T>().ToList();
+        }
+
+        public T Get(int id)
+        {
+            using var db = _dbFactory.Open();
+            return db.SingleById<T>(id);
         }
     }
 }

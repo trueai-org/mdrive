@@ -10,8 +10,9 @@ namespace MDriveSync.Security.Models
         /// <summary>
         /// ID
         /// </summary>
-        [PrimaryKey]
-        [AutoIncrement]
+        //[PrimaryKey]
+        //[AutoIncrement]
+        [PrimaryKey, AutoIncrement]
         public int Id { get; set; }
 
         /// <summary>

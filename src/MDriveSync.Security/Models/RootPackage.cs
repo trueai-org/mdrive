@@ -15,8 +15,7 @@ namespace MDriveSync.Security.Models
         /// <summary>
         /// 文件 ID
         /// </summary>
-        [PrimaryKey]
-        [AutoIncrement]
+        [PrimaryKey, AutoIncrement]
         public int Id { get; set; }
 
         /// <summary>

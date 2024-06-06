@@ -1,6 +1,6 @@
 ﻿using MDriveSync.Security.Models;
-using Org.BouncyCastle.Math.Field;
 using ServiceStack;
+using ServiceStack.OrmLite;
 using ServiceStack.Text;
 
 namespace MDriveSync.Security
@@ -20,12 +20,12 @@ namespace MDriveSync.Security
         /// <summary>
         /// 根目录包索引
         /// </summary>
-        private static SqliteRepository<RootPackage> _rootPackageDb;
+        private static IRepository<RootPackage> _rootPackageDb;
 
         /// <summary>
         /// 根目录文件索引
         /// </summary>
-        private static SqliteRepository<RootFileset> _rootFilesetDb;
+        private static IRepository<RootFileset> _rootFilesetDb;
 
         /// <summary>
         /// 根目录
@@ -37,10 +37,13 @@ namespace MDriveSync.Security
         /// </summary>
         public static void RunBackup()
         {
-            _rootPackageDb = new(Path.Combine(_baseDir, "root.d"));
-            _rootFilesetDb = new(Path.Combine(_baseDir, "root.d"));
+            var pwd = "123";
+            _rootPackageDb = GetRepository<RootPackage>(Path.Combine(_baseDir, "root.d"), pwd);
+            _rootFilesetDb = GetRepository<RootFileset>(Path.Combine(_baseDir, "root.d"), pwd);
 
-            var files = Directory.GetFiles("E:\\_test\\imgs", "*.*", SearchOption.TopDirectoryOnly);
+            _rootFilesetDb.Init();
+
+            var files = Directory.GetFiles("E:\\_test\\imgs", "*.*", SearchOption.AllDirectories);
             var count = files.Length;
             var i = 0;
 
@@ -50,11 +53,14 @@ namespace MDriveSync.Security
                 //ProcessFile(item, "SHA256", "LZ4");
 
                 // 加密测试
-                ProcessFile(item, "BLAKE3", "Zstd", "ChaCha20-Poly1305", "123sdfsdfsdfsdfsdfsdfsdfsdf");
+                ProcessFile(item, "BLAKE3", "Zstd", "ChaCha20-Poly1305", pwd);
 
                 i++;
                 Console.WriteLine($"{i}/{count}, {item}");
             }
+
+            // 执行数据库压缩
+            _rootPackageDb.Compact();
         }
 
         /// <summary>
@@ -62,8 +68,10 @@ namespace MDriveSync.Security
         /// </summary>
         public static void RunRestore()
         {
-            _rootPackageDb = new SqliteRepository<RootPackage>(Path.Combine(_baseDir, "root.d"));
-            _rootFilesetDb = new SqliteRepository<RootFileset>(Path.Combine(_baseDir, "root.d"));
+            var pwd = "123";
+
+            _rootPackageDb = GetRepository<RootPackage>(Path.Combine(_baseDir, "root.d"), pwd);
+            _rootFilesetDb = GetRepository<RootFileset>(Path.Combine(_baseDir, "root.d"), pwd);
 
             // 还原目录
             var restoreRootDir = "E:\\_test\\imgs_restore";
@@ -85,7 +93,7 @@ namespace MDriveSync.Security
                 var restoreDir = Path.Combine(restoreRootDir, pkg.Key);
                 Directory.CreateDirectory(restoreDir);
 
-                RestoreByPackage(packageDbPath, restoreDir, true, false, false, "123sdfsdfsdfsdfsdfsdfsdfsdf");
+                RestoreByPackage(packageDbPath, restoreDir, true, false, false, pwd);
 
                 i++;
 
@@ -116,8 +124,8 @@ namespace MDriveSync.Security
                 {
                     var packagePath = Path.GetDirectoryName(packageDbPath);
 
-                    var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
-                    var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+                    var blocksetDb = GetRepository<Blockset>(packageDbPath, encryptionKey);
+                    var filesetDb = GetRepository<Fileset>(packageDbPath, encryptionKey);
 
                     var files = filesetDb.GetAll();
                     var blocksets = blocksetDb.GetAll().OrderBy(b => b.Index).ToList();
@@ -368,7 +376,8 @@ namespace MDriveSync.Security
                 if (!File.Exists(filePath))
                 {
                     // 文件被删除了
-                    var rf = _rootFilesetDb.Single(c => c.FilesetSourceKey == filePath.ToUrlPath());
+                    var upath = filePath.ToUrlPath();
+                    var rf = _rootFilesetDb.Single(c => c.FilesetSourceKey == upath);
                     if (rf != null)
                     {
                         // 文件 hash 不一致，重新处理
@@ -380,7 +389,7 @@ namespace MDriveSync.Security
                             var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
                             if (File.Exists(dbPath))
                             {
-                                PackageDeleteFile(package, filePath);
+                                PackageDeleteFile(package, filePath, encryptionKey);
                             }
                         }
                     }
@@ -397,14 +406,15 @@ namespace MDriveSync.Security
                 if (category == "0" && fileSize == 0)
                 {
                     // 如果历史文件不为 0 字节，则删除
-                    var rf = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName.ToUrlPath());
+                    var upath = fileInfo.FullName.ToUrlPath();
+                    var rf = _rootFilesetDb.Single(c => c.FilesetSourceKey == upath);
                     if (rf != null)
                     {
                         if (!string.IsNullOrWhiteSpace(rf.FilesetHash))
                         {
                             // 如果原文件存在 hash，则删除
                             var package = _rootPackageDb.Get(rf.RootPackageId);
-                            PackageDeleteFile(package, fileInfo.FullName);
+                            PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
                         }
                         else
                         {
@@ -414,7 +424,7 @@ namespace MDriveSync.Security
                     }
 
                     // 0 字节文件
-                    var pkg = _rootPackageDb.Where(c => c.Category == category).FirstOrDefault();
+                    var pkg = _rootPackageDb.Single(c => c.Category == category);
                     if (pkg == null)
                     {
                         pkg = new RootPackage()
@@ -439,9 +449,10 @@ namespace MDriveSync.Security
                         var packageDbPath = Path.Combine(_baseDir, pkg.Key, "0.d");
 
                         // 判断是文件是否处理过
-                        var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+                        var filesetDb = GetRepository<Fileset>(packageDbPath, encryptionKey);
 
-                        var oldFile = filesetDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
+                        var upath = fileInfo.FullName.ToUrlPath();
+                        var oldFile = filesetDb.Single(c => c.SourceKey == upath);
                         if (oldFile != null)
                         {
                             if (string.IsNullOrWhiteSpace(oldFile.Hash))
@@ -461,11 +472,14 @@ namespace MDriveSync.Security
                         };
                         filesetDb.Add(file);
 
-                        _rootFilesetDb.Add(new RootFileset()
+                        var rfModel = new RootFileset()
                         {
                             RootPackageId = pkg.Id,
                             FilesetSourceKey = fileInfo.FullName.ToUrlPath(),
-                        });
+                            FilesetCreated = fileInfo.CreationTime.ToUnixTimeMs(),
+                            FilesetUpdated = fileInfo.LastWriteTime.ToUnixTimeMs(),
+                        };
+                        _rootFilesetDb.Add(rfModel);
                     });
 
                     // 处理完毕
@@ -475,7 +489,8 @@ namespace MDriveSync.Security
                 // 计算文件 hash
                 var hash = HashHelper.ComputeHashHex(filePath, hashAlgorithm);
 
-                var rootFile = _rootFilesetDb.Single(c => c.FilesetSourceKey == fileInfo.FullName.ToUrlPath());
+                var urlPath = fileInfo.FullName.ToUrlPath();
+                var rootFile = _rootFilesetDb.Single(c => c.FilesetSourceKey == urlPath);
                 if (rootFile != null)
                 {
                     if (rootFile.FilesetHash == hash)
@@ -492,7 +507,7 @@ namespace MDriveSync.Security
                             if (rootFile.IsShadow)
                             {
                                 // 如果是影子文件变更了，则将影子文件移除，作为新的文件处理
-                                PackageDeleteFile(package, fileInfo.FullName);
+                                PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
                             }
                             else
                             {
@@ -501,7 +516,7 @@ namespace MDriveSync.Security
                                 {
                                     // 删除并收缩包，然后在新的包中处理
                                     // 删除重新处理
-                                    PackageDeleteFile(package, fileInfo.FullName);
+                                    PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
                                 }
                                 else
                                 {
@@ -511,10 +526,11 @@ namespace MDriveSync.Security
                                         var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
                                         if (File.Exists(dbPath))
                                         {
-                                            var blocksetDb = new SqliteRepository<Blockset>(dbPath);
-                                            var fileDb = new SqliteRepository<Fileset>(dbPath);
+                                            var blocksetDb = GetRepository<Blockset>(dbPath, encryptionKey);
+                                            var fileDb = GetRepository<Fileset>(dbPath, encryptionKey);
 
-                                            var fileset = fileDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
+                                            var upath = fileInfo.FullName.ToUrlPath();
+                                            var fileset = fileDb.Single(c => c.SourceKey == upath);
                                             if (fileset != null)
                                             {
                                                 // 判断文件是增长还是收缩
@@ -522,7 +538,7 @@ namespace MDriveSync.Security
                                                 if (fileSize <= fileset.Size || (package.Size - fileset.Size + fileSize) <= MAX_PACKAGE_SIZE)
                                                 {
                                                     // 在原本的包基础上进行处理
-                                                    PackageDeleteFile(package, fileInfo.FullName);
+                                                    PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
                                                     PackageAddFile(package, fileInfo, hash, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
 
                                                     // 处理完成
@@ -531,7 +547,7 @@ namespace MDriveSync.Security
                                             }
 
                                             // 删除并收缩包，然后在新的包中处理
-                                            PackageDeleteFile(package, fileInfo.FullName);
+                                            PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
                                         }
                                     }
                                     else
@@ -549,7 +565,8 @@ namespace MDriveSync.Security
                 {
                     // 查找是否有相同的文件
                     // 如果有相同大小，且 hash 相同的文件，则创建影子文件
-                    var realFile = _rootFilesetDb.Single(c => c.FilesetSize == fileSize && c.FilesetHash == hash && c.IsShadow == false && c.FilesetSourceKey != fileInfo.FullName.ToUrlPath());
+                    var upath = fileInfo.FullName.ToUrlPath();
+                    var realFile = _rootFilesetDb.Single(c => c.FilesetSize == fileSize && c.FilesetHash == hash && c.IsShadow == false && c.FilesetSourceKey != upath);
                     if (realFile != null)
                     {
                         // 找到了相同的真实文件，说明新文件是影子文件
@@ -566,13 +583,14 @@ namespace MDriveSync.Security
                                 var dbPath = Path.Combine(_baseDir, package.Key, "0.d");
                                 if (File.Exists(dbPath))
                                 {
-                                    var blocksetDb = new SqliteRepository<Blockset>(dbPath);
-                                    var filesetDb = new SqliteRepository<Fileset>(dbPath);
+                                    var blocksetDb = GetRepository<Blockset>(dbPath, encryptionKey);
+                                    var filesetDb = GetRepository<Fileset>(dbPath, encryptionKey);
 
                                     var filesets = filesetDb.Where(c => c.SourceKey == realFile.FilesetSourceKey);
                                     if (filesets.Count > 0)
                                     {
-                                        var blocks = blocksetDb.Where(c => filesets.Select(f => f.Id).Contains(c.FilesetId));
+                                        var fids = filesets.Select(f => f.Id).ToList();
+                                        var blocks = blocksetDb.Where(c => fids.Contains(c.FilesetId));
                                         if (blocks.Count > 0)
                                         {
                                             // 创建影子文件的 fileset， 并复制真实文件的 block
@@ -613,7 +631,7 @@ namespace MDriveSync.Security
                                                 }
                                             }
 
-                                            _rootFilesetDb.Add(new RootFileset()
+                                            var rf = new RootFileset()
                                             {
                                                 RootPackageId = package.Id,
                                                 FilesetSourceKey = fileInfo.FullName.ToUrlPath(),
@@ -622,7 +640,8 @@ namespace MDriveSync.Security
                                                 FilesetSize = fileSize,
                                                 FilesetHash = hash,
                                                 IsShadow = true
-                                            });
+                                            };
+                                            _rootFilesetDb.Add(rf);
 
                                             // 影子文件不更新包大小
 
@@ -654,16 +673,20 @@ namespace MDriveSync.Security
                 {
                     // 文件较小，打包处理
                     // 读取一个数据较少的包
-                    last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category && (c.Size + fileSize) < PACKAGE_SIZE)
-                       .OrderBy(c => c.Size)
-                       .FirstOrDefault();
+                    // 由于数据库不支持 (c.Size + fileSize) < PACKAGE_SIZE
+                    // 因此调整
+                    var allowSize = PACKAGE_SIZE - fileSize;
+
+                    last = _rootPackageDb.Single(c => c.Multifile == true && c.Category == category && c.Size <= allowSize, c => c.Size);
+
+                    //last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category && (c.Size + fileSize) < PACKAGE_SIZE)
+                    //   .OrderBy(c => c.Size)
+                    //   .FirstOrDefault();
 
                     if (last == null)
                     {
                         // 最后一个包
-                        last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category)
-                            .OrderByDescending(c => c.Index)
-                            .FirstOrDefault();
+                        last = _rootPackageDb.Single(c => c.Multifile == true && c.Category == category, c => c.Index, true);
                     }
 
                     if (last == null)
@@ -700,9 +723,7 @@ namespace MDriveSync.Security
                 else
                 {
                     // 文件较大，分块处理
-                    last = _rootPackageDb.Where(c => c.Multifile == false && c.Category == category)
-                        .OrderByDescending(c => c.Index)
-                        .FirstOrDefault();
+                    last = _rootPackageDb.Single(c => c.Multifile == false && c.Category == category, c => c.Index, false);
 
                     if (last == null)
                     {
@@ -755,7 +776,7 @@ namespace MDriveSync.Security
         /// </summary>
         /// <param name="package"></param>
         /// <param name="fileFullName"></param>
-        public static void PackageDeleteFile(RootPackage package, string fileFullName)
+        public static void PackageDeleteFile(RootPackage package, string fileFullName, string encryptionKey = null)
         {
             if (package == null || string.IsNullOrWhiteSpace(fileFullName))
             {
@@ -772,15 +793,16 @@ namespace MDriveSync.Security
                 // 不判断源文件是否存在，因为文件可能被删除
                 if (File.Exists(packageDbPath))
                 {
-                    var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
-                    var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+                    var blocksetDb = GetRepository<Blockset>(packageDbPath, encryptionKey);
+                    var filesetDb = GetRepository<Fileset>(packageDbPath, encryptionKey);
 
                     // 含有多个文件的单个包
                     if (package.Multifile)
                     {
                         var packageFilePath = Path.Combine(_baseDir, package.Key, "0.f");
 
-                        var fileset = filesetDb.Single(c => c.SourceKey == fileFullName.ToUrlPath());
+                        var upath = fileFullName.ToUrlPath();
+                        var fileset = filesetDb.Single(c => c.SourceKey == upath);
                         if (fileset != null)
                         {
                             var blocksets = blocksetDb.Where(c => c.FilesetId == fileset.Id);
@@ -788,7 +810,7 @@ namespace MDriveSync.Security
                             blocksetDb.Delete(c => c.FilesetId == fileset.Id);
                             filesetDb.Delete(fileset);
 
-                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == fileFullName.ToUrlPath());
+                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == upath);
 
                             // 是否允许收缩文件
                             var isAllowShrinkFile = false;
@@ -878,7 +900,8 @@ namespace MDriveSync.Security
                     else
                     {
                         // 只有一个文件的包，包含 1 个或多个块
-                        var filesets = filesetDb.Where(c => c.SourceKey == fileFullName.ToUrlPath());
+                        var upath = fileFullName.ToUrlPath();
+                        var filesets = filesetDb.Where(c => c.SourceKey == upath);
                         var filesetIds = filesets.Select(f => f.Id).ToList();
                         var blocksets = blocksetDb.Where(c => filesetIds.Contains(c.FilesetId));
 
@@ -890,7 +913,7 @@ namespace MDriveSync.Security
                                 filesetDb.Delete(fileset);
                             }
 
-                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == fileFullName.ToUrlPath());
+                            _rootFilesetDb.Delete(c => c.FilesetSourceKey == upath);
 
                             // 是否允许收缩文件
                             var isAllowShrinkFile = false;
@@ -993,7 +1016,7 @@ namespace MDriveSync.Security
                             // 处理完毕后，判断文件如果有且只有一个文件，且引用此文件的是影子文件，则将影子文件标记为真实文件
                             // 根据 hash 和大小判断
                             var fileHash = filesets.First().Hash;
-                            var fss = filesetDb.Where(c => c.Hash == fileHash); ;
+                            var fss = filesetDb.Where(c => c.Hash == fileHash);
                             if (fss.GroupBy(c => c.SourceKey).Count() == 1 && fss.Any(x => x.IsShadow == true))
                             {
                                 foreach (var item in fss)
@@ -1003,7 +1026,8 @@ namespace MDriveSync.Security
                                 }
 
                                 // 标记 rootFileset isShadow
-                                var rootFileset = _rootFilesetDb.Single(c => c.FilesetSourceKey == fss.First().SourceKey && c.IsShadow == true);
+                                var fssKey = fss.First().SourceKey;
+                                var rootFileset = _rootFilesetDb.Single(c => c.FilesetSourceKey == fssKey && c.IsShadow == true);
                                 if (rootFileset != null)
                                 {
                                     rootFileset.IsShadow = false;
@@ -1012,6 +1036,8 @@ namespace MDriveSync.Security
                             }
                         }
                     }
+
+                    filesetDb.Compact();
                 }
             });
         }
@@ -1049,12 +1075,13 @@ namespace MDriveSync.Security
 
                 if (File.Exists(fileFullName) && File.Exists(packageDbPath))
                 {
-                    var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
-                    var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
+                    var blocksetDb = GetRepository<Blockset>(packageDbPath, encryptionKey);
+                    var filesetDb = GetRepository<Fileset>(packageDbPath, encryptionKey);
 
-                    var filesets = filesetDb.Where(c => c.SourceKey == fileFullName.ToUrlPath()).ToList();
+                    var upath = fileFullName.ToUrlPath();
+                    var filesets = filesetDb.Where(c => c.SourceKey == upath).ToList();
                     var filesetIds = filesets.Select(f => f.Id).ToList();
-                    var blocksets = blocksetDb.Where(c => filesetIds.Contains(c.FilesetId)).OrderBy(c => c.Index).ToList();
+                    var blocksets = blocksetDb.Where(c => filesetIds.Contains(c.FilesetId), c => c.Index);
 
                     if (filesets.Count > 0)
                     {
@@ -1228,16 +1255,16 @@ namespace MDriveSync.Security
                         else
                         {
                             // 删除并收缩包，然后在新的包中处理
-                            PackageDeleteFile(package, fileInfo.FullName);
+                            PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
 
                             // 重新处理
                             ProcessFile(fileFullName, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
                         }
                     }
+
+                    filesetDb.Compact();
                 }
             });
-
-
         }
 
         /// <summary>
@@ -1270,10 +1297,11 @@ namespace MDriveSync.Security
                 var packageDbPath = Path.Combine(_baseDir, package.Key, "0.d");
 
                 // 判断是文件是否处理过
-                var filesetDb = new SqliteRepository<Fileset>(packageDbPath);
-                var blocksetDb = new SqliteRepository<Blockset>(packageDbPath);
+                var filesetDb = GetRepository<Fileset>(packageDbPath, encryptionKey);
+                var blocksetDb = GetRepository<Blockset>(packageDbPath, encryptionKey);
 
-                var oldFile = filesetDb.Single(c => c.SourceKey == fileInfo.FullName.ToUrlPath());
+                var upath = fileInfo.FullName.ToUrlPath();
+                var oldFile = filesetDb.Single(c => c.SourceKey == upath);
                 if (oldFile != null)
                 {
                     if (oldFile.Hash == hash)
@@ -1284,7 +1312,7 @@ namespace MDriveSync.Security
                     else
                     {
                         // 不一致，删除包重新处理
-                        PackageDeleteFile(package, fileInfo.FullName);
+                        PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
                     }
                 }
 
@@ -1411,7 +1439,7 @@ namespace MDriveSync.Security
                 // 更新包大小
                 package.Size += fileSize;
 
-                _rootFilesetDb.Add(new RootFileset()
+                var rf = new RootFileset()
                 {
                     RootPackageId = package.Id,
                     FilesetSourceKey = fileInfo.FullName.ToUrlPath(),
@@ -1419,8 +1447,11 @@ namespace MDriveSync.Security
                     FilesetSize = fileSize,
                     FilesetCreated = fileInfo.CreationTime.ToUnixTimeMs(),
                     FilesetUpdated = fileInfo.LastWriteTime.ToUnixTimeMs(),
-                });
+                };
+                _rootFilesetDb.Add(rf);
                 _rootPackageDb.Update(package);
+
+                filesetDb.Compact();
             });
         }
 
@@ -1517,5 +1548,24 @@ namespace MDriveSync.Security
         //        Console.WriteLine("Index file verification passed");
         //    }
         //}
+
+        /// <summary>
+        /// 获取仓储（没有密码使用 OrmLiteRepository，有密码使用 LiteRepository）
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="dbPath"></param>
+        /// <param name="password"></param>
+        /// <returns></returns>
+        public static IRepository<T> GetRepository<T>(string dbPath, string password = null) where T : IBaseId, new()
+        {
+            if (string.IsNullOrWhiteSpace(password))
+            {
+                return new OrmLiteRepository<T>(dbPath);
+            }
+            else
+            {
+                return new LiteRepository<T>(dbPath, password);
+            }
+        }
     }
 }
