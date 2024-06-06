@@ -9,6 +9,7 @@ namespace MDriveSync.Security.Test
     {
         private static void Main(string[] args)
         {
+
             var sw = new Stopwatch();
 
             /*

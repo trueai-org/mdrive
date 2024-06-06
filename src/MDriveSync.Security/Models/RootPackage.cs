@@ -39,7 +39,7 @@ namespace MDriveSync.Security.Models
         public int Index { get; set; }
 
         /// <summary>
-        /// 包大小
+        /// 包大小（影子文件不占用包大小）
         /// </summary>
         public long Size { get; set; }
 

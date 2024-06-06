@@ -68,7 +68,7 @@ namespace MDriveSync.Security
                 using (FileStream fileStream = File.OpenRead(filePath))
                 {
                     byte[] hashBytes = sha256.ComputeHash(fileStream);
-                    return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+                    return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
                 }
             }
         }

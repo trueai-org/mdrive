@@ -32,5 +32,26 @@ namespace MDriveSync.Security.Models
         /// 0 字节文件没有 hash
         /// </summary>
         public string FilesetHash { get; set; }
+
+        /// <summary>
+        /// 源文件大小
+        /// </summary>
+        public long FilesetSize { get; set; }
+
+        /// <summary>
+        /// 源文件创建时间
+        /// </summary>
+        public long FilesetCreated { get; set; }
+
+        /// <summary>
+        /// 源文件修改时间
+        /// </summary>
+        public long FilesetUpdated { get; set; }
+
+        /// <summary>
+        /// 是否为影子文件（说明是重复文件）
+        /// 表示文件只是一个指向原始数据的指针、表示文件是对原始文件的引用。
+        /// </summary>
+        public bool IsShadow { get; set; }
     }
 }

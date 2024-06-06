@@ -139,6 +139,18 @@ namespace MDriveSync.Security
             return db.Single<T>(predicate);
         }
 
+        public bool Any(Expression<Func<T, bool>> predicate)
+        {
+            using var db = _dbFactory.Open();
+            return db.Count(predicate) > 0;
+        }
+
+        public long Count(Expression<Func<T, bool>> predicate)
+        {
+            using var db = _dbFactory.Open();
+            return db.Count(predicate);
+        }
+
         public int Delete(T model)
         {
             using var db = _dbFactory.Open();

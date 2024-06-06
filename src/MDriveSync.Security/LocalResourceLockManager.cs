@@ -3,11 +3,12 @@
 namespace MDriveSync.Security
 {
     /// <summary>
-    /// 本地资源锁，支持基于键的锁管理（允许同一线程多次获取相同的锁）
+    /// 本地资源锁管理器，不支持重入锁。
+    /// 通过键来管理锁，每个键对应一个独立的锁。
     /// </summary>
-    public class LocalResourceLock
+    public class LocalResourceLockManager
     {
-        private static readonly ConcurrentDictionary<string, object> _locks = new();
+        private static readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
         /// <summary>
         /// 获取指定键的锁，并进入该锁。
@@ -18,8 +19,8 @@ namespace MDriveSync.Security
             if (key == null)
                 throw new ArgumentNullException(nameof(key), "键不能为空");
 
-            var lockObject = _locks.GetOrAdd(key, _ => new object());
-            Monitor.Enter(lockObject);
+            var lockObject = _locks.GetOrAdd(key, _ => new SemaphoreSlim(1, 1));
+            lockObject.Wait();
         }
 
         /// <summary>
@@ -33,7 +34,7 @@ namespace MDriveSync.Security
 
             if (_locks.TryGetValue(key, out var lockObject))
             {
-                Monitor.Exit(lockObject);
+                lockObject.Release();
             }
         }
 
