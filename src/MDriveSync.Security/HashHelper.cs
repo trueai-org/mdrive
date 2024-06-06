@@ -14,7 +14,7 @@ namespace MDriveSync.Security
         /// 计算数据的哈希值
         /// </summary>
         /// <param name="data">要计算哈希值的字节数组</param>
-        /// <param name="algorithm">哈希算法（"SHA256"或"BLAKE3"），如果为空则默认为"SHA256"</param>
+        /// <param name="algorithm">哈希算法（"SHA256"或"BLAKE3"）</param>
         /// <returns>哈希值的字节数组</returns>
         /// <exception cref="ArgumentException">当指定的哈希算法类型不支持时抛出异常</exception>
         public static byte[] ComputeHash(byte[] data, string algorithm = "SHA256")
@@ -39,7 +39,7 @@ namespace MDriveSync.Security
         /// 计算数据的哈希值并返回十六进制字符串
         /// </summary>
         /// <param name="data">要计算哈希值的字节数组</param>
-        /// <param name="algorithm">哈希算法（"SHA256"或"BLAKE3"），如果为空则默认为"SHA256"</param>
+        /// <param name="algorithm">哈希算法（"SHA256"或"BLAKE3"）</param>
         /// <returns>哈希值的十六进制字符串</returns>
         public static string ComputeHashHex(byte[] data, string algorithm = "SHA256")
         {
