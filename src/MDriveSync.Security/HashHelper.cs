@@ -90,5 +90,25 @@ namespace MDriveSync.Security
                 throw new ArgumentException("Unsupported hash algorithm", nameof(algorithm));
             }
         }
+
+        /// <summary>
+        /// 比较 hash1 和 hash2 是否相等
+        /// </summary>
+        /// <param name="hash1"></param>
+        /// <param name="hash2"></param>
+        /// <returns></returns>
+        public static bool CompareHashes(byte[] hash1, byte[] hash2)
+        {
+            if (hash1.Length != hash2.Length)
+                return false;
+
+            for (int i = 0; i < hash1.Length; i++)
+            {
+                if (hash1[i] != hash2[i])
+                    return false;
+            }
+
+            return true;
+        }
     }
 }

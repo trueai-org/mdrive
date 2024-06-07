@@ -8,6 +8,35 @@ namespace MDriveSync.Security.Test
     {
         private static void Main(string[] args)
         {
+            /*
+            // 文件流压缩解压测试
+            string inputFilePath = "E:\\_test\\imgs\\5555.txt";
+            string outputFilePath = "E:\\_test\\imgs\\5555.txt.enc";
+            string outputFilePathJm = "E:\\_test\\imgs\\5555-2.txt";
+            string compressionType = "Zstd";
+            string encryptionType = "AES256-GCM";
+            string encryptionKey = "your-encryption";
+
+            //using FileStream inputFileStream = new FileStream(inputFilePath, FileMode.Open, FileAccess.Read);
+            //using FileStream outputFileStream = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write);
+
+            //CompressionHelper.CompressAndEncryptStream(inputFileStream,
+            //     outputFileStream,
+            //     compressionType,
+            //     encryptionType,
+            //     encryptionKey, "BLAKE3");
+
+            using FileStream jmFileStream = new FileStream(outputFilePath, FileMode.Open, FileAccess.Read);
+            using FileStream outputFileStreamJm = new FileStream(outputFilePathJm, FileMode.Create, FileAccess.ReadWrite);
+            CompressionHelper.DecompressStream(jmFileStream,
+     outputFileStreamJm,
+     compressionType,
+     encryptionType,
+     encryptionKey, "BLAKE3");
+
+            return;
+            */
+
             var sw = new Stopwatch();
 
             /*
