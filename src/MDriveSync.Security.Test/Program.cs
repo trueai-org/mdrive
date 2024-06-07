@@ -77,14 +77,14 @@ namespace MDriveSync.Security.Test
             return;
             */
 
-            sw.Restart();
-            LocalStorage.RunRestore();
-            sw.Stop();
+            //sw.Restart();
+            //LocalStorage.RunRestore();
+            //sw.Stop();
 
-            Console.WriteLine($"还原用时：{sw.ElapsedMilliseconds}ms");
-            Console.WriteLine("Hello, World!");
-            Console.ReadKey();
-            return;
+            //Console.WriteLine($"还原用时：{sw.ElapsedMilliseconds}ms");
+            //Console.WriteLine("Hello, World!");
+            //Console.ReadKey();
+            //return;
 
             sw.Restart();
             LocalStorage.RunBackup();
