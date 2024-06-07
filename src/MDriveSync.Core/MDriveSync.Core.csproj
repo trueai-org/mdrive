@@ -34,5 +34,10 @@
 		<PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
 		<PackageReference Include="LiteDB" Version="5.0.17" />
 	</ItemGroup>
+	
+	<ItemGroup>
+	  <ProjectReference Include="..\MDriveSync.Infrastructure\MDriveSync.Infrastructure.csproj" />
+	  <ProjectReference Include="..\MDriveSync.Security\MDriveSync.Security.csproj" />
+	</ItemGroup>
 
 </Project>

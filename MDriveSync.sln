@@ -35,6 +35,10 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Security", "src\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Security.Test", "src\MDriveSync.Security.Test\MDriveSync.Security.Test.csproj", "{B036CE46-D6BD-45B0-A967-7F866D06FD2B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Infrastructure", "src\MDriveSync.Infrastructure\MDriveSync.Infrastructure.csproj", "{4D5DF593-BC91-4803-99AA-7872DFA98987}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{3CE27DBE-FA45-41B6-A170-A721CD66562B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -73,12 +77,17 @@ Global
 		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{B036CE46-D6BD-45B0-A967-7F866D06FD2B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{894C26A4-BD81-49A5-9D73-AA68E5BEBDD7} = {687C2212-CB3A-4267-9F20-C4ACA34B9570}
+		{B036CE46-D6BD-45B0-A967-7F866D06FD2B} = {3CE27DBE-FA45-41B6-A170-A721CD66562B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {A3F34F36-7CED-4A53-A203-D8F89661D42C}
