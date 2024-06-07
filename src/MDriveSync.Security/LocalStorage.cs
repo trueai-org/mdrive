@@ -8,7 +8,7 @@ namespace MDriveSync.Security
     /// <summary>
     /// 本地存储作业
     /// </summary>
-    public class LocalJob
+    public class LocalStorage
     {
         /// <summary>
         /// 默认包大小（用于首次打包计算，必须 > 10MB 且 < 100MB）
@@ -40,7 +40,7 @@ namespace MDriveSync.Security
         /// </summary>
         public static void RunBackup()
         {
-            var pwd = "";
+            var pwd = "123";
             _rootPackageDb = GetRepository<RootPackage>(Path.Combine(_baseDir, "root.d"), pwd);
             _rootFilesetDb = GetRepository<RootFileset>(Path.Combine(_baseDir, "root.d"), pwd);
 
@@ -56,7 +56,7 @@ namespace MDriveSync.Security
                 //ProcessFile(item, "SHA256", "LZ4");
 
                 // 加密测试
-                ProcessFile(item, "BLAKE3", "Zstd", "ChaCha20-Poly1305", pwd);
+                StartBackup(item, "BLAKE3", "Zstd", "ChaCha20-Poly1305", pwd);
 
                 i++;
                 Console.WriteLine($"{i}/{count}, {item}");
@@ -71,7 +71,7 @@ namespace MDriveSync.Security
         /// </summary>
         public static void RunRestore()
         {
-            var pwd = "123";
+            var pwd = "";
 
             _rootPackageDb = GetRepository<RootPackage>(Path.Combine(_baseDir, "root.d"), pwd);
             _rootFilesetDb = GetRepository<RootFileset>(Path.Combine(_baseDir, "root.d"), pwd);
@@ -355,6 +355,8 @@ namespace MDriveSync.Security
                                 {
                                     // 校验不通过，删除临时部分文件
                                     File.Delete(filePartPath);
+
+                                    Console.WriteLine("还原失败 " + filePartPath);
                                 }
                             }
                         }
@@ -364,11 +366,11 @@ namespace MDriveSync.Security
         }
 
         /// <summary>
-        ///
+        /// 开始备份
         /// </summary>
         /// <param name="filePath"></param>
         /// <param name="internalCompression">在将数据存储到仓库之前，数据是否进行压缩，Zstd、LZ4、Snappy</param>
-        public static void ProcessFile(string filePath,
+        public static void StartBackup(string filePath,
             string hashAlgorithm = "SHA256",
             string internalCompression = null,
             string encryptionType = null,
@@ -682,6 +684,11 @@ namespace MDriveSync.Security
 
                     last = _rootPackageDb.Single(c => c.Multifile == true && c.Category == category && c.Size <= allowSize, c => c.Size);
 
+                    if (last?.Key == "d01/1")
+                    {
+
+                    }
+
                     //last = _rootPackageDb.Where(c => c.Multifile == true && c.Category == category && (c.Size + fileSize) < PACKAGE_SIZE)
                     //   .OrderBy(c => c.Size)
                     //   .FirstOrDefault();
@@ -689,7 +696,7 @@ namespace MDriveSync.Security
                     if (last == null)
                     {
                         // 最后一个包
-                        last = _rootPackageDb.Single(c => c.Multifile == true && c.Category == category, c => c.Index, true);
+                        last = _rootPackageDb.Single(c => c.Multifile == true && c.Category == category, c => c.Index, false);
                     }
 
                     if (last == null)
@@ -1261,7 +1268,7 @@ namespace MDriveSync.Security
                             PackageDeleteFile(package, fileInfo.FullName, encryptionKey);
 
                             // 重新处理
-                            ProcessFile(fileFullName, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
+                            StartBackup(fileFullName, hashAlgorithm, internalCompression, encryptionType, encryptionKey);
                         }
                     }
 
