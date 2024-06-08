@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 namespace MDriveSync.Security
 {
     /// <summary>
-    /// 哈希算法（SHA256、BLAKE3）
+    /// 哈希算法（SHA1、SHA256、BLAKE3）
     /// 用于生成数据块或文件的哈希值，以验证数据的完整性和唯一性
     /// 默认：SHA256
     /// </summary>
@@ -19,7 +19,7 @@ namespace MDriveSync.Security
         /// <exception cref="ArgumentException">当指定的哈希算法类型不支持时抛出异常</exception>
         public static byte[] ComputeHash(byte[] data, string algorithm = "SHA256")
         {
-            switch (algorithm.ToUpperInvariant())
+            switch (algorithm.ToUpper())
             {
                 case "SHA256":
                     using (SHA256 sha256 = SHA256.Create())
@@ -28,8 +28,45 @@ namespace MDriveSync.Security
                     }
 
                 case "BLAKE3":
-                    return Hasher.Hash(data).AsSpan().ToArray();
+                    {
+                        return Hasher.Hash(data).AsSpan().ToArray();
+                    }
+                case "SHA1":
+                    using (SHA1 sha1 = SHA1.Create())
+                    {
+                        return sha1.ComputeHash(data);
+                    }
+                default:
+                    throw new ArgumentException("Unsupported hash algorithm", nameof(algorithm));
+            }
+        }
 
+        /// <summary>
+        /// 计算数据的哈希值
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="algorithm"></param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentException"></exception>
+        public static byte[] ComputeHash(Stream stream, string algorithm = "SHA256")
+        {
+            switch (algorithm.ToUpper())
+            {
+                case "SHA256":
+                    using (SHA256 sha256 = SHA256.Create())
+                    {
+                        return sha256.ComputeHash(stream);
+                    }
+                case "BLAKE3":
+                    {
+                        using var blake3Stream = new Blake3Stream(stream);
+                        return blake3Stream.ComputeHash().AsSpan().ToArray();
+                    }
+                case "SHA1":
+                    using (SHA1 sha1 = SHA1.Create())
+                    {
+                        return sha1.ComputeHash(stream);
+                    }
                 default:
                     throw new ArgumentException("Unsupported hash algorithm", nameof(algorithm));
             }
@@ -44,16 +81,7 @@ namespace MDriveSync.Security
         public static string ComputeHashHex(byte[] data, string algorithm = "SHA256")
         {
             byte[] hash = ComputeHash(data, algorithm);
-            return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
-
-            // OR
-            //byte[] hash = ComputeHash(data, algorithm);
-            //StringBuilder sb = new StringBuilder(hash.Length * 2);
-            //foreach (byte b in hash)
-            //{
-            //    sb.Append(b.ToString("x2"));
-            //}
-            //return sb.ToString();
+            return BitConverter.ToString(hash).Replace("-", "").ToLower();
         }
 
         /// <summary>
@@ -64,14 +92,25 @@ namespace MDriveSync.Security
         /// <returns></returns>
         public static string ComputeHashHex(string filePath, string algorithm = "SHA256")
         {
-            if (algorithm == "SHA256")
+            if (algorithm == "SHA1")
+            {
+                using (SHA1 sha1 = SHA1.Create())
+                {
+                    using (FileStream fileStream = File.OpenRead(filePath))
+                    {
+                        var hashBytes = sha1.ComputeHash(fileStream);
+                        return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+                    }
+                }
+            }
+            else if (algorithm == "SHA256")
             {
                 using (SHA256 sha256 = SHA256.Create())
                 {
                     using (FileStream fileStream = File.OpenRead(filePath))
                     {
                         var hashBytes = sha256.ComputeHash(fileStream);
-                        return BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
+                        return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
                     }
                 }
             }

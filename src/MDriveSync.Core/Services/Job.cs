@@ -976,7 +976,7 @@ namespace MDriveSync.Core
                             LastWriteTime = fileInfo.LastWriteTime,
                             Length = fileInfo.Length,
                             Name = fileInfo.Name,
-                            Hash = HashHelper.ComputeFileHash(file, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm)
+                            Hash = ShaHashHelper.ComputeFileHash(file, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, file.Length)
                         };
 
                         _localRestoreFiles.AddOrUpdate(lf.Key, lf, (k, v) => lf);
@@ -1042,7 +1042,7 @@ namespace MDriveSync.Core
                     if (File.Exists(finalFilePath))
                     {
                         // 验证本地是否已存在文件，并比较 sha1 值
-                        var hash = HashHelper.ComputeFileHash(finalFilePath, "sha1");
+                        var hash = ShaHashHelper.ComputeFileHash(finalFilePath, "sha1");
                         if (hash == item.Value.ContentHash)
                         {
                             _log.LogInformation($"文件已存在，跳过 {finalFilePath}");
@@ -1425,7 +1425,7 @@ namespace MDriveSync.Core
                             }
 
                             // 计算 hash
-                            lf.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
+                            lf.Hash = ShaHashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, lf.Length);
 
                             // 如果没有获取到，从本地缓存中对比获取 sha1
                             if (oldLocalFiles.TryGetValue(lf.Key, out var cacheFile) && cacheFile != null)
@@ -1991,7 +1991,7 @@ namespace MDriveSync.Core
                                     if (File.Exists(finalFilePath))
                                     {
                                         // 验证本地是否已存在文件，并比较 sha1 值
-                                        var hash = HashHelper.ComputeFileHash(finalFilePath, "sha1");
+                                        var hash = ShaHashHelper.ComputeFileHash(finalFilePath, "sha1");
                                         if (hash == dinfo.ContentHash)
                                         {
                                             _log.LogInformation($"文件已存在，跳过 {finalFilePath}");
@@ -2247,7 +2247,7 @@ namespace MDriveSync.Core
                     }
 
                     // 校验 hash 值
-                    var sha1 = HashHelper.ComputeFileHash(tempFilePath, "sha1");
+                    var sha1 = ShaHashHelper.ComputeFileHash(tempFilePath, "sha1");
                     if (!string.IsNullOrWhiteSpace(fileSha1) && sha1 != fileSha1)
                     {
                         throw new Exception("文件内容不一致");
@@ -2384,7 +2384,62 @@ namespace MDriveSync.Core
             // 加密处理
             if (_jobConfig.IsEncrypt)
             {
-                // 
+                // 分块上传 buffer 大小
+                var partBuffSize = 1024 * 1024 * 16;
+
+                if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
+                {
+                    // 计算 hash
+                    localFileInfo.Hash = ShaHashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, localFileInfo.Length);
+                }
+
+                // 本地文件没有 sha1 时，计算本地文件的 sha1
+                if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
+                {
+                    localFileInfo.Sha1 = ShaHashHelper.ComputeFileHash(fileFullPath, "sha1");
+                }
+
+                // 如果文件已上传则跳过
+                // 对比文件差异 sha1
+                if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null)
+                {
+                    // 如果存在同名文件，且内容相同则跳过
+                    if (driveItem.ContentHash == localFileInfo.Sha1)
+                    {
+                        return;
+                    }
+                    else
+                    {
+                        // 删除同名文件
+                        _driveApi.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                        _driveFiles.TryRemove(saveFilePath, out _);
+
+                        // 再次搜索确认是否有同名文件，有则删除
+                        do
+                        {
+                            var delData = _driveApi.Exist(_driveId, saveParentFileId, name, AccessToken);
+                            if (delData?.Items?.Count > 0)
+                            {
+                                foreach (var f in delData.Items)
+                                {
+                                    var delRes = _driveApi.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                                    if (delRes == null)
+                                    {
+                                        _log.LogInformation($"远程文件已删除 {localFileInfo.Key}");
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                break;
+                            }
+                        } while (true);
+                    }
+                }
+
+                _log.LogInformation($"正在上传文件 {localFileInfo.Key}");
+
+
             }
             else
             {
@@ -2394,13 +2449,13 @@ namespace MDriveSync.Core
                 if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
                 {
                     // 计算 hash
-                    localFileInfo.Hash = HashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm);
+                    localFileInfo.Hash = ShaHashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, localFileInfo.Length);
                 }
 
                 // 本地文件没有 sha1 时，计算本地文件的 sha1
                 if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
                 {
-                    localFileInfo.Sha1 = HashHelper.ComputeFileHash(fileFullPath, "sha1");
+                    localFileInfo.Sha1 = ShaHashHelper.ComputeFileHash(fileFullPath, "sha1");
                 }
 
                 // 如果文件已上传则跳过
