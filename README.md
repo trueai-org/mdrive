@@ -4,7 +4,7 @@
 
 提供 Docker、Windows、Linux、Web 等多平台版本。
 
-支持多种算法同步与备份，保证数据的安全性，任何第三方、任何云盘服务商都无法查看或分析你的数据，只有通过你本人设置的安全密钥才能解密数据，保证您的数据安全和隐私。
+支持 **AES256-GCM、ChaCha20-Poly1305** 加密，支持 **Zstd、LZ4、Snappy** 压缩，支持 **SHA256、BLAKE3** 等哈希算法，**任何第三方、任何云盘服务商都无法查看或分析你的数据，只有通过你本人设置的安全密钥才能解密数据，保证您的数据安全和隐私**。
 
 > 更多版本，敬请期待~~
 
@@ -41,6 +41,13 @@ g. 磁盘挂载支持（可选），下载并安装驱动（http://localhost:808
 
 ![作业](/docs/screenshots/job.gif)
 ![挂载](/docs/screenshots/mount.png)
+
+
+### 加密说明
+
+![文件加密模式](/docs/screenshots/file-encrypt.png)
+
+![文件打包加密模式](/docs/screenshots/package-encrypt.png)
 
 ### Docker 部署
 

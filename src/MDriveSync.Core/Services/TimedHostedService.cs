@@ -183,6 +183,47 @@ namespace MDriveSync.Core
                 throw new LogicException("云盘不存在");
             }
 
+            // 加密配置验证
+            if (cfg.IsEncrypt)
+            {
+                if (string.IsNullOrEmpty(cfg.HashAlgorithm) || string.IsNullOrEmpty(cfg.EncryptAlgorithm) || string.IsNullOrEmpty(cfg.EncryptKey))
+                {
+                    throw new LogicException("加密配置不完整");
+                }
+
+                // 压缩算法验证
+                if (!string.IsNullOrWhiteSpace(cfg.CompressAlgorithm))
+                {
+                    var allowComs = new[] { "Zstd", "LZ4", "Snappy" };
+                    if (!allowComs.Contains(cfg.CompressAlgorithm))
+                    {
+                        throw new LogicException("压缩算法不支持");
+                    }
+                }
+
+                // 加密算法验证
+                var allowEncrypts = new[] { "AES256-GCM", "ChaCha20-Poly1305" };
+                if (!allowEncrypts.Contains(cfg.EncryptAlgorithm))
+                {
+                    throw new LogicException("加密算法不支持");
+                }
+
+                // 哈希算法验证
+                var allowHashs = new[] { "SHA256", "BLAKE3" };
+                if (!allowHashs.Contains(cfg.HashAlgorithm))
+                {
+                    throw new LogicException("哈希算法不支持");
+                }
+            }
+            else
+            {
+                cfg.IsEncryptName = false;
+                cfg.HashAlgorithm = null;
+                cfg.EncryptAlgorithm = null;
+                cfg.CompressAlgorithm = null;
+                cfg.EncryptKey = null;
+            }
+
             // 默认禁用状态
             cfg.State = JobState.Disabled;
             cfg.Id = Guid.NewGuid().ToString("N");
