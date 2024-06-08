@@ -85,11 +85,8 @@
 
         /// <summary>
         /// 文件对比检查级别
-        /// 0 比较大小和时间
         /// 1 对文件采样计算 hash
         /// 2 比较整个文件的 hash
-        /// 3 比较文件头部 hash
-        /// 4 比较文件尾部 hash
         /// </summary>
         public int CheckLevel { get; set; } = 1;
 

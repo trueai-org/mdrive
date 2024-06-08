@@ -8,14 +8,21 @@ namespace MDriveSync.Core
     public static class ShaHashHelper
     {
         /// <summary>
-        /// 计算文件的采样 hash 值，结合头部、尾部、中间固定采样点和随机采样点。
+        /// 计算文件的采样 hash 值，结合头部、尾部、中间固定采样点和随机采样点
         /// </summary>
         /// <param name="filePath">文件路径</param>
         /// <param name="alg">哈希算法名称</param>
-        /// <param name="seed">随机种子，用于生成随机采样点</param>
+        /// <param name="seed">随机种子，用于生成随机采样点（Size + 当天时间）</param>
         /// <returns>采样 hash 字符串</returns>
         public static string ComputeFileSampleHash(string filePath, string alg, int seed)
         {
+            // 种子 += 当天时间
+            // Ticks 需要除以 10000，因为 DateTime.Now.Ticks 是以 100ns 为单位的
+            // 除以 1000 是为了转换为秒
+            // 除以 3600 是为了转换为小时
+            // 除以 24 是为了转换为天
+            seed += (int)(DateTime.Now.Date.Ticks / 10000 / 1000 / 3600 / 24);
+
             var hash = ComputeFileSampleHashHex(filePath, alg, seed);
             return BitConverter.ToString(hash).Replace("-", string.Empty).ToLower();
         }
