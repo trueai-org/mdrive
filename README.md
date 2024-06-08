@@ -4,7 +4,7 @@
 
 提供 Docker、Windows、Linux、Web 等多平台版本。
 
-支持 **AES256-GCM、ChaCha20-Poly1305** 加密，支持 **Zstd、LZ4、Snappy** 压缩，支持 **SHA256、BLAKE3** 等哈希算法，**任何第三方、服务商都无法读取数据，保护您的数据安全和隐私**。
+支持 **AES256-GCM、ChaCha20-Poly1305** 加密，支持 **Zstd、LZ4、Snappy** 压缩，支持 **SHA256、BLAKE3** 等哈希算法，**任何第三方、服务商都无法查看数据，保护您的数据安全和隐私**。
 
 > 更多版本，敬请期待~~
 
