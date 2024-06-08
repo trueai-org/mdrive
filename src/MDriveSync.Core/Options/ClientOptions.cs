@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.DB;
+using System.Reflection.Metadata.Ecma335;
 
 namespace MDriveSync.Core
 {
@@ -11,6 +12,12 @@ namespace MDriveSync.Core
         /// 阿里云盘作业配置
         /// </summary>
         public List<AliyunDriveConfig> AliyunDrives { get; set; } = new List<AliyunDriveConfig>();
+
+        /// <summary>
+        /// 版本
+        /// 每次发布版本时更新，用于检测是否有新版本
+        /// </summary>
+        public string Version { get; set; } = "v1.6.0";
     }
 
     /// <summary>

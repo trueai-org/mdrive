@@ -138,6 +138,36 @@
         /// 作业元信息（文件大小、数量、执行结果）
         /// </summary>
         public JobMetadata Metadata { get; set; }
+
+        /// <summary>
+        /// 文件加密
+        /// </summary>
+        public bool IsEncrypt { get; set; }
+
+        /// <summary>
+        /// 文件名加密
+        /// </summary>
+        public bool IsEncryptName { get; set; }
+
+        /// <summary>
+        /// Hash 算法（SHA256、BLAKE3）
+        /// </summary>
+        public string HashAlgorithm { get; set; }
+
+        /// <summary>
+        /// 加密算法（AES256-GCM、ChaCha20-Poly1305）
+        /// </summary>
+        public string EncryptAlgorithm { get; set; }
+
+        /// <summary>
+        /// 加密密钥
+        /// </summary>
+        public string EncryptKey { get; set; }
+
+        /// <summary>
+        /// 压缩算法（Zstd、LZ4、Snappy）
+        /// </summary>
+        public string CompressAlgorithm { get; set; }
     }
 
     /// <summary>
