@@ -6,22 +6,8 @@ namespace MDriveSync.Core
     /// <summary>
     /// 本地文件信息
     /// </summary>
-    public class LocalFileInfo : IBaseKey<string> // : INotifyPropertyChanged
+    public class LocalFileInfo : IBaseKey<string>
     {
-        //public event PropertyChangedEventHandler PropertyChanged;
-
-        //protected void OnPropertyChanged(string propertyName = null)
-        //{
-        //    Console.WriteLine("值更新: " + propertyName);
-
-        //    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-
-        //    if (nameof(UpdateId) != propertyName)
-        //    {
-        //        UpdateId = Guid.NewGuid().ToString();
-        //    }
-        //}
-
         /// <summary>
         /// 本地完整路径
         /// </summary>
@@ -47,7 +33,18 @@ namespace MDriveSync.Core
         /// <summary>
         /// 文件名称
         /// </summary>
-        public string Name { get; set; }
+        public string Name
+        {
+            get
+            {
+                if (IsEncrypt && IsEncryptName)
+                {
+                    return EncryptFileName;
+                }
+
+                return LocalFileName;
+            }
+        }
 
         /// <summary>
         /// 文件大小（字节数）
@@ -94,11 +91,26 @@ namespace MDriveSync.Core
         /// </summary>
         public string AliyunContentHash { get; set; }
 
-        ///// <summary>
-        ///// 更新标识，如果字段有变更，则标识重新赋值
-        ///// 可以用于字段变更后，是否需要更新到数据库
-        ///// </summary>
-        //[Ignore]
-        //public string UpdateId { get; private set; }
+        /// <summary>
+        /// 文件加密
+        /// </summary>
+        public bool IsEncrypt { get; set; }
+
+        /// <summary>
+        /// 文件名加密
+        /// </summary>
+        public bool IsEncryptName { get; set; }
+
+        /// <summary>
+        /// 本地文件名称
+        /// 1.txt
+        /// </summary>
+        public string LocalFileName { get; set; }
+
+        /// <summary>
+        /// 已加密的文件名称
+        /// ***.e
+        /// </summary>
+        public string EncryptFileName { get; set; }
     }
 }

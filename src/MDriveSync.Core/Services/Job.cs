@@ -1,6 +1,7 @@
 ﻿using MDriveSync.Core.DB;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
+using MDriveSync.Security;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -10,6 +11,7 @@ using System.Data;
 using System.Diagnostics;
 using System.Net;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 
@@ -952,7 +954,8 @@ namespace MDriveSync.Core
                         Key = GetDirectoryKey(_localRestorePath, dirInfo),
                         CreationTime = dirInfo.CreationTime,
                         LastWriteTime = dirInfo.LastWriteTime,
-                        Name = dirInfo.Name,
+                        LocalFileName = dirInfo.Name,
+                        EncryptFileName = dirInfo.Name
                     };
                     _localRestoreFolders.AddOrUpdate(loDir.Key, loDir, (k, v) => loDir);
 
@@ -975,7 +978,7 @@ namespace MDriveSync.Core
                             CreationTime = fileInfo.CreationTime,
                             LastWriteTime = fileInfo.LastWriteTime,
                             Length = fileInfo.Length,
-                            Name = fileInfo.Name,
+                            LocalFileName = fileInfo.Name,
                             Hash = ShaHashHelper.ComputeFileHash(file, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, file.Length)
                         };
 
@@ -1709,7 +1712,7 @@ namespace MDriveSync.Core
                 CreationTime = fileInfo.CreationTime,
                 LastWriteTime = fileInfo.LastWriteTime,
                 Length = fileInfo.Length,
-                Name = fileInfo.Name,
+                LocalFileName = fileInfo.Name,
             };
 
             // 过滤文件
@@ -1755,7 +1758,8 @@ namespace MDriveSync.Core
                 Key = GetDirectoryKey(localBackupFullPath, dirInfo),
                 CreationTime = dirInfo.CreationTime,
                 LastWriteTime = dirInfo.LastWriteTime,
-                Name = dirInfo.Name,
+                LocalFileName = dirInfo.Name,
+                EncryptFileName = dirInfo.Name
             };
 
             // 过滤文件夹
@@ -2381,65 +2385,300 @@ namespace MDriveSync.Core
                 saveParentFileId = _driveFolders[saveParentPath].FileId;
             }
 
+            localFileInfo.IsEncrypt = _jobConfig.IsEncrypt;
+            localFileInfo.IsEncryptName = _jobConfig.IsEncryptName;
+
             // 加密处理
             if (_jobConfig.IsEncrypt)
             {
-                // 分块上传 buffer 大小
-                var partBuffSize = 1024 * 1024 * 16;
+                // 根据加密算法生成加密文件
+                var encryptCachePath = Path.Combine(Directory.GetCurrentDirectory(), "caches");
+                Directory.CreateDirectory(encryptCachePath);
+                var encryptCacheFile = Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.e.cache");
 
-                if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
-                {
-                    // 计算 hash
-                    localFileInfo.Hash = ShaHashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, localFileInfo.Length);
-                }
+                using FileStream inputFileStream = new FileStream(fileFullPath, FileMode.Open, FileAccess.Read);
+                using FileStream outputFileStream = new FileStream(encryptCacheFile, FileMode.Create, FileAccess.Write);
+                CompressionHelper.CompressStream(inputFileStream, outputFileStream,
+                    _jobConfig.CompressAlgorithm, _jobConfig.EncryptAlgorithm, _jobConfig.EncryptKey, _jobConfig.HashAlgorithm, _jobConfig.IsEncryptName, name, out var encryptFileHash);
 
-                // 本地文件没有 sha1 时，计算本地文件的 sha1
-                if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
-                {
-                    localFileInfo.Sha1 = ShaHashHelper.ComputeFileHash(fileFullPath, "sha1");
-                }
+                // 关闭文件流
+                inputFileStream.Close();
+                outputFileStream.Close();
 
-                // 如果文件已上传则跳过
-                // 对比文件差异 sha1
-                if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null)
+                //// 解密测试
+                //using FileStream inputFileStream1 = new FileStream(encryptCacheFile, FileMode.Open, FileAccess.Read);
+                //using FileStream outputFileStream1 = new FileStream(Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.d.cache"), FileMode.Create, FileAccess.Write);
+                //CompressionHelper.DecompressStream(inputFileStream1, outputFileStream1, _jobConfig.CompressAlgorithm, _jobConfig.EncryptAlgorithm, _jobConfig.EncryptKey, _jobConfig.HashAlgorithm,
+                //    _jobConfig.IsEncryptName, out var decryptFileName);
+                //inputFileStream1.Close();
+                //outputFileStream1.Close();
+
+                // 将文件重命名为 hash.e
+                var encryptFileName = $"{encryptFileHash}.e";
+                var encryptFilePath = Path.Combine(encryptCachePath, encryptFileName);
+
+                try
                 {
-                    // 如果存在同名文件，且内容相同则跳过
-                    if (driveItem.ContentHash == localFileInfo.Sha1)
+                    // 更新上传文件信息
+                    File.Move(encryptCacheFile, encryptFilePath, true);
+                    var encryptFileInfo = new FileInfo(encryptFilePath);
+
+                    name = encryptFileName;
+                    fileFullPath = encryptFilePath;
+                    fileInfo = encryptFileInfo;
+                    saveFilePath = $"{saveParentPath}/{name}".TrimPath();
+
+                    localFileInfo.EncryptFileName = encryptFileName;
+
+                    // ---------------------- 上传文件 ---------------------
+
+                    // 分块上传 buffer 大小
+                    var partBuffSize = 1024 * 1024 * 16;
+
+                    if (string.IsNullOrWhiteSpace(localFileInfo.Hash))
                     {
+                        // 计算 hash
+                        localFileInfo.Hash = ShaHashHelper.ComputeFileHash(fileFullPath, _jobConfig.CheckLevel, _jobConfig.CheckAlgorithm, localFileInfo.Length);
+                    }
+
+                    // 本地文件没有 sha1 时，计算本地文件的 sha1
+                    if (string.IsNullOrWhiteSpace(localFileInfo.Sha1))
+                    {
+                        localFileInfo.Sha1 = ShaHashHelper.ComputeFileHash(fileFullPath, "sha1");
+                    }
+
+                    // 如果文件已上传则跳过
+                    // 对比文件差异 sha1
+                    if (_driveFiles.TryGetValue(saveFilePath, out var driveItem) && driveItem != null)
+                    {
+                        // 如果存在同名文件，且内容相同则跳过
+                        if (driveItem.ContentHash == localFileInfo.Sha1)
+                        {
+                            return;
+                        }
+                        else
+                        {
+                            // 删除同名文件
+                            _driveApi.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                            _driveFiles.TryRemove(saveFilePath, out _);
+
+                            // 再次搜索确认是否有同名文件，有则删除
+                            do
+                            {
+                                var delData = _driveApi.Exist(_driveId, saveParentFileId, name, AccessToken);
+                                if (delData?.Items?.Count > 0)
+                                {
+                                    foreach (var f in delData.Items)
+                                    {
+                                        var delRes = _driveApi.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                                        if (delRes == null)
+                                        {
+                                            _log.LogInformation($"远程文件已删除 {localFileInfo.Key}");
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    break;
+                                }
+                            } while (true);
+                        }
+                    }
+
+                    _log.LogInformation($"正在上传文件 {localFileInfo.Key}");
+
+                    var request = new RestRequest("/adrive/v1.0/openFile/create", Method.Post);
+                    request.AddHeader("Content-Type", "application/json");
+                    request.AddHeader("Authorization", $"Bearer {AccessToken}");
+
+                    var fileSize = fileInfo.Length;
+
+                    // 分块计算
+                    var partCount = (int)Math.Ceiling((double)fileSize / partBuffSize);
+
+                    var partInfoList = Enumerable.Range(1, partCount).Select(i => new
+                    {
+                        part_number = i
+                    }).ToArray();
+
+                    object body = new
+                    {
+                        drive_id = _driveId,
+                        parent_file_id = saveParentFileId,
+                        name = name,
+                        type = "file",
+
+                        // refuse 同名不创建
+                        // ignore 同名文件可创建
+
+                        check_name_mode = "refuse", // 覆盖文件模式
+                        size = fileSize,
+
+                        part_info_list = fileSize <= partBuffSize ? null : partInfoList // 分块计算
+                    };
+
+                    // 是否进行秒传处理
+                    var isRapidUpload = false;
+                    if (_jobConfig.RapidUpload)
+                    {
+                        // 开启秒传
+                        // 如果文件 > 10kb 则进行秒传计算，否则不进行
+                        if (fileSize > 1024 * 10)
+                        {
+                            isRapidUpload = true;
+                        }
+                    }
+
+                    // 如果需要计算秒传
+                    if (isRapidUpload)
+                    {
+                        if (fileSize > 1024 * 1024 && needPreHash)
+                        {
+                            // 如果文件超过 1mb 则进行预处理，判断是否可以进行妙传
+                            var preHash = AliyunDriveHelper.GenerateStartSHA1(fileFullPath);
+                            body = new
+                            {
+                                drive_id = _driveId,
+                                parent_file_id = saveParentFileId,
+                                name = name,
+                                type = "file",
+
+                                // refuse 同名不创建
+                                // ignore 同名文件可创建
+                                check_name_mode = "refuse",
+                                size = fileInfo.Length,
+                                pre_hash = preHash,
+
+                                part_info_list = fileSize <= partBuffSize ? null : partInfoList // 分块计算
+                            };
+                        }
+                        else
+                        {
+                            // > 10kb 且 < 1mb 的文件直接计算 sha1
+                            var proofCode = AliyunDriveHelper.GenerateProofCode(fileFullPath, fileSize, AccessToken);
+                            var contentHash = AliyunDriveHelper.GenerateSHA1(fileFullPath);
+
+                            body = new
+                            {
+                                drive_id = _driveId,
+                                parent_file_id = saveParentFileId,
+                                name = name,
+                                type = "file",
+
+                                // refuse 同名不创建
+                                // ignore 同名文件可创建
+                                check_name_mode = "refuse",
+                                size = fileInfo.Length,
+                                content_hash = contentHash,
+                                content_hash_name = "sha1",
+                                proof_version = "v1",
+                                proof_code = proofCode,
+
+                                part_info_list = fileSize <= partBuffSize ? null : partInfoList
+                            };
+                        }
+                    }
+                    request.AddBody(body);
+                    var response = _driveApi.WithRetry<dynamic>(request);
+
+                    // 如果需要秒传，并且需要预处理时
+                    // System.Net.HttpStatusCode.Conflict 注意可能不是 409
+                    if (isRapidUpload && needPreHash
+                        && (response.StatusCode == HttpStatusCode.BadRequest || response.StatusCode == HttpStatusCode.Conflict)
+                        && response.Content.Contains("PreHashMatched"))
+                    {
+                        using (var mcDoc = JsonDocument.Parse(response.Content))
+                        {
+                            // 尝试获取code属性的值
+                            if (mcDoc.RootElement.TryGetProperty("code", out JsonElement codeElement))
+                            {
+                                var code = codeElement.GetString();
+                                if (code == "PreHashMatched")
+                                {
+                                    // 匹配成功，进行完整的秒传，不需要预处理
+                                    await AliyunDriveUploadFile(localFileInfo, false);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+
+                    if (response.StatusCode != HttpStatusCode.OK)
+                    {
+                        _log.LogError(response.ErrorException, $"文件上传失败 {localFileInfo.Key} {response.Content}");
+
+                        throw response.ErrorException ?? new Exception($"文件上传失败 {localFileInfo.Key}");
+                    }
+
+                    using var doc = JsonDocument.Parse(response.Content!);
+                    var root = doc.RootElement;
+
+                    var drive_id = root.GetProperty("drive_id").GetString();
+                    var file_id = root.GetProperty("file_id").GetString();
+                    var upload_id = root.GetProperty("upload_id").GetString();
+
+                    var rapid_upload = root.GetProperty("rapid_upload").GetBoolean();
+                    if (rapid_upload)
+                    {
+                        _log.LogInformation($"文件秒传成功 {localFileInfo.Key}");
                         return;
+                    }
+
+                    var partList = root.GetProperty("part_info_list").EnumerateArray().Select(p => new
+                    {
+                        part_number = p.GetProperty("part_number").GetInt32(),
+                        upload_url = p.GetProperty("upload_url").GetString()
+                    }).ToArray();
+
+                    if (fileSize > partBuffSize)
+                    {
+                        using var fs = new FileStream(fileFullPath, FileMode.Open, FileAccess.Read);
+                        var partNumber = 1;
+                        var buffer = new byte[partBuffSize];
+                        int bytesRead;
+
+                        while ((bytesRead = await fs.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                        {
+                            var partUploadUrl = partList.First(p => p.part_number == partNumber).upload_url;
+                            var content = new ByteArrayContent(buffer, 0, bytesRead);
+                            await UploadPart(partUploadUrl, content);
+                            partNumber++;
+                        }
                     }
                     else
                     {
-                        // 删除同名文件
-                        _driveApi.FileDelete(_driveId, driveItem.FileId, AccessToken, _jobConfig.IsRecycleBin);
-                        _driveFiles.TryRemove(saveFilePath, out _);
+                        var partUploadUrl = partList.First().upload_url;
+                        byte[] fileData = await File.ReadAllBytesAsync(fileFullPath);
+                        var content = new ByteArrayContent(fileData);
+                        await UploadPart(partUploadUrl, content);
+                    }
 
-                        // 再次搜索确认是否有同名文件，有则删除
-                        do
-                        {
-                            var delData = _driveApi.Exist(_driveId, saveParentFileId, name, AccessToken);
-                            if (delData?.Items?.Count > 0)
-                            {
-                                foreach (var f in delData.Items)
-                                {
-                                    var delRes = _driveApi.FileDelete(_driveId, f.FileId, AccessToken, _jobConfig.IsRecycleBin);
-                                    if (delRes == null)
-                                    {
-                                        _log.LogInformation($"远程文件已删除 {localFileInfo.Key}");
-                                    }
-                                }
-                            }
-                            else
-                            {
-                                break;
-                            }
-                        } while (true);
+                    var completeResponse = _driveApi.UploadComplete(_driveId, file_id, upload_id, AccessToken);
+                    if (completeResponse.ParentFileId == "root")
+                    {
+                        _driveFiles.TryAdd($"{completeResponse.Name}".TrimPath(), completeResponse);
+                    }
+                    else
+                    {
+                        var parent = _driveFolders.First(c => c.Value.Type == "folder" && c.Value.FileId == completeResponse.ParentFileId);
+                        var path = $"{parent.Key}/{completeResponse.Name}".TrimPath();
+                        _driveFiles.TryAdd(path, completeResponse);
+                    }
+
+                    _log.LogInformation($"文件上传成功 {localFileInfo.Key}");
+                }
+                finally
+                {
+                    // 删除加密文件和缓存文件，如果存在
+                    if (File.Exists(encryptCacheFile))
+                    {
+                        File.Delete(encryptCacheFile);
+                    }
+                    if (File.Exists(encryptFilePath))
+                    {
+                        File.Delete(encryptFilePath);
                     }
                 }
-
-                _log.LogInformation($"正在上传文件 {localFileInfo.Key}");
-
-
             }
             else
             {
@@ -2525,7 +2764,7 @@ namespace MDriveSync.Core
                     check_name_mode = "refuse", // 覆盖文件模式
                     size = fileSize,
 
-                    part_info_list = partInfoList // 分块计算
+                    part_info_list = fileSize <= partBuffSize ? null : partInfoList // 分块计算
                 };
 
                 // 是否进行秒传处理
@@ -2560,7 +2799,7 @@ namespace MDriveSync.Core
                             size = fileInfo.Length,
                             pre_hash = preHash,
 
-                            part_info_list = partInfoList // 分块计算
+                            part_info_list = fileSize <= partBuffSize ? null : partInfoList // 分块计算
                         };
                     }
                     else
@@ -2585,7 +2824,7 @@ namespace MDriveSync.Core
                             proof_version = "v1",
                             proof_code = proofCode,
 
-                            part_info_list = partInfoList
+                            part_info_list = fileSize <= partBuffSize ? null : partInfoList
                         };
                     }
                 }

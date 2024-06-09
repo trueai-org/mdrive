@@ -40,7 +40,7 @@ namespace MDriveSync.Security.Test
             var sw = new Stopwatch();
 
             /*
-             // 文件加密解密测试
+            // 文件加密解密测试
 
             for (int i = 0; i < 120; i++)
             {
@@ -50,7 +50,7 @@ namespace MDriveSync.Security.Test
 
                 // 生成随机的最大长度文件名（255字符）和扩展名（例如：.txt）
                 // 最大200长度
-                string randomFileName = "萝莉系列[Hello! Project Digital Books]No.100 Risa Niigaki 新垣里沙【96P】 - 激情图片 激情小说 伦理电影 快播电影 QVOD"; //  GenerateRandomString(i + 1) + ".xfdsdf";  // 保留5字符用于扩展名
+                string randomFileName = GenerateRandomString(i + 1); //  GenerateRandomString(i + 1) + ".xfdsdf";  // 保留5字符用于扩展名
 
                 // 生成随机的最大长度路径（例如Windows的4096字符或更长）
                 string randomPath = GenerateRandomPath(4096);  // 路径最大长度，可以调整为更长以测试长路径支持
@@ -60,6 +60,7 @@ namespace MDriveSync.Security.Test
 
                 //var x2 = DeflateCompressor.Shared.Compress(x1);
 
+                var x2 = CompressionHelper.Compress(x1, null, "AES256-GCM", "123");
                 var bytes = CompressionHelper.Compress(x1, "LZ4", "AES256-GCM", "123");
 
                 var b2 = CompressionHelper.Compress(bytes, "LZ4");
@@ -80,23 +81,25 @@ namespace MDriveSync.Security.Test
                 // BrotliCompressor
                 // DeflateCompressor
 
-                var b5 = ZstdSharpCompressor.Shared.Compress(bytes);
-                var b6 = SnappierCompressor.Shared.Compress(bytes);
-                var b7 = LZ4Compressor.Shared.Compress(bytes); // 最小，但仍然比base64大+1~2
-                var b8 = LZMACompressor.Shared.Compress(bytes);
-                var b9 = DeflateCompressor.Shared.Compress(bytes);
-                var b10 = BrotliCompressor.Shared.Compress(bytes);
+                //var b5 = ZstdSharpCompressor.Shared.Compress(bytes);
+                //var b6 = SnappierCompressor.Shared.Compress(bytes);
+                //var b7 = LZ4Compressor.Shared.Compress(bytes); // 最小，但仍然比base64大+1~2
+                //var b8 = LZMACompressor.Shared.Compress(bytes);
+                //var b9 = DeflateCompressor.Shared.Compress(bytes);
+                //var b10 = BrotliCompressor.Shared.Compress(bytes);
                 //var b10base64 = Convert.ToBase64String(b10);
 
                 //var hex = BitConverter.ToString(bytes).Replace("-", "");
 
-                var result = CompressionHelper.Decompress(decodedData, "LZ4", "ChaCha20-Poly1305", "12342342SDFSDFAS");
-                var str = Encoding.UTF8.GetString(result);
+                //var result = CompressionHelper.Decompress(decodedData, "LZ4", "ChaCha20-Poly1305", "12342342SDFSDFAS");
+                //var str = Encoding.UTF8.GetString(result);
 
                 //Console.WriteLine($"压缩后: {bytes.Length}, base64: {base64.Length}, cbase64: {b10base64.Length}");
 
                 // 控制台显示b5~b10 长度
-                Console.WriteLine($"byte: {bytes.Length}, b5: {b5.Length}, b6: {b6.Length}, b7: {b7.Length}, b8: {b8.Length}, b9: {b9.Length}, b10: {b10.Length}, base64: {base64.Length}, {str}");
+                //Console.WriteLine($"byte: {bytes.Length}, b5: {b5.Length}, b6: {b6.Length}, b7: {b7.Length}, b8: {b8.Length}, b9: {b9.Length}, b10: {b10.Length}, base64: {base64.Length}, {str}");
+
+                Console.WriteLine($"i: {i + 1}, x1: {x1.Length}, {x2.Length}, byte: {bytes.Length}, base64: {base64.Length}");
 
                 Thread.Sleep(1);
             }

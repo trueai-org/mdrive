@@ -85,6 +85,16 @@ namespace MDriveSync.Security
         }
 
         /// <summary>
+        /// 计算数据流的哈希值并返回十六进制字符串
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <returns></returns>
+        public static string ToHex(byte[] hash)
+        {
+            return BitConverter.ToString(hash).Replace("-", "").ToLower();
+        }
+
+        /// <summary>
         /// 计算文件的哈希值并返回十六进制字符串
         /// </summary>
         /// <param name="filePath">文件路径</param>

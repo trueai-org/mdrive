@@ -1,4 +1,6 @@
 ﻿using EasyCompressor;
+using Org.BouncyCastle.Asn1.Cms;
+using System.Text;
 
 namespace MDriveSync.Security
 {
@@ -14,6 +16,10 @@ namespace MDriveSync.Security
         // 数据流哈希值大小
         // SHA-256 | BLAKE3-256 hash size in bytes
         private const int StreamHashSize = 32;
+
+        // 加密文件名的缓冲区大小
+        // Buffer size for the encrypted file name
+        private const int FileNameBufferSize = 1068;
 
         /// <summary>
         /// 使用指定的算法压缩数据，并在需要时进行加密
@@ -94,10 +100,47 @@ namespace MDriveSync.Security
             Stream inputStream,
             Stream outputStream,
             string compressionType,
-            string encryptionType = null,
-            string encryptionKey = null,
-            string hashAlgorithm = "SHA256")
+            string encryptionType,
+            string encryptionKey,
+            string hashAlgorithm,
+            bool encryptFileName,
+            string fileName,
+            out string encryptFileHash)
         {
+            encryptFileHash = null;
+
+            // 如果需要加密文件名
+            if (encryptFileName && !string.IsNullOrWhiteSpace(fileName) && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrEmpty(encryptionKey))
+            {
+                // 文件名仅加密，不需要压缩
+                var fileBytes = Encoding.UTF8.GetBytes(fileName);
+                byte[] encryptedFileName = Compress(fileBytes, null, encryptionType, encryptionKey);
+                if (encryptedFileName.Length > FileNameBufferSize)
+                {
+                    throw new InvalidOperationException("Encrypted file name is too long.");
+                }
+
+                // 写入文件名加密后的长度 [4]
+                byte[] lengthBytes = BitConverter.GetBytes(encryptedFileName.Length);
+                outputStream.Write(lengthBytes, 0, lengthBytes.Length);
+
+                // 再写入文件名 [n <= 1068]
+                //byte[] paddedFileName = new byte[FileNameBufferSize];
+                //Array.Copy(encryptedFileName, paddedFileName, Math.Min(encryptedFileName.Length, FileNameBufferSize));
+                //outputStream.Write(paddedFileName, 0, paddedFileName.Length);
+                outputStream.Write(encryptedFileName, 0, encryptedFileName.Length);
+
+                // 最后计算文件名哈希值 [32]
+                byte[] fileNameHash = HashHelper.ComputeHash(encryptedFileName, hashAlgorithm);
+                if (fileNameHash.Length != StreamHashSize)
+                {
+                    throw new InvalidOperationException("Invalid hash size.");
+                }
+                outputStream.Write(fileNameHash, 0, fileNameHash.Length);
+
+                encryptFileHash = HashHelper.ToHex(fileNameHash);
+            }
+
             byte[] buffer = new byte[StreamBufferSize];
             int bytesRead;
             while ((bytesRead = inputStream.Read(buffer, 0, buffer.Length)) > 0)
@@ -134,10 +177,91 @@ namespace MDriveSync.Security
         public static void DecompressStream(Stream inputStream,
             Stream outputStream,
             string compressionType,
-            string encryptionType = null,
-            string encryptionKey = null,
-            string hashAlgorithm = "SHA256")
+            string encryptionType,
+            string encryptionKey,
+            string hashAlgorithm,
+            bool encryptFileName,
+            out string fileName)
         {
+            fileName = null;
+
+            if (encryptFileName && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrWhiteSpace(encryptionKey))
+            {
+                // 读取文件名长度
+                byte[] fileLengthBytes = new byte[4];
+                if (inputStream.Read(fileLengthBytes, 0, fileLengthBytes.Length) != fileLengthBytes.Length)
+                {
+                    throw new InvalidOperationException("Failed to read file name length.");
+                }
+
+                int fileNameLength = BitConverter.ToInt32(fileLengthBytes, 0);
+                if (fileNameLength > FileNameBufferSize)
+                {
+                    throw new InvalidOperationException("Encrypted file name is too long.");
+                }
+
+                // 读取文件名
+                byte[] fileNameBuffer = new byte[fileNameLength];
+                if (inputStream.Read(fileNameBuffer, 0, fileNameBuffer.Length) != fileNameBuffer.Length)
+                {
+                    throw new InvalidOperationException("Failed to read encrypted file name.");
+                }
+
+                // 读取文件名哈希值
+                byte[] fileNameHash = new byte[StreamHashSize];
+                if (inputStream.Read(fileNameHash, 0, fileNameHash.Length) != fileNameHash.Length)
+                {
+                    throw new InvalidOperationException("Failed to read file name hash.");
+                }
+
+                byte[] computedFileNameHash = HashHelper.ComputeHash(fileNameBuffer, hashAlgorithm);
+                if (!HashHelper.CompareHashes(fileNameHash, computedFileNameHash))
+                {
+                    throw new InvalidOperationException("File name hash check failed.");
+                }
+
+                var decBytes = Decompress(fileNameBuffer, null, encryptionType, encryptionKey);
+                fileName = Encoding.UTF8.GetString(decBytes).TrimEnd('\0').Trim();
+            }
+
+            //if (encryptFileName && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrWhiteSpace(encryptionKey))
+            //{
+            //    byte[] fileNameBuffer = new byte[FileNameBufferSize];
+            //    byte[] fileNameHash = new byte[StreamHashSize];
+
+            //    // 读取文件名部分
+            //    if (inputStream.Read(fileNameBuffer, 0, fileNameBuffer.Length) == fileNameBuffer.Length)
+            //    {
+            //        // 读取文件名长度
+            //        byte[] fileLengthBytes = new byte[4];
+            //        if (inputStream.Read(fileLengthBytes, 0, fileLengthBytes.Length) == fileLengthBytes.Length)
+            //        {
+            //            int fileNameLength = BitConverter.ToInt32(fileLengthBytes, 0);
+            //            if (fileNameLength > 1068)
+            //            {
+            //                throw new InvalidOperationException("Encrypted file name is too long.");
+            //            }
+
+            //            // 读取文件名哈希值
+            //            if (inputStream.Read(fileNameHash, 0, fileNameHash.Length) == fileNameHash.Length)
+            //            {
+            //                // 计算真实的需要解密的文件名的 buffer
+            //                byte[] fileNameBufferReal = new byte[fileNameLength];
+            //                Array.Copy(fileNameBuffer, fileNameBufferReal, fileNameLength);
+
+            //                byte[] computedFileNameHash = HashHelper.ComputeHash(fileNameBufferReal, hashAlgorithm);
+            //                if (!HashHelper.CompareHashes(fileNameHash, computedFileNameHash))
+            //                {
+            //                    throw new InvalidOperationException("File name hash check failed.");
+            //                }
+
+            //                var decBytes = Decompress(fileNameBufferReal, null, encryptionType, encryptionKey);
+            //                fileName = Encoding.UTF8.GetString(decBytes).TrimEnd('\0').Trim();
+            //            }
+            //        }
+            //    }
+            //}
+
             byte[] lengthBytes = new byte[4];
             byte[] hash = new byte[StreamHashSize];
 
