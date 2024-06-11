@@ -43,7 +43,7 @@ namespace MDriveSync.Core
         {
             get
             {
-                if (IsEncrypt && IsEncryptName && !string.IsNullOrWhiteSpace(EncryptFileName))
+                if (IsEncrypt && !string.IsNullOrWhiteSpace(EncryptFileName))
                 {
                     return EncryptFileName;
                 }
@@ -128,7 +128,7 @@ namespace MDriveSync.Core
         {
             get
             {
-                if (IsEncrypt && IsEncryptName && !string.IsNullOrWhiteSpace(EncryptFileName))
+                if (IsEncrypt && !string.IsNullOrWhiteSpace(EncryptFileName))
                 {
                     return $"{KeyPath.TrimPath()}/{EncryptFileName}"?.TrimPath();
                 }

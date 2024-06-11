@@ -30,7 +30,7 @@ namespace MDriveSync.Core.DB
         {
             _useCache = noCache;
 
-            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "db", dbName);
+            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", dbName);
             lock (_lock)
             {
                 if (!Directory.Exists(Path.GetDirectoryName(dbPath)))
@@ -39,8 +39,11 @@ namespace MDriveSync.Core.DB
                 }
             }
 
-            _db = new LiteDatabase(dbPath);
-            _db.GetCollection<T>().EnsureIndex(x => x.Id);
+            var connectionString = $"Filename={dbPath};Connection=shared;";
+       
+            _db = new LiteDatabase(connectionString);
+
+            //_db.GetCollection<T>().EnsureIndex(x => x.Id);
         }
 
         // 增加

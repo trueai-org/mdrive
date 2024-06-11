@@ -144,6 +144,26 @@ namespace MDriveSync.Client.API.Controllers
         }
 
         /// <summary>
+        /// 下载文件V2 - 支持加密文件下载（边下载边解压/解密）
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="fileId"></param>
+        /// <returns></returns>
+        [HttpGet("download-v2/{jobId}/{fileId}")]
+        public async Task<IActionResult> DownloadV2(string jobId, string fileId)
+        {
+            var jobs = _timedHostedService.Jobs();
+            if (jobs.TryGetValue(jobId, out var job) && job != null)
+            {
+                var url = job.AliyunDriveGetDownloadUrl(fileId);
+
+                // TODO
+            }
+
+            return null;
+        }
+
+        /// <summary>
         /// 获取文件详情
         /// </summary>
         /// <param name="jobId"></param>

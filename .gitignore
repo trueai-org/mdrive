@@ -364,3 +364,5 @@ FodyWeavers.xsd
 *appsettings.Development.json
 *appsettings.Production.json
 *.db
+src/MDriveSync.Client.API/data
+src/MDriveSync.Client.API/*

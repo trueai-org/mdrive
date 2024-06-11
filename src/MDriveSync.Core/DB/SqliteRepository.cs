@@ -12,7 +12,7 @@ namespace MDriveSync.Core.DB
     public class SqliteRepository<T> : SqliteRepository<T, int> where T : IBaseKey<int>, new()
     {
         /// <inheritdoc />
-        public SqliteRepository(string dbName, bool? noCache) : base(dbName, noCache)
+        public SqliteRepository(string dbName, bool? noCache) : base(dbName, null, noCache)
         {
         }
     }
@@ -40,12 +40,12 @@ namespace MDriveSync.Core.DB
         /// </summary>
         /// <param name="dbName">数据库名称，例如：log.db</param>
         /// <param name="noCache">是否使用缓存</param>
-        public SqliteRepository(string dbName, bool? noCache = null)
+        public SqliteRepository(string dbName, string subPath = null, bool? noCache = null)
         {
             _useCache = noCache;
             _members = _accessor.GetMembers();
 
-            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "db", dbName);
+            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", subPath, dbName);
             lock (_lock)
             {
                 if (!Directory.Exists(Path.GetDirectoryName(dbPath)))

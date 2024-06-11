@@ -201,7 +201,7 @@ namespace MDriveSync.Core
 
         public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
         {
-            _localFileCache = new($"cache_{jobConfig.Id}.db", true);
+            _localFileCache = new($"{jobConfig.Id}.d", "cache", true);
             _driveApi = new AliyunDriveApi();
             _log = log;
 
@@ -954,8 +954,7 @@ namespace MDriveSync.Core
                         Key = GetDirectoryKey(_localRestorePath, dirInfo),
                         CreationTime = dirInfo.CreationTime,
                         LastWriteTime = dirInfo.LastWriteTime,
-                        LocalFileName = dirInfo.Name,
-                        EncryptFileName = dirInfo.Name
+                        LocalFileName = dirInfo.Name
                     };
                     _localRestoreFolders.AddOrUpdate(ld.Key, ld, (k, v) => ld);
 
@@ -1761,8 +1760,7 @@ namespace MDriveSync.Core
                 Key = GetDirectoryKey(localBackupFullPath, dirInfo),
                 CreationTime = dirInfo.CreationTime,
                 LastWriteTime = dirInfo.LastWriteTime,
-                LocalFileName = dirInfo.Name,
-                EncryptFileName = dirInfo.Name
+                LocalFileName = dirInfo.Name
             };
 
             // 过滤文件夹
@@ -2398,8 +2396,13 @@ namespace MDriveSync.Core
                 if (_jobConfig.IsEncryptName)
                 {
                     name = HashHelper.ComputeHash(Encoding.UTF8.GetBytes(name), "MD5").ToHex() + ".e";
-                    localFileInfo.EncryptFileName = name;
                 }
+                else
+                {
+                    name += ".e";
+                }
+
+                localFileInfo.EncryptFileName = name;
                 saveFilePath = $"{saveParentPath}/{name}".TrimPath();
 
                 // 如果文件已上传则跳过
@@ -2414,10 +2417,10 @@ namespace MDriveSync.Core
                 }
 
                 // 根据加密算法生成加密文件
-                var encryptCachePath = Path.Combine(Directory.GetCurrentDirectory(), "caches");
+                var encryptCachePath = Path.Combine(Directory.GetCurrentDirectory(), "data", "cache");
                 Directory.CreateDirectory(encryptCachePath);
 
-                var encryptCacheFile = Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.e.cache");
+                var encryptCacheFile = Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.c");
                 var encryptFile = Path.Combine(encryptCachePath, name);
 
                 using FileStream inputFileStream = new FileStream(fileFullPath, FileMode.Open, FileAccess.Read);

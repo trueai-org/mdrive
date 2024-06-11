@@ -32,7 +32,6 @@
 		<PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
 		<PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="8.0.0" />
 		<PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
-		<PackageReference Include="LiteDB" Version="5.0.17" />
 	</ItemGroup>
 	
 	<ItemGroup>
