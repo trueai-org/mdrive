@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 namespace MDriveSync.Security
 {
     /// <summary>
-    /// 哈希算法（SHA1、SHA256、BLAKE3）
+    /// 哈希算法（MD5、SHA1、SHA256、BLAKE3）
     /// 用于生成数据块或文件的哈希值，以验证数据的完整性和唯一性
     /// 默认：SHA256
     /// </summary>
@@ -26,7 +26,6 @@ namespace MDriveSync.Security
                     {
                         return sha256.ComputeHash(data);
                     }
-
                 case "BLAKE3":
                     {
                         return Hasher.Hash(data).AsSpan().ToArray();
@@ -35,6 +34,11 @@ namespace MDriveSync.Security
                     using (SHA1 sha1 = SHA1.Create())
                     {
                         return sha1.ComputeHash(data);
+                    }
+                case "MD5":
+                    using (MD5 md5 = MD5.Create())
+                    {
+                        return md5.ComputeHash(data);
                     }
                 default:
                     throw new ArgumentException("Unsupported hash algorithm", nameof(algorithm));
@@ -62,6 +66,11 @@ namespace MDriveSync.Security
                         using var blake3Stream = new Blake3Stream(stream);
                         return blake3Stream.ComputeHash().AsSpan().ToArray();
                     }
+                case "MD5":
+                    using (MD5 md5 = MD5.Create())
+                    {
+                        return md5.ComputeHash(stream);
+                    }
                 case "SHA1":
                     using (SHA1 sha1 = SHA1.Create())
                     {
@@ -85,16 +94,6 @@ namespace MDriveSync.Security
         }
 
         /// <summary>
-        /// 计算数据流的哈希值并返回十六进制字符串
-        /// </summary>
-        /// <param name="hash"></param>
-        /// <returns></returns>
-        public static string ToHex(byte[] hash)
-        {
-            return BitConverter.ToString(hash).Replace("-", "").ToLower();
-        }
-
-        /// <summary>
         /// 计算文件的哈希值并返回十六进制字符串
         /// </summary>
         /// <param name="filePath">文件路径</param>
@@ -109,6 +108,17 @@ namespace MDriveSync.Security
                     using (FileStream fileStream = File.OpenRead(filePath))
                     {
                         var hashBytes = sha1.ComputeHash(fileStream);
+                        return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+                    }
+                }
+            }
+            else if (algorithm == "MD5")
+            {
+                using (MD5 md5 = MD5.Create())
+                {
+                    using (FileStream fileStream = File.OpenRead(filePath))
+                    {
+                        var hashBytes = md5.ComputeHash(fileStream);
                         return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
                     }
                 }

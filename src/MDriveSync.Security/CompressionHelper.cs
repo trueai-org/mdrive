@@ -29,7 +29,8 @@ namespace MDriveSync.Security
         /// <param name="encryptionType">加密算法类型（"AES256-GCM"或"ChaCha20-Poly1305"），如果不需要加密则为null</param>
         /// <param name="encryptionKey">加密密钥，如果不需要加密则为null</param>
         /// <returns>压缩（并加密）后的字节数组</returns>
-        public static byte[] Compress(byte[] buffer, string compressionType, string encryptionType = null, string encryptionKey = null)
+        public static byte[] Compress(byte[] buffer, string compressionType,
+            string encryptionType = null, string encryptionKey = null, byte[] nonce = null)
         {
             // 压缩数据
             buffer = compressionType switch
@@ -45,8 +46,8 @@ namespace MDriveSync.Security
             {
                 buffer = encryptionType switch
                 {
-                    "AES256-GCM" => EncryptionHelper.EncryptWithAES256GCM(buffer, encryptionKey),
-                    "ChaCha20-Poly1305" => EncryptionHelper.EncryptWithChaCha20Poly1305(buffer, encryptionKey),
+                    "AES256-GCM" => EncryptionHelper.EncryptWithAES256GCM(buffer, encryptionKey, nonce),
+                    "ChaCha20-Poly1305" => EncryptionHelper.EncryptWithChaCha20Poly1305(buffer, encryptionKey, nonce),
                     _ => buffer
                 };
             }
@@ -104,17 +105,22 @@ namespace MDriveSync.Security
             string encryptionKey,
             string hashAlgorithm,
             bool encryptFileName,
-            string fileName,
-            out string encryptFileHash)
+            string fileName)
+        //, out string encryptFileHash
         {
-            encryptFileHash = null;
+            byte[] nonce = null;
 
             // 如果需要加密文件名
             if (encryptFileName && !string.IsNullOrWhiteSpace(fileName) && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrEmpty(encryptionKey))
             {
                 // 文件名仅加密，不需要压缩
                 var fileBytes = Encoding.UTF8.GetBytes(fileName);
-                byte[] encryptedFileName = Compress(fileBytes, null, encryptionType, encryptionKey);
+
+                // 使用文件名的 SHA256 哈希值作为 nonce，确保长度为 12 字节
+                // 不需要多次计算
+                nonce = HashHelper.ComputeHash(fileBytes, "SHA256").Take(12).ToArray();
+
+                byte[] encryptedFileName = Compress(fileBytes, null, encryptionType, encryptionKey, nonce);
                 if (encryptedFileName.Length > FileNameBufferSize)
                 {
                     throw new InvalidOperationException("Encrypted file name is too long.");
@@ -138,7 +144,9 @@ namespace MDriveSync.Security
                 }
                 outputStream.Write(fileNameHash, 0, fileNameHash.Length);
 
-                encryptFileHash = HashHelper.ToHex(fileNameHash);
+                //// 计算文件名的 MD5 哈希值
+                //// 此处使用 MD5 哈希值作为文件名的唯一标识，而不是加密后的文件名，因为加密后的文件名会有随机 IV 导致每次加密结果不同
+                //encryptFileHash = HashHelper.ComputeHash(fileBytes, "MD5").ToHex();
             }
 
             byte[] buffer = new byte[StreamBufferSize];
@@ -147,7 +155,13 @@ namespace MDriveSync.Security
             {
                 byte[] dataToCompress = new byte[bytesRead];
                 Array.Copy(buffer, dataToCompress, bytesRead);
-                var compressedData = Compress(dataToCompress, compressionType, encryptionType, encryptionKey);
+
+                var compressedData = Compress(
+                    dataToCompress,
+                    compressionType,
+                    encryptionType,
+                    encryptionKey,
+                    nonce);
 
                 // 计算哈希值
                 byte[] hash = HashHelper.ComputeHash(compressedData, hashAlgorithm);

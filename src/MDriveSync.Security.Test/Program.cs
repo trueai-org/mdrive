@@ -8,6 +8,12 @@ namespace MDriveSync.Security.Test
     {
         private static void Main(string[] args)
         {
+            //var txt = "hello";
+            //var txtbytes = Encoding.UTF8.GetBytes(txt);
+
+            //var t1 = EncryptionHelper.EncryptWithAES256GCM(txtbytes, "123");
+            //var t2 = EncryptionHelper.EncryptWithChaCha20Poly1305(txtbytes, "123");
+
             /*
             // 文件流压缩解压测试
             string inputFilePath = "E:\\_test\\imgs\\5555.txt";

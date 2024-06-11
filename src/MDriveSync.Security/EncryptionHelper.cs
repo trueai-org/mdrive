@@ -20,14 +20,25 @@ namespace MDriveSync.Security
         /// <param name="plaintext">明文数据</param>
         /// <param name="key">加密密钥</param>
         /// <returns>加密后的数据，包括nonce、密文和tag</returns>
-        public static byte[] EncryptWithAES256GCM(byte[] plaintext, string key)
+        public static byte[] EncryptWithAES256GCM(byte[] plaintext, string key, byte[] nonce = null)
         {
             // 生成AES-GCM加密实例，指定标签大小
             using AesGcm aesGcm = new AesGcm(GenerateKey(key), AesGcmTagSize);
 
             // 生成随机nonce
-            byte[] nonce = new byte[AesGcm.NonceByteSizes.MaxSize];
-            RandomNumberGenerator.Fill(nonce);
+            if(nonce == null)
+            {
+                nonce = new byte[AesGcm.NonceByteSizes.MaxSize];
+                RandomNumberGenerator.Fill(nonce);
+            }
+            else
+            {
+                // 保证nonce长度为12字节
+                if (nonce.Length != AesGcm.NonceByteSizes.MaxSize)
+                {
+                    throw new ArgumentException("Nonce length must be 12 bytes", nameof(nonce));
+                }
+            }
 
             // 准备存储加密后的密文和tag
             byte[] ciphertext = new byte[plaintext.Length];
@@ -76,15 +87,27 @@ namespace MDriveSync.Security
         /// <param name="plaintext">明文数据</param>
         /// <param name="key">加密密钥</param>
         /// <returns>加密后的数据，包括nonce、密文和tag</returns>
-        public static byte[] EncryptWithChaCha20Poly1305(byte[] plaintext, string key)
+        public static byte[] EncryptWithChaCha20Poly1305(byte[] plaintext, string key, byte[] nonce = null)
         {
             if (ChaCha20Poly1305.IsSupported)
             {
                 using ChaCha20Poly1305 chacha = new ChaCha20Poly1305(GenerateKey(key));
 
+
                 // 生成随机nonce
-                byte[] nonce = new byte[ChaCha20NonceSize];
-                RandomNumberGenerator.Fill(nonce);
+                if (nonce == null)
+                {
+                    nonce = new byte[ChaCha20NonceSize];
+                    RandomNumberGenerator.Fill(nonce);
+                }
+                else
+                {
+                    // 保证nonce长度为12字节
+                    if (nonce.Length != ChaCha20NonceSize)
+                    {
+                        throw new ArgumentException("Nonce length must be 12 bytes", nameof(nonce));
+                    }
+                }
 
                 // 准备存储加密后的密文和tag
                 byte[] ciphertext = new byte[plaintext.Length];
@@ -149,6 +172,7 @@ namespace MDriveSync.Security
         private static byte[] GenerateKey(string key)
         {
             using SHA256 sha256 = SHA256.Create();
+
             // 对输入的字符串进行哈希，确保密钥长度为32字节
             return sha256.ComputeHash(Encoding.UTF8.GetBytes(key.PadRight(32).Substring(0, 32)));
         }

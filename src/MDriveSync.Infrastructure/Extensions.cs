@@ -101,5 +101,15 @@ namespace MDriveSync.Infrastructure
             }
             return displayName;
         }
+
+        /// <summary>
+        /// 计算数据流的哈希值并返回十六进制字符串
+        /// </summary>
+        /// <param name="hash"></param>
+        /// <returns></returns>
+        public static string ToHex(this byte[] hash)
+        {
+            return BitConverter.ToString(hash).Replace("-", "").ToLower();
+        }
     }
 }

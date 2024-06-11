@@ -9,11 +9,21 @@ namespace MDriveSync.Security
         private const int ChaCha20NonceSize = 12; // 96-bit nonce
         private const int ChaCha20TagSize = 16;   // 128-bit tag
 
-        public static byte[] EncryptChaCha20Poly1305(byte[] plaintext, byte[] key)
+        public static byte[] EncryptChaCha20Poly1305(byte[] plaintext, byte[] key, byte[] nonce = null)
         {
-            SecureRandom random = new SecureRandom();
-            byte[] nonce = new byte[ChaCha20NonceSize];
-            random.NextBytes(nonce);
+            if (nonce == null)
+            {
+                SecureRandom random = new SecureRandom(); 
+                nonce = new byte[ChaCha20NonceSize];
+                random.NextBytes(nonce);
+            }
+            else
+            {
+                if (nonce.Length != ChaCha20NonceSize)
+                {
+                    throw new ArgumentException("Nonce length must be 12 bytes", nameof(nonce));
+                }
+            }
 
             ChaCha20Poly1305 engine = new ChaCha20Poly1305();
             engine.Init(true, new ParametersWithIV(new KeyParameter(key), nonce));

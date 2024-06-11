@@ -8,6 +8,11 @@ namespace MDriveSync.Core
     /// </summary>
     public class LocalFileInfo : IBaseKey<string>
     {
+        public LocalFileInfo()
+        {
+
+        }
+
         /// <summary>
         /// 本地完整路径
         /// </summary>
@@ -33,11 +38,12 @@ namespace MDriveSync.Core
         /// <summary>
         /// 文件名称
         /// </summary>
+        [Ignore]
         public string Name
         {
             get
             {
-                if (IsEncrypt && IsEncryptName)
+                if (IsEncrypt && IsEncryptName && !string.IsNullOrWhiteSpace(EncryptFileName))
                 {
                     return EncryptFileName;
                 }
@@ -112,5 +118,23 @@ namespace MDriveSync.Core
         /// ***.e
         /// </summary>
         public string EncryptFileName { get; set; }
+
+        /// <summary>
+        /// 已加密的文件名称的对应的相对路径 key
+        /// xxx/xxx/xxx ***.e
+        /// </summary>
+        [Ignore]
+        public string EncryptKey
+        {
+            get
+            {
+                if (IsEncrypt && IsEncryptName && !string.IsNullOrWhiteSpace(EncryptFileName))
+                {
+                    return $"{KeyPath.TrimPath()}/{EncryptFileName}"?.TrimPath();
+                }
+
+                return Key;
+            }
+        }
     }
 }
