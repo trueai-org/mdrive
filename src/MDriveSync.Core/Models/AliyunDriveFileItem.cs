@@ -124,6 +124,11 @@ namespace MDriveSync.Core
         /// </summary>
         [JsonPropertyName("status")]
         public string Status { get; set; }
+
+        /// <summary>
+        /// 本地文件名（如果匹配到本地文件）
+        /// </summary>
+        public string LocalFileName { get; set; }
     }
 
     /// <summary>

@@ -1,5 +1,4 @@
 ﻿using EasyCompressor;
-using Org.BouncyCastle.Asn1.Cms;
 using System.Text;
 
 namespace MDriveSync.Security
@@ -195,7 +194,8 @@ namespace MDriveSync.Security
             string encryptionKey,
             string hashAlgorithm,
             bool encryptFileName,
-            out string fileName)
+            out string fileName,
+            bool? onlyEncryptFileName = null)
         {
             fileName = null;
 
@@ -236,6 +236,12 @@ namespace MDriveSync.Security
 
                 var decBytes = Decompress(fileNameBuffer, null, encryptionType, encryptionKey);
                 fileName = Encoding.UTF8.GetString(decBytes).TrimEnd('\0').Trim();
+            }
+
+            // 如果只需要解密文件名，则直接返回
+            if (onlyEncryptFileName == true)
+            {
+                return;
             }
 
             //if (encryptFileName && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrWhiteSpace(encryptionKey))
@@ -312,5 +318,7 @@ namespace MDriveSync.Security
                 outputStream.Write(decryptedData, 0, decryptedData.Length);
             }
         }
+
+
     }
 }

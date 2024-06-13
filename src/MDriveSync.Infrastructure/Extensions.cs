@@ -75,6 +75,30 @@ namespace MDriveSync.Infrastructure
         }
 
         /// <summary>
+        /// 移除指路径的后缀
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="removeSuffix"></param>
+        /// <returns></returns>
+        public static string TrimSuffix(this string path, string removeSuffix = "")
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return path;
+            }
+
+            if (!string.IsNullOrWhiteSpace(removeSuffix))
+            {
+                if (path.EndsWith(removeSuffix))
+                {
+                    path = path.Substring(0, path.Length - removeSuffix.Length);
+                }
+            }
+
+            return path;
+        }
+
+        /// <summary>
         /// 获取枚举描述或名称
         /// </summary>
         /// <param name="value"></param>
@@ -110,6 +134,39 @@ namespace MDriveSync.Infrastructure
         public static string ToHex(this byte[] hash)
         {
             return BitConverter.ToString(hash).Replace("-", "").ToLower();
+        }
+
+        /// <summary>
+        /// 格式化文件大小
+        /// </summary>
+        /// <param name="size"></param>
+        /// <returns></returns>
+        public static string ToFileSizeString(this double size)
+        {
+            //size switch
+            //{
+            //    var s when s >= 1024 * 1024 * 1024 => $"{s / 1024 / 1024 / 1024:F2} GB/s",
+            //    var s when s >= 1024 * 1024 => $"{s / 1024 / 1024:F2} MB/s",
+            //    var s when s >= 1024 => $"{s / 1024:F2} KB/s",
+            //    var s => $"{s:F2} B/s"
+            //};
+
+            if (size >= 1024 * 1024 * 1024)
+            {
+                return $"{size / 1024 / 1024 / 1024:F2} GB";
+            }
+            else if (size >= 1024 * 1024)
+            {
+                return $"{size / 1024 / 1024:F2} MB";
+            }
+            else if (size >= 1024)
+            {
+                return $"{size / 1024:F2} KB";
+            }
+            else
+            {
+                return $"{size:F2} B";
+            }
         }
     }
 }

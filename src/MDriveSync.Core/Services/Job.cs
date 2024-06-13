@@ -138,6 +138,16 @@ namespace MDriveSync.Core
         /// </summary>
         public AliyunDriveConfig CurrrentDrive => _driveConfig;
 
+        /// <summary>
+        /// 云盘所有文件夹
+        /// </summary>
+        public ConcurrentDictionary<string, AliyunDriveFileItem> DriveFolders => _driveFolders;
+
+        /// <summary>
+        /// 云盘所有文件
+        /// </summary>
+        public ConcurrentDictionary<string, AliyunDriveFileItem> DriveFiles => _driveFiles;
+
         // 作业配置
         private JobConfig _jobConfig;
 
@@ -1100,7 +1110,7 @@ namespace MDriveSync.Core
         /// 获取云盘文件文件夹
         /// </summary>
         /// <param name="parentId"></param>
-        public List<AliyunDriveFileItem> GetDrivleFiles(string parentId = "")
+        public async Task<List<AliyunDriveFileItem>> GetDrivleFiles(string parentId = "")
         {
             if (string.IsNullOrWhiteSpace(parentId))
             {
@@ -1108,17 +1118,64 @@ namespace MDriveSync.Core
                 {
                     parentId = p.FileId;
                 }
+
+                // 如果为空则初始化备份目录
+                if (string.IsNullOrWhiteSpace(parentId))
+                {
+                    AliyunDriveInitBackupPath();
+
+                    if (_driveFolders.TryGetValue(_driveSavePath, out var p2))
+                    {
+                        parentId = p2.FileId;
+                    }
+                }
             }
 
             var list = new List<AliyunDriveFileItem>();
+
+            // 拉取云盘文件
+            await AliyunDriveFetchAllFiles(_driveId, parentId, isDeepLoop: false);
 
             // 目录下的所有文件文件夹
             var fdirs = _driveFolders.Values.Where(c => c.ParentFileId == parentId)
                 .OrderBy(c => c.Name)
                 .ToList();
+
             var fs = _driveFiles.Values.Where(c => c.ParentFileId == parentId)
                 .OrderBy(c => c.Name)
                 .ToList();
+
+            // 当云盘存在文件，但是没有本地文件时
+            if (fs.Count > 0 && _localFiles.Count <= 0)
+            {
+                // 重新扫描本地文件
+                ScanLocalFiles();
+            }
+
+            // 如果是加密文件
+            if (_jobConfig.IsEncrypt)
+            {
+                if (_jobConfig.IsEncryptName)
+                {
+                    // 解析加密文件对应的本地文件名称
+                    foreach (var item in fs)
+                    {
+                        var localEntryptKey = item.Key.TrimPrefix(_driveSavePath);
+                        var f = _localFiles.Values.FirstOrDefault(x => x.EncryptKey == localEntryptKey);
+                        if (f != null)
+                        {
+                            item.LocalFileName = f.LocalFileName;
+                        }
+                    }
+                }
+                else
+                {
+                    foreach (var item in fs)
+                    {
+                        item.LocalFileName = item.Name.TrimSuffix(".e");
+                    }
+                }
+            }
 
             list.AddRange(fdirs);
             list.AddRange(fs);
@@ -1137,6 +1194,7 @@ namespace MDriveSync.Core
             if (info.IsFolder)
             {
                 var f = _driveFolders.Where(c => c.Value.FileId == fileId).FirstOrDefault();
+
                 if (!string.IsNullOrWhiteSpace(f.Key))
                 {
                     info.Key = f.Key;
@@ -1443,6 +1501,34 @@ namespace MDriveSync.Core
                                 {
                                     lf.Sha1 = cacheFile.Sha1;
                                 }
+
+                                if (lf.IsEncrypt)
+                                {
+                                    if (string.IsNullOrWhiteSpace(lf.EncryptFileName))
+                                    {
+                                        lf.EncryptFileName = cacheFile.EncryptFileName;
+                                    }
+                                }
+                            }
+
+
+                            // 计算加密文件名称
+                            if (lf.IsEncrypt)
+                            {
+                                if (string.IsNullOrWhiteSpace(lf.EncryptFileName))
+                                {
+                                    var name = lf.LocalFileName;
+                                    if (lf.IsEncryptName)
+                                    {
+                                        name = HashHelper.ComputeHash(Encoding.UTF8.GetBytes(name), "MD5").ToHex() + ".e";
+                                    }
+                                    else
+                                    {
+                                        name += ".e";
+                                    }
+
+                                    lf.EncryptFileName = name;
+                                }
                             }
 
                             _localFiles.AddOrUpdate(lf.Key, lf, (k, v) =>
@@ -1457,6 +1543,7 @@ namespace MDriveSync.Core
                                     // 如果之前内存中有文件的 sha1
                                     lf.Sha1 = v.Sha1;
                                 }
+
 
                                 return lf;
                             });
@@ -2426,7 +2513,8 @@ namespace MDriveSync.Core
                 using FileStream inputFileStream = new FileStream(fileFullPath, FileMode.Open, FileAccess.Read);
                 using FileStream outputFileStream = new FileStream(encryptCacheFile, FileMode.Create, FileAccess.Write);
                 CompressionHelper.CompressStream(inputFileStream, outputFileStream,
-                    _jobConfig.CompressAlgorithm, _jobConfig.EncryptAlgorithm, _jobConfig.EncryptKey, _jobConfig.HashAlgorithm, _jobConfig.IsEncryptName, name);
+                    _jobConfig.CompressAlgorithm, _jobConfig.EncryptAlgorithm, _jobConfig.EncryptKey, _jobConfig.HashAlgorithm, _jobConfig.IsEncryptName,
+                    localFileInfo.LocalFileName);
 
                 // 关闭文件流
                 inputFileStream.Close();
@@ -2434,7 +2522,7 @@ namespace MDriveSync.Core
 
                 //// 解密测试
                 //using FileStream inputFileStream1 = new FileStream(encryptCacheFile, FileMode.Open, FileAccess.Read);
-                //using FileStream outputFileStream1 = new FileStream(Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.d.cache"), FileMode.Create, FileAccess.Write);
+                //using FileStream outputFileStream1 = new FileStream(Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.c"), FileMode.Create, FileAccess.Write);
                 //CompressionHelper.DecompressStream(inputFileStream1, outputFileStream1, _jobConfig.CompressAlgorithm, _jobConfig.EncryptAlgorithm, _jobConfig.EncryptKey, _jobConfig.HashAlgorithm,
                 //    _jobConfig.IsEncryptName, out var decryptFileName);
                 //inputFileStream1.Close();
@@ -2828,7 +2916,16 @@ namespace MDriveSync.Core
         /// <param name="type"></param>
         /// <param name="saveRootPath">备份保存的目录，如果匹配到则立即返回</param>
         /// <returns></returns>
-        private async Task AliyunDriveFetchAllFiles(string driveId, string parentFileId, int limit = 100, string orderBy = null, string orderDirection = null, string category = null, string type = "all")
+        private async Task AliyunDriveFetchAllFiles(string driveId,
+            string parentFileId,
+            int limit = 100,
+            string orderBy = null,
+            string orderDirection = null,
+            string category = null,
+            string type = "all",
+
+            // 是否递归获取子文件夹
+            bool isDeepLoop = true)
         {
             try
             {
@@ -2861,28 +2958,35 @@ namespace MDriveSync.Core
                         // 如果是根目录
                         if (item.ParentFileId == "root")
                         {
-                            _driveFolders.TryAdd($"{item.Name}".TrimPath(), item);
+                            item.Key = $"{item.Name}".TrimPath();
+                            _driveFolders.TryAdd(item.Key, item);
                         }
                         else
                         {
                             var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
-                            _driveFolders.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                            item.Key = $"{parent.Key}/{item.Name}".TrimPath();
+                            _driveFolders.TryAdd(item.Key, item);
                         }
 
-                        await AliyunDriveFetchAllFiles(driveId, item.FileId, limit, orderBy, orderDirection, category, type);
+                        if (isDeepLoop)
+                        {
+                            await AliyunDriveFetchAllFiles(driveId, item.FileId, limit, orderBy, orderDirection, category, type);
+                        }
                     }
                     else
                     {
                         // 如果是根目录的文件
                         if (item.ParentFileId == "root")
                         {
-                            _driveFiles.TryAdd($"{item.Name}".TrimPath(), item);
+                            item.Key = $"{item.Name}".TrimPath();
+                            _driveFiles.TryAdd(item.Key, item);
                         }
                         else
                         {
                             // 构建文件路径作为字典的键
                             var parent = _driveFolders.Where(c => c.Value.Type == "folder" && c.Value.FileId == item.ParentFileId).First()!;
-                            _driveFiles.TryAdd($"{parent.Key}/{item.Name}".TrimPath(), item);
+                            item.Key = $"{parent.Key}/{item.Name}".TrimPath();
+                            _driveFiles.TryAdd(item.Key, item);
                         }
                     }
 
@@ -2893,6 +2997,24 @@ namespace MDriveSync.Core
             {
                 throw;
             }
+        }
+
+
+        /// <summary>
+        /// 阿里云盘 - 获取文件列表（限流 4 QPS）
+        /// </summary>
+        /// <param name="driveId"></param>
+        /// <param name="parentFileId"></param>
+        /// <param name="limit"></param>
+        /// <param name="orderBy"></param>
+        /// <param name="orderDirection"></param>
+        /// <param name="category"></param>
+        /// <param name="type"></param>
+        /// <param name="saveRootPath">备份保存的目录，如果匹配到则立即返回</param>
+        /// <returns></returns>
+        public async Task AliyunDriveFetchAllSubFiles(string parentFileId, int limit = 100, string orderBy = null, string orderDirection = null, string category = null, string type = "all")
+        {
+            await AliyunDriveFetchAllFiles(_driveId, parentFileId, limit, orderBy, orderDirection, category, type);
         }
 
         /// <summary>
