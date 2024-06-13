@@ -7,6 +7,8 @@ using MDriveSync.Infrastructure;
 using MDriveSync.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
+using Newtonsoft.Json;
+using System.Text;
 
 namespace MDriveSync.Client.API.Controllers
 {
@@ -42,6 +44,73 @@ namespace MDriveSync.Client.API.Controllers
         public List<AliyunDriveConfig> GetDrives()
         {
             return _timedHostedService.Drives();
+        }
+
+        /// <summary>
+        /// 导出配置为 json 文件
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet("export")]
+        public IActionResult Export()
+        {
+            var drives = DriveDb.Instacne.GetAll();
+
+            // 导出的文件支持中文，需要使用 UTF-8 编码
+            var json = JsonConvert.SerializeObject(drives, Formatting.Indented);
+            var bytes = Encoding.UTF8.GetBytes(json);
+
+            return File(bytes, "application/json", "mdrive.json");
+        }
+
+        /// <summary>
+        /// 导入配置文件
+        /// </summary>
+        /// <param name="file"></param>
+        /// <returns></returns>
+        [HttpPost("import")]
+        public Result Import([FromForm] IFormFile file)
+        {
+            if (file == null)
+            {
+                return Result.Fail("文件不能为空");
+            }
+
+            using var stream = file.OpenReadStream();
+            using var reader = new StreamReader(stream);
+            var json = reader.ReadToEnd();
+            var items = JsonConvert.DeserializeObject<List<AliyunDriveConfig>>(json);
+
+            var drives = DriveDb.Instacne.GetAll();
+
+            foreach (var cd in items)
+            {
+                var f = drives.FirstOrDefault(x => x.Id == cd.Id);
+                if (f == null)
+                {
+                    DriveDb.Instacne.Add(cd);
+                }
+                else
+                {
+                    // 循环配置是否存在，不存在则添加
+                    var addCount = 0;
+                    foreach (var job in cd.Jobs)
+                    {
+                        var j = f.Jobs.FirstOrDefault(x => x.Id == job.Id);
+                        if (j == null)
+                        {
+                            f.Jobs.Add(job);
+                            addCount++;
+                        }
+                    }
+
+                    if (addCount > 0)
+                    {
+                        DriveDb.Instacne.Update(f);
+                    }
+                }
+            }
+
+            return Result.Ok();
         }
 
         /// <summary>
