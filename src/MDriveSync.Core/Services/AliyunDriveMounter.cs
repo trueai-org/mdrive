@@ -234,44 +234,8 @@ namespace MDriveSync.Core.Services
         {
             get
             {
-                return _cache.GetOrCreate(TOEKN_KEY, c =>
-                {
-                    var token = InitToken();
-
-                    var secs = _driveConfig.ExpiresIn;
-                    if (secs <= 300 || secs > 7200)
-                    {
-                        secs = 7200;
-                    }
-
-                    // 提前 5 分钟过期
-                    c.SetAbsoluteExpiration(TimeSpan.FromSeconds(secs - 60 * 5));
-
-                    return token;
-                });
+                return AliyunDriveToken.Instance.GetAccessToken(_driveConfig.Id);
             }
-        }
-
-        /// <summary>
-        /// 初始化令牌
-        /// </summary>
-        /// <returns></returns>
-        private string InitToken()
-        {
-            // 重新获取令牌
-            var data = ProviderApiHelper.RefreshToken(_driveConfig.RefreshToken);
-            if (data != null)
-            {
-                _driveConfig.TokenType = data.TokenType;
-                _driveConfig.AccessToken = data.AccessToken;
-                _driveConfig.RefreshToken = data.RefreshToken;
-                _driveConfig.ExpiresIn = data.ExpiresIn;
-                _driveConfig.Save();
-
-                return _driveConfig.AccessToken;
-            }
-
-            throw new Exception("初始化访问令牌失败");
         }
 
         /// <summary>

@@ -235,36 +235,43 @@ namespace MDriveSync.Client.API.Controllers
                 var url = urlResponse.Url;
                 var name = detail.Name;
 
-                if (job.CurrrentJob.IsEncrypt && job.CurrrentJob.IsEncryptName)
+                if (job.CurrrentJob.IsEncrypt)
                 {
-                    var jobConfig = job.CurrrentJob;
-                    var httpClient = new HttpClient();
-
-                    // 设置Range头以只下载0到1112字节
-                    var request = new HttpRequestMessage(HttpMethod.Get, url);
-                    request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, Math.Min(1112, detail.Size ?? 0));
-
-                    var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-                    if (!response.IsSuccessStatusCode)
+                    if (job.CurrrentJob.IsEncryptName)
                     {
-                        throw new LogicException("无法下载文件");
+                        var jobConfig = job.CurrrentJob;
+                        var httpClient = new HttpClient();
+
+                        // 设置Range头以只下载0到1112字节
+                        var request = new HttpRequestMessage(HttpMethod.Get, url);
+                        request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, Math.Min(1112, detail.Size ?? 0));
+
+                        var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            throw new LogicException("无法下载文件");
+                        }
+
+                        // 直接从 HttpResponseMessage 获取流
+                        var inputStream = await response.Content.ReadAsStreamAsync();
+
+                        // 解密流
+                        var outputStream = new MemoryStream();
+
+                        // 解密流
+                        CompressionHelper.DecompressStream(inputStream, outputStream, jobConfig.CompressAlgorithm, jobConfig.EncryptAlgorithm,
+                            jobConfig.EncryptKey, jobConfig.HashAlgorithm, jobConfig.IsEncryptName, out var decryptFileName, true);
+
+                        outputStream.Seek(0, SeekOrigin.Begin);
+
+                        if (!string.IsNullOrWhiteSpace(decryptFileName))
+                        {
+                            name = decryptFileName;
+                        }
                     }
-
-                    // 直接从 HttpResponseMessage 获取流
-                    var inputStream = await response.Content.ReadAsStreamAsync();
-
-                    // 解密流
-                    var outputStream = new MemoryStream();
-
-                    // 解密流
-                    CompressionHelper.DecompressStream(inputStream, outputStream, jobConfig.CompressAlgorithm, jobConfig.EncryptAlgorithm,
-                        jobConfig.EncryptKey, jobConfig.HashAlgorithm, jobConfig.IsEncryptName, out var decryptFileName, true);
-
-                    outputStream.Seek(0, SeekOrigin.Begin);
-
-                    if (!string.IsNullOrWhiteSpace(decryptFileName))
+                    else
                     {
-                        name = decryptFileName;
+                        name = name.TrimSuffix(".e");
                     }
                 }
 
@@ -795,7 +802,7 @@ namespace MDriveSync.Client.API.Controllers
                 _timedHostedService.JobDelete(jobId);
 
                 // 修复 https://github.com/trueai-org/MDriveSync/issues/4
-                var ds = DriveDb.Instacne.GetAll();
+                var ds = DriveDb.Instacne.GetAll(false);
                 foreach (var d in ds)
                 {
                     var jo = d?.Jobs?.FirstOrDefault(x => x.Id == jobId);
@@ -958,9 +965,16 @@ namespace MDriveSync.Client.API.Controllers
                 throw new LogicException("请选择保存位置");
             }
 
-            var downloadTask = DownloadManager.Instance.AddDownloadTask(request.Url,
-                Path.Combine(request.FilePath, request.FileName), request.JobId, request.FileId);
-            return Result.Ok(downloadTask);
+            var jobs = _timedHostedService.Jobs();
+            var jobId = request.JobId;
+            if (jobs.TryGetValue(jobId, out var job) && job != null)
+            {
+                var downloadTask = DownloadManager.Instance.AddDownloadTask(request.Url, Path.Combine(request.FilePath, request.FileName), request.JobId, request.FileId,
+                    job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
+                return Result.Ok(downloadTask);
+            }
+
+            return Result.Fail("作业不存在");
         }
 
         /// <summary>
@@ -1043,7 +1057,7 @@ namespace MDriveSync.Client.API.Controllers
                                 }
 
                                 var path = Path.Combine(baseSavePath, subPath, subName);
-                                DownloadManager.Instance.AddDownloadTask(subUrl, path, jobId, fid);
+                                DownloadManager.Instance.AddDownloadTask(subUrl, path, jobId, fid, job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
                             }
                         }
                     }
@@ -1089,7 +1103,7 @@ namespace MDriveSync.Client.API.Controllers
                         }
 
                         var path = Path.Combine(baseSavePath, name);
-                        DownloadManager.Instance.AddDownloadTask(url, path, jobId, fileId);
+                        DownloadManager.Instance.AddDownloadTask(url, path, jobId, fileId, job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
                     }
                 }
 

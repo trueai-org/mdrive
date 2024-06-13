@@ -73,11 +73,6 @@ namespace MDriveSync.Core
         private readonly IMemoryCache _cache;
 
         /// <summary>
-        /// 令牌标识
-        /// </summary>
-        private const string TOEKN_KEY = "TOKEN";
-
-        /// <summary>
         /// 阿里云盘接口
         /// </summary>
         private readonly AliyunDriveApi _driveApi;
@@ -132,6 +127,11 @@ namespace MDriveSync.Core
 
         // 客户端信息
         private AliyunDriveConfig _driveConfig;
+
+        /// <summary>
+        /// 阿里云盘备份盘/资源盘 ID
+        /// </summary>
+        public string AliyunDriveId => _driveId;
 
         /// <summary>
         /// 当前云盘
@@ -562,44 +562,8 @@ namespace MDriveSync.Core
         {
             get
             {
-                return _cache.GetOrCreate(TOEKN_KEY, c =>
-                {
-                    var token = InitToken();
-
-                    var secs = _driveConfig.ExpiresIn;
-                    if (secs <= 300 || secs > 7200)
-                    {
-                        secs = 7200;
-                    }
-
-                    // 提前 5 分钟过期
-                    c.SetAbsoluteExpiration(TimeSpan.FromSeconds(secs - 60 * 5));
-
-                    return token;
-                });
+                return AliyunDriveToken.Instance.GetAccessToken(_driveConfig.Id);
             }
-        }
-
-        /// <summary>
-        /// 初始化令牌
-        /// </summary>
-        /// <returns></returns>
-        private string InitToken()
-        {
-            // 重新获取令牌
-            var data = ProviderApiHelper.RefreshToken(_driveConfig.RefreshToken);
-            if (data != null)
-            {
-                _driveConfig.TokenType = data.TokenType;
-                _driveConfig.AccessToken = data.AccessToken;
-                _driveConfig.RefreshToken = data.RefreshToken;
-                _driveConfig.ExpiresIn = data.ExpiresIn;
-                _driveConfig.Save();
-
-                return _driveConfig.AccessToken;
-            }
-
-            throw new Exception("初始化访问令牌失败");
         }
 
         /// <summary>

@@ -1,6 +1,8 @@
 ﻿using MDriveSync.Core.DB;
 using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
+using MDriveSync.Core.Services;
+using MDriveSync.Security;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
@@ -99,7 +101,6 @@ namespace MDriveSync.Core
 
             maxParallelDownloads = maxParallel;
 
-
             lock (semaphore)
             {
                 var difference = maxParallelDownloads - semaphore.CurrentCount;
@@ -124,7 +125,14 @@ namespace MDriveSync.Core
         /// <param name="url">文件的 URL。</param>
         /// <param name="filePath">保存文件的路径。</param>
         /// <returns>下载任务对象。</returns>
-        public DownloadTask AddDownloadTask(string url, string filePath, string jobId, string fileId)
+        public DownloadTask AddDownloadTask(string url,
+            string filePath,
+            string jobId,
+            string fileId,
+            string driveId,
+            string aliyunDriveId,
+            bool isEncrypt,
+            bool isEncryptName)
         {
             var downloadTask = new DownloadTask
             {
@@ -134,17 +142,11 @@ namespace MDriveSync.Core
                 Status = DownloadStatus.Pending,
                 JobId = jobId,
                 FileId = fileId,
+                DriveId = driveId,
+                AliyunDriveId = aliyunDriveId,
+                IsEncrypted = isEncrypt,
+                IsEncryptName = isEncryptName,
             };
-
-            // 根据 jobId 查询任务配置
-            var ds = DriveDb.Instacne.GetAll(false);
-            var job = ds.SelectMany(x => x.Jobs).FirstOrDefault(x => x.Id == jobId);
-            if (job == null)
-            {
-                throw new LogicException("作业不存在");
-            }
-
-            downloadTask.IsEncrypted = job.IsEncrypt;
 
             if (downloadTasks.TryAdd(downloadTask.Id, downloadTask))
             {
@@ -208,7 +210,6 @@ namespace MDriveSync.Core
                 return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             }
         }
-
 
         /// <summary>
         /// 打开下载目录文件夹，并选中当前下载的文件
@@ -306,22 +307,31 @@ namespace MDriveSync.Core
         {
             await semaphore.WaitAsync();
 
-            // TODO
-            // 如果 url 为空或作业创建超过 5 分钟，则重新获取 url
-
-
-            downloadTask.Status = DownloadStatus.Downloading;
-            downloadTask.StartTime = DateTime.Now;
+            var tmpFilePath = downloadTask.FilePath + $".{Guid.NewGuid():N}.cache";
 
             try
             {
+                Directory.CreateDirectory(Path.GetDirectoryName(tmpFilePath));
+
+                // 如果 url 为空或作业创建超过 5 分钟，则重新获取 url
+                if (string.IsNullOrWhiteSpace(downloadTask.Url) || (DateTime.Now - downloadTask.CreateTime).TotalMinutes > 5)
+                {
+                    var token = AliyunDriveToken.Instance.GetAccessToken(downloadTask.DriveId);
+                    var api = new AliyunDriveApi();
+                    var urlResponse = api.GetDownloadUrl(downloadTask.AliyunDriveId, downloadTask.FileId, token);
+                    downloadTask.Url = urlResponse.Url;
+                }
+
+                downloadTask.Status = DownloadStatus.Downloading;
+                downloadTask.StartTime = DateTime.Now;
+
                 var response = await httpClient.GetAsync(downloadTask.Url, HttpCompletionOption.ResponseHeadersRead);
                 response.EnsureSuccessStatusCode();
 
                 downloadTask.TotalBytes = response.Content.Headers.ContentLength ?? 0;
 
                 using (var stream = await response.Content.ReadAsStreamAsync())
-                using (var fileStream = new FileStream(downloadTask.FilePath, FileMode.OpenOrCreate, FileAccess.Write, FileShare.None))
+                using (var fileStream = new FileStream(tmpFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
                     var buffer = new byte[1024 * 1024];
                     int bytesRead;
@@ -365,13 +375,96 @@ namespace MDriveSync.Core
                     }
                 }
 
+                // 下载完成后，判断文件是否需要解密，如果需要解密，则解密文件
+                if (downloadTask.IsEncrypted)
+                {
+                    var entryptCachePath = downloadTask.FilePath + $".{Guid.NewGuid():N}.encrypt.cache";
+
+                    try
+                    {
+                        // 获取 job 配置
+                        var job = DriveDb.Instacne.Get(downloadTask.DriveId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
+                        if (job == null)
+                        {
+                            throw new LogicException("未找到指定的任务配置");
+                        }
+
+                        var fileName = Path.GetFileName(downloadTask.FilePath);
+
+                        using (FileStream inputFileStream = new FileStream(tmpFilePath, FileMode.Open, FileAccess.Read))
+                        {
+                            using (FileStream outputFileStream = new FileStream(entryptCachePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                            {
+                                CompressionHelper.DecompressStream(inputFileStream, outputFileStream,
+                                    job.CompressAlgorithm, job.EncryptAlgorithm, job.EncryptKey, job.HashAlgorithm, job.IsEncryptName, out var decryptFileName);
+
+                                if (!string.IsNullOrWhiteSpace(decryptFileName))
+                                {
+                                    fileName = decryptFileName;
+                                }
+                            }
+                        }
+
+                        // 重命名，并判断是否存在重复的文件，如果存在则继续重命名
+                        var newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), fileName);
+                        if (File.Exists(newFilePath))
+                        {
+                            var newFileName = Path.GetFileNameWithoutExtension(fileName);
+                            var newFileExtension = Path.GetExtension(fileName);
+                            var i = 1;
+
+                            do
+                            {
+                                newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), $"{newFileName} ({i}){newFileExtension}");
+                                i++;
+                            } while (File.Exists(newFilePath));
+                        }
+                        File.Move(entryptCachePath, newFilePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new LogicException("解密失败：" + ex.Message);
+                    }
+                    finally
+                    {
+                        // 删除临时文件
+                        if (File.Exists(tmpFilePath))
+                        {
+                            File.Delete(tmpFilePath);
+                        }
+
+                        // 删除解密临时文件
+                        if (File.Exists(entryptCachePath))
+                        {
+                            File.Delete(entryptCachePath);
+                        }
+                    }
+                }
+                else
+                {
+                    var fileName = Path.GetFileName(downloadTask.FilePath);
+
+                    // 重命名，并判断是否存在重复的文件，如果存在则继续重命名
+                    var newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), fileName);
+                    if (File.Exists(newFilePath))
+                    {
+                        var newFileName = Path.GetFileNameWithoutExtension(fileName);
+                        var newFileExtension = Path.GetExtension(fileName);
+                        var i = 1;
+
+                        do
+                        {
+                            newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), $"{newFileName} ({i}){newFileExtension}");
+                            i++;
+                        } while (File.Exists(newFilePath));
+                    }
+                    File.Move(tmpFilePath, newFilePath);
+                }
+
+
                 // TODO
-
-                // 下载为临时文件，下载完成后重命名，并修改任务名称的文件名，删除临时文件等
-
+                // 回复文件读写权限、时间戳等
                 // 判断文件状态，判断文件 sha1
-
-                // 判断文件是否需要解密
 
                 if (downloadTask.Status == DownloadStatus.Downloading)
                 {
@@ -389,6 +482,12 @@ namespace MDriveSync.Core
             }
             finally
             {
+                // 删除临时文件
+                if (File.Exists(tmpFilePath))
+                {
+                    File.Delete(tmpFilePath);
+                }
+
                 semaphore.Release();
 
                 // 检查任务数是否超过 1000+，如果超过则删除最早已完成的任务

@@ -143,6 +143,16 @@ namespace MDriveSync.Core.Models
         };
 
         /// <summary>
+        /// 阿里云盘 ID（备份盘/资源盘）
+        /// </summary>
+        public string AliyunDriveId { get; set; }
+
+        /// <summary>
+        /// 云盘 ID（云盘作业标识）
+        /// </summary>
+        public string DriveId { get; set; }
+
+        /// <summary>
         /// 作业 ID
         /// </summary>
         public string JobId { get; set; }
@@ -156,6 +166,11 @@ namespace MDriveSync.Core.Models
         /// 表示是否为加密文件
         /// </summary>
         public bool IsEncrypted { get; set; }
+
+        /// <summary>
+        /// 文件名加密
+        /// </summary>
+        public bool IsEncryptName { get; set; }
 
         /// <summary>
         /// 错误消息
