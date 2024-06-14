@@ -12,13 +12,19 @@
 
 ### 快速启动
 
-> docker 版本
+> docker 版本（近期 docker 国内无法使用，可以使用 https://docker.m.daocloud.io 加速）
 
 ```bash
 docker pull trueaiorg/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/mdrive
+
+# or ghcr.io
+docker pull ghcr.io/trueai-org/mdrive
+docker run --name mdrive -d --restart=always \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -p 8080:8080 ghcr.io/trueai-org/mdrive
 ```
 
 > windows 版本
