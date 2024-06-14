@@ -37,7 +37,7 @@ g. 磁盘挂载支持（可选），下载并安装驱动（http://localhost:808
 
 > 账号：admin，密码：123456
 
-<http://43.129.20.214:18080>
+<http://8.134.218.99:18080>
 
 ![作业](/docs/screenshots/job.gif)
 ![挂载](/docs/screenshots/mount.png)
