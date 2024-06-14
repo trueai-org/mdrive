@@ -49,14 +49,15 @@ g. 磁盘挂载支持（可选），下载并安装驱动（http://localhost:808
 ![挂载](/docs/screenshots/mount.png)
 
 
-### 压缩&加密
+### 压缩与加密
 
-- [对称加密方法的比较](https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/) https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/
-- [AEAD 加密结构](https://libsodium.gitbook.io/doc/secret-key_cryptography/aead) https://libsodium.gitbook.io/doc/secret-key_cryptography/aead
-- [压缩对比分析](https://kopia.io/docs/advanced/compression/) https://kopia.io/docs/advanced/compression/
-- [压缩算法对比](https://tech.meituan.com/2021/01/07/pack-gzip-zstd-lz4.html) https://tech.meituan.com/2021/01/07/pack-gzip-zstd-lz4.html
-- [LZ4 官方](https://github.com/lz4/lz4) https://github.com/lz4/lz4
-- [zstd 官方](https://github.com/facebook/zstd) https://github.com/facebook/zstd
+- [对称加密方法](https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/) https://soatok.blog/2020/07/12/comparison-of-symmetric-encryption-methods/
+- [AEAD 加密](https://libsodium.gitbook.io/doc/secret-key_cryptography/aead) https://libsodium.gitbook.io/doc/secret-key_cryptography/aead
+- [压缩分析](https://kopia.io/docs/advanced/compression/) https://kopia.io/docs/advanced/compression/
+- [压缩算法](https://tech.meituan.com/2021/01/07/pack-gzip-zstd-lz4.html) https://tech.meituan.com/2021/01/07/pack-gzip-zstd-lz4.html
+- [LZ4 - lz4.org](https://github.com/lz4/lz4) https://github.com/lz4/lz4
+- [Facebook zstd](https://github.com/facebook/zstd) https://github.com/facebook/zstd
+- [Google snappy](https://github.com/google/snappy) https://github.com/google/snappy
  
 ![文件加密模式](/docs/screenshots/file-encrypt.png)
 
