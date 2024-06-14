@@ -23,6 +23,7 @@
 		<Content Include="..\..\scripts\WinSW\**\*.*">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+			
 			<!-- 排除它们从单文件发布 -->
 			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>

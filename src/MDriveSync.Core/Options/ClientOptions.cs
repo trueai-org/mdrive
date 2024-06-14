@@ -16,7 +16,7 @@ namespace MDriveSync.Core
         /// 版本
         /// 每次发布版本时更新，用于检测是否有新版本
         /// </summary>
-        public string Version { get; set; } = "v2.0.0";
+        public string Version { get; set; } = "v2.0.1";
     }
 
     /// <summary>
