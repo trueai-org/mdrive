@@ -485,7 +485,7 @@ namespace MDriveSync.Core
                             throw new LogicException("未找到指定的任务配置");
                         }
 
-                        var fileName = downloadTask.Name;
+                        var fileName = downloadTask.Name?.TrimSuffix(".e");
                         if (!string.IsNullOrWhiteSpace(downloadTask.FilePath))
                         {
                             fileName = Path.GetFileName(downloadTask.FilePath);
