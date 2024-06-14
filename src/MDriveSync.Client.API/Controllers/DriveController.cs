@@ -279,7 +279,7 @@ namespace MDriveSync.Client.API.Controllers
                 return Result.Ok(new
                 {
                     Url = url,
-                    DownloadPath = DownloadManager.Instance.LastDownloadPath(),
+                    DownloadPath = DownloadManager.Instance.GetSettings().DefaultDownload ?? DownloadManager.Instance.LastDownloadPath(),
                     FileName = name,
                     FileId = fileId,
                     JobId = jobId
@@ -1178,7 +1178,7 @@ namespace MDriveSync.Client.API.Controllers
         [HttpGet("download-status")]
         public Result GetDownloadTasks()
         {
-            var tasks = DownloadManager.Instance.GetDownloadTasks().Values.OrderByDescending(x => x.CreateTime).ToList();
+            var tasks = DownloadManager.Instance.GetDownloadTasks();
             return Result.Ok(tasks);
         }
 

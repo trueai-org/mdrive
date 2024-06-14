@@ -1,12 +1,15 @@
-﻿using ServiceStack.DataAnnotations;
+﻿using MDriveSync.Core.DB;
+using ServiceStack.DataAnnotations;
 
 namespace MDriveSync.Core.Models
 {
     /// <summary>
     /// 下载管理器设置
     /// </summary>
-    public class DownloadManagerSetting
+    public class DownloadManagerSetting : IBaseId<string>
     {
+        public string Id { get; set; } = "default";
+
         /// <summary>
         /// 默认下载路径
         /// </summary>
@@ -26,7 +29,7 @@ namespace MDriveSync.Core.Models
     /// <summary>
     /// 表示一个下载任务。
     /// </summary>
-    public class DownloadTask
+    public class DownloadTask : IBaseId<string>
     {
         /// <summary>
         /// 获取或设置下载任务的唯一标识符。
@@ -215,6 +218,7 @@ namespace MDriveSync.Core.Models
         Downloading = 1,
         Paused = 2,
         Completed = 3,
-        Failed = 4
+        Failed = 4,
+        Canceled = 5
     }
 }

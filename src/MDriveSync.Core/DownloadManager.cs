@@ -30,15 +30,45 @@ namespace MDriveSync.Core
         // 下载速度限制（字节/秒）
         private int downloadSpeedLimit = 0;
 
+        private LiteRepository<DownloadTask, string> _taskDb = new("drive.db", false);
+
+        private LiteRepository<DownloadManagerSetting, string> _settingDb = new("drive.db", false);
+
         private DownloadManager()
         {
             downloadTasks = new ConcurrentDictionary<string, DownloadTask>();
             httpClient = new HttpClient();
+
+            var def = _settingDb.Get("default");
+            if (def != null)
+            {
+                maxParallelDownloads = def.MaxParallelDownload;
+                defaultDownloadDir = def.DefaultDownload;
+                downloadSpeedLimit = def.DownloadSpeedLimit;
+            }
+            else
+            {
+                _settingDb.Add(new DownloadManagerSetting
+                {
+                    DefaultDownload = defaultDownloadDir,
+                    MaxParallelDownload = maxParallelDownloads,
+                    DownloadSpeedLimit = downloadSpeedLimit,
+                });
+            }
+
             semaphore = new SemaphoreSlim(maxParallelDownloads); // 默认并行下载数为3
 
-            // 设置下载目录
-            defaultDownloadDir = LastDownloadPath();
-            downloadSpeedLimit = 0;
+            if (string.IsNullOrWhiteSpace(defaultDownloadDir))
+            {
+                defaultDownloadDir = LastDownloadPath();
+            }
+
+            // 初始化历史记录
+            var tasks = _taskDb.GetAll();
+            foreach (var task in tasks)
+            {
+                downloadTasks.TryAdd(task.Id, task);
+            }
         }
 
         /// <summary>
@@ -61,6 +91,9 @@ namespace MDriveSync.Core
 
             // 设置最大并行下载数
             SetMaxParallelDownloads(setting.MaxParallelDownload);
+
+            // 持久化
+            _settingDb.Update(setting);
         }
 
         /// <summary>
@@ -192,6 +225,7 @@ namespace MDriveSync.Core
             if (downloadTasks.Count > 0)
             {
                 var lastTask = downloadTasks.Values.OrderByDescending(c => c.Id).Last();
+
                 if (lastTask.Status == DownloadStatus.Completed)
                 {
                     return Path.GetDirectoryName(lastTask.FilePath);
@@ -253,7 +287,14 @@ namespace MDriveSync.Core
         /// <param name="taskId">下载任务的唯一标识符。</param>
         public void RemoveDownloadTask(string taskId)
         {
-            downloadTasks.TryRemove(taskId, out _);
+            downloadTasks.TryRemove(taskId, out var task);
+
+            if (task.Status == DownloadStatus.Downloading)
+            {
+                task.Status = DownloadStatus.Canceled;
+            }
+
+            _taskDb.Delete(taskId);
         }
 
         /// <summary>
@@ -275,18 +316,41 @@ namespace MDriveSync.Core
         /// 获取所有下载任务。
         /// </summary>
         /// <returns>下载任务字典。</returns>
-        public ConcurrentDictionary<string, DownloadTask> GetDownloadTasks()
+        public List<DownloadTask> GetDownloadTasks()
         {
-            return downloadTasks;
+            return downloadTasks.Values.OrderByDescending(x => x.CreateTime).ToList();
         }
 
+        ///// <summary>
+        ///// 获取全局下载速度（字节/秒）。
+        ///// </summary>
+        ///// <returns>全局下载速度。</returns>
+        //public double GetGlobalDownloadSpeed()
+        //{
+        //    double totalSpeed = 0;
+
+        //    foreach (var task in downloadTasks.Values)
+        //    {
+        //        if (task.Status == DownloadStatus.Downloading)
+        //        {
+        //            totalSpeed += task.Speed;
+        //        }
+        //    }
+
+        //    return totalSpeed;
+        //}
+
+
+        private readonly object speedLock = new object();
+
         /// <summary>
-        /// 获取全局下载速度（字节/秒）。
+        /// 获取全局下载速度（字节/秒）
         /// </summary>
-        /// <returns>全局下载速度。</returns>
+        /// <returns></returns>
         public double GetGlobalDownloadSpeed()
         {
             double totalSpeed = 0;
+
 
             foreach (var task in downloadTasks.Values)
             {
@@ -340,25 +404,44 @@ namespace MDriveSync.Core
 
                     while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                     {
-                        if (downloadTask.Status == DownloadStatus.Paused)
+                        if (downloadTask.Status == DownloadStatus.Paused || downloadTask.Status == DownloadStatus.Canceled)
                         {
-                            break;
+                            // 直接返回，不再继续下载
+                            return;
                         }
 
                         await fileStream.WriteAsync(buffer, 0, bytesRead);
                         downloadTask.DownloadedBytes += bytesRead;
 
+                        //// 全局下载速度限制
+                        //if (downloadSpeedLimit > 0)
+                        //{
+                        //    var globalSpeed = GetGlobalDownloadSpeed();
+                        //    while (globalSpeed > downloadSpeedLimit)
+                        //    {
+                        //        await Task.Delay(100);
+
+                        //        downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
+
+                        //        // 更新结束时间
+                        //        downloadTask.EndTime = DateTime.Now;
+
+                        //        globalSpeed = GetGlobalDownloadSpeed();
+                        //    }
+                        //}
+
                         // 全局下载速度限制
                         if (downloadSpeedLimit > 0)
                         {
-                            while (GetGlobalDownloadSpeed() > downloadSpeedLimit)
+                            var globalSpeed = GetGlobalDownloadSpeed();
+                            while (globalSpeed > downloadSpeedLimit)
                             {
-                                await Task.Delay(100);
+                                await Task.Delay(200);
 
                                 downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
-
-                                // 更新结束时间
                                 downloadTask.EndTime = DateTime.Now;
+
+                                globalSpeed = GetGlobalDownloadSpeed();
                             }
                         }
 
@@ -497,7 +580,19 @@ namespace MDriveSync.Core
                     foreach (var item in earliestCompletedTasks)
                     {
                         downloadTasks.TryRemove(item.Id, out _);
+                        _taskDb.Delete(item.Id);
                     }
+                }
+
+                // 更新数据库
+                var task = _taskDb.Get(downloadTask.Id);
+                if (task == null)
+                {
+                    _taskDb.Add(downloadTask);
+                }
+                else
+                {
+                    _taskDb.Update(downloadTask);
                 }
             }
         }
