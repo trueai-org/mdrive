@@ -109,16 +109,22 @@ namespace MDriveSync.Security
         {
             byte[] nonce = null;
 
-            // 如果需要加密文件名
-            if (encryptFileName && !string.IsNullOrWhiteSpace(fileName) && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrEmpty(encryptionKey))
+            byte[] fileBytes = null;
+
+            // 使用文件名的 SHA256 哈希值作为 nonce，确保长度为 12 字节
+            if (!string.IsNullOrWhiteSpace(fileName))
             {
                 // 文件名仅加密，不需要压缩
-                var fileBytes = Encoding.UTF8.GetBytes(fileName);
+                fileBytes = Encoding.UTF8.GetBytes(fileName);
 
                 // 使用文件名的 SHA256 哈希值作为 nonce，确保长度为 12 字节
                 // 不需要多次计算
                 nonce = HashHelper.ComputeHash(fileBytes, "SHA256").Take(12).ToArray();
+            }
 
+            // 如果需要加密文件名
+            if (encryptFileName && !string.IsNullOrWhiteSpace(fileName) && !string.IsNullOrWhiteSpace(encryptionType) && !string.IsNullOrEmpty(encryptionKey))
+            {
                 byte[] encryptedFileName = Compress(fileBytes, null, encryptionType, encryptionKey, nonce);
                 if (encryptedFileName.Length > FileNameBufferSize)
                 {
