@@ -984,7 +984,7 @@ namespace MDriveSync.Client.API.Controllers
         /// <returns></returns>
         /// <exception cref="LogicException"></exception>
         [HttpPost("download-tasks")]
-        public async Task<Result> AddDownloadTasks([FromBody] BatchDownloadRequest param)
+        public Result AddDownloadTasks([FromBody] BatchDownloadRequest param)
         {
             var jobs = _timedHostedService.Jobs();
             var jobId = param.JobId;
@@ -997,115 +997,117 @@ namespace MDriveSync.Client.API.Controllers
 
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
-                // 如果是文件夹，获取文件夹下的所有文件
-                foreach (var fileId in param.FileIds)
-                {
-                    var detail = job.GetFileDetail(fileId);
-                    if (detail.IsFolder)
-                    {
-                        var subPath = detail.Name;
+                Task.Run(() => DownloadManager.Instance.AddDownloadTasksAsync(param, job));
 
-                        // 获取子文件夹下的所有文件
-                        await job.AliyunDriveFetchAllSubFiles(fileId);
+                //// 如果是文件夹，获取文件夹下的所有文件
+                //foreach (var fileId in param.FileIds)
+                //{
+                //    var detail = job.GetFileDetail(fileId);
+                //    if (detail.IsFolder)
+                //    {
+                //        var subPath = detail.Name;
 
-                        // 获取子文件夹下的所有文件
-                        var parentKey = job.DriveFolders.FirstOrDefault(x => x.Value.FileId == fileId).Key;
-                        if (!string.IsNullOrWhiteSpace(parentKey))
-                        {
-                            var fids = job.DriveFiles.Where(c => c.Value.IsFile && c.Key.StartsWith(parentKey)).Select(c => c.Value.FileId).ToList();
+                //        // 获取子文件夹下的所有文件
+                //        await job.AliyunDriveFetchAllSubFiles(fileId);
 
-                            foreach (var fid in fids)
-                            {
-                                var subDetail = job.GetFileDetail(fid);
-                                var subUrlResponse = job.AliyunDriveGetDownloadUrl(fid);
+                //        // 获取子文件夹下的所有文件
+                //        var parentKey = job.DriveFolders.FirstOrDefault(x => x.Value.FileId == fileId).Key;
+                //        if (!string.IsNullOrWhiteSpace(parentKey))
+                //        {
+                //            var fids = job.DriveFiles.Where(c => c.Value.IsFile && c.Key.StartsWith(parentKey)).Select(c => c.Value.FileId).ToList();
 
-                                // 如果是加密文件，需要解密后再下载
-                                var subUrl = subUrlResponse.Url;
-                                var subName = subDetail.Name;
+                //            foreach (var fid in fids)
+                //            {
+                //                var subDetail = job.GetFileDetail(fid);
+                //                var subUrlResponse = job.AliyunDriveGetDownloadUrl(fid);
 
-                                if (job.CurrrentJob.IsEncrypt && job.CurrrentJob.IsEncryptName)
-                                {
-                                    var jobConfig = job.CurrrentJob;
-                                    var httpClient = new HttpClient();
+                //                // 如果是加密文件，需要解密后再下载
+                //                var subUrl = subUrlResponse.Url;
+                //                var subName = subDetail.Name;
 
-                                    // 设置Range头以只下载0到1112字节
-                                    var request = new HttpRequestMessage(HttpMethod.Get, subUrl);
-                                    request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, Math.Min(1112, subDetail.Size ?? 0));
+                //                if (job.CurrrentJob.IsEncrypt && job.CurrrentJob.IsEncryptName)
+                //                {
+                //                    var jobConfig = job.CurrrentJob;
+                //                    var httpClient = new HttpClient();
 
-                                    var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-                                    if (!response.IsSuccessStatusCode)
-                                    {
-                                        throw new LogicException("无法下载文件");
-                                    }
+                //                    // 设置Range头以只下载0到1112字节
+                //                    var request = new HttpRequestMessage(HttpMethod.Get, subUrl);
+                //                    request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, Math.Min(1112, subDetail.Size ?? 0));
 
-                                    // 直接从 HttpResponseMessage 获取流
-                                    var inputStream = await response.Content.ReadAsStreamAsync();
+                //                    var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                //                    if (!response.IsSuccessStatusCode)
+                //                    {
+                //                        throw new LogicException("无法下载文件");
+                //                    }
 
-                                    // 解密流
-                                    var outputStream = new MemoryStream();
+                //                    // 直接从 HttpResponseMessage 获取流
+                //                    var inputStream = await response.Content.ReadAsStreamAsync();
 
-                                    // 解密流
-                                    CompressionHelper.DecompressStream(inputStream, outputStream, jobConfig.CompressAlgorithm, jobConfig.EncryptAlgorithm,
-                                                                               jobConfig.EncryptKey, jobConfig.HashAlgorithm, jobConfig.IsEncryptName, out var decryptFileName, true);
+                //                    // 解密流
+                //                    var outputStream = new MemoryStream();
 
-                                    outputStream.Seek(0, SeekOrigin.Begin);
+                //                    // 解密流
+                //                    CompressionHelper.DecompressStream(inputStream, outputStream, jobConfig.CompressAlgorithm, jobConfig.EncryptAlgorithm,
+                //                                                               jobConfig.EncryptKey, jobConfig.HashAlgorithm, jobConfig.IsEncryptName, out var decryptFileName, true);
 
-                                    if (!string.IsNullOrWhiteSpace(decryptFileName))
-                                    {
-                                        subName = decryptFileName;
-                                    }
-                                }
+                //                    outputStream.Seek(0, SeekOrigin.Begin);
 
-                                var path = Path.Combine(baseSavePath, subPath, subName);
-                                DownloadManager.Instance.AddDownloadTask(subUrl, path, jobId, fid, job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        var urlResponse = job.AliyunDriveGetDownloadUrl(fileId);
+                //                    if (!string.IsNullOrWhiteSpace(decryptFileName))
+                //                    {
+                //                        subName = decryptFileName;
+                //                    }
+                //                }
 
-                        // 如果是加密文件，需要解密后再下载
-                        var url = urlResponse.Url;
-                        var name = detail.Name;
+                //                var path = Path.Combine(baseSavePath, subPath, subName);
+                //                DownloadManager.Instance.AddDownloadTask(subUrl, path, jobId, fid, job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
+                //            }
+                //        }
+                //    }
+                //    else
+                //    {
+                //        var urlResponse = job.AliyunDriveGetDownloadUrl(fileId);
 
-                        if (job.CurrrentJob.IsEncrypt && job.CurrrentJob.IsEncryptName)
-                        {
-                            var jobConfig = job.CurrrentJob;
-                            var httpClient = new HttpClient();
+                //        // 如果是加密文件，需要解密后再下载
+                //        var url = urlResponse.Url;
+                //        var name = detail.Name;
 
-                            // 设置Range头以只下载0到1112字节
-                            var request = new HttpRequestMessage(HttpMethod.Get, url);
-                            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, Math.Min(1112, detail.Size ?? 0));
+                //        if (job.CurrrentJob.IsEncrypt && job.CurrrentJob.IsEncryptName)
+                //        {
+                //            var jobConfig = job.CurrrentJob;
+                //            var httpClient = new HttpClient();
 
-                            var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
-                            if (!response.IsSuccessStatusCode)
-                            {
-                                throw new LogicException("无法下载文件");
-                            }
+                //            // 设置Range头以只下载0到1112字节
+                //            var request = new HttpRequestMessage(HttpMethod.Get, url);
+                //            request.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, Math.Min(1112, detail.Size ?? 0));
 
-                            // 直接从 HttpResponseMessage 获取流
-                            var inputStream = await response.Content.ReadAsStreamAsync();
+                //            var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
+                //            if (!response.IsSuccessStatusCode)
+                //            {
+                //                throw new LogicException("无法下载文件");
+                //            }
 
-                            // 解密流
-                            var outputStream = new MemoryStream();
+                //            // 直接从 HttpResponseMessage 获取流
+                //            var inputStream = await response.Content.ReadAsStreamAsync();
 
-                            // 解密流
-                            CompressionHelper.DecompressStream(inputStream, outputStream, jobConfig.CompressAlgorithm, jobConfig.EncryptAlgorithm,
-                                jobConfig.EncryptKey, jobConfig.HashAlgorithm, jobConfig.IsEncryptName, out var decryptFileName, true);
+                //            // 解密流
+                //            var outputStream = new MemoryStream();
 
-                            outputStream.Seek(0, SeekOrigin.Begin);
+                //            // 解密流
+                //            CompressionHelper.DecompressStream(inputStream, outputStream, jobConfig.CompressAlgorithm, jobConfig.EncryptAlgorithm,
+                //                jobConfig.EncryptKey, jobConfig.HashAlgorithm, jobConfig.IsEncryptName, out var decryptFileName, true);
 
-                            if (!string.IsNullOrWhiteSpace(decryptFileName))
-                            {
-                                name = decryptFileName;
-                            }
-                        }
+                //            outputStream.Seek(0, SeekOrigin.Begin);
 
-                        var path = Path.Combine(baseSavePath, name);
-                        DownloadManager.Instance.AddDownloadTask(url, path, jobId, fileId, job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
-                    }
-                }
+                //            if (!string.IsNullOrWhiteSpace(decryptFileName))
+                //            {
+                //                name = decryptFileName;
+                //            }
+                //        }
+
+                //        var path = Path.Combine(baseSavePath, name);
+                //        DownloadManager.Instance.AddDownloadTask(url, path, jobId, fileId, job.CurrrentDrive.Id, job.AliyunDriveId, job.CurrrentJob.IsEncrypt, job.CurrrentJob.IsEncryptName);
+                //    }
+                //}
 
                 return Result.Ok();
             }

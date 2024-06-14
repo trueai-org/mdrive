@@ -49,7 +49,28 @@ namespace MDriveSync.Core.Models
         /// <summary>
         /// 获取或设置下载文件的名称。
         /// </summary>
-        public string FileName => Path.GetFileName(FilePath);
+        public string FileName
+        {
+            get
+            {
+                if (!string.IsNullOrWhiteSpace(FilePath))
+                {
+                    return Path.GetFileName(FilePath);
+                }
+
+                return Name;
+            }
+        }
+
+        /// <summary>
+        /// 阿里云文件名称（加密名称或非加密名称）
+        /// </summary>
+        public string Name { get; set; }
+
+        /// <summary>
+        /// 默认保存的下载目录
+        /// </summary>
+        public string DefaultSavePath { get; set; }
 
         /// <summary>
         /// 文件大小

@@ -3,6 +3,7 @@ using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
 using MDriveSync.Security;
+using Serilog;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
@@ -211,7 +212,6 @@ namespace MDriveSync.Core
             {
                 if (downloadTask.Status != DownloadStatus.Completed)
                 {
-                    downloadTask.Status = DownloadStatus.Downloading;
                     StartDownloadTask(downloadTask);
                 }
             }
@@ -341,7 +341,7 @@ namespace MDriveSync.Core
         //}
 
 
-        private readonly object speedLock = new object();
+        //private readonly object speedLock = new object();
 
         /// <summary>
         /// 获取全局下载速度（字节/秒）
@@ -371,7 +371,20 @@ namespace MDriveSync.Core
         {
             await semaphore.WaitAsync();
 
-            var tmpFilePath = downloadTask.FilePath + $".{Guid.NewGuid():N}.cache";
+            var tmpFilePath = string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(downloadTask.FilePath))
+            {
+                tmpFilePath = downloadTask.FilePath + $".{Guid.NewGuid():N}.cache";
+            }
+            else if (!string.IsNullOrWhiteSpace(downloadTask.DefaultSavePath))
+            {
+                tmpFilePath = Path.Combine(downloadTask.DefaultSavePath, downloadTask.Name + $".{Guid.NewGuid():N}.cache");
+            }
+            else
+            {
+                tmpFilePath = Path.Combine(defaultDownloadDir, downloadTask.Name, $".{Guid.NewGuid():N}.cache");
+            }
 
             try
             {
@@ -472,7 +485,11 @@ namespace MDriveSync.Core
                             throw new LogicException("未找到指定的任务配置");
                         }
 
-                        var fileName = Path.GetFileName(downloadTask.FilePath);
+                        var fileName = downloadTask.Name;
+                        if (!string.IsNullOrWhiteSpace(downloadTask.FilePath))
+                        {
+                            fileName = Path.GetFileName(downloadTask.FilePath);
+                        }
 
                         using (FileStream inputFileStream = new FileStream(tmpFilePath, FileMode.Open, FileAccess.Read))
                         {
@@ -489,7 +506,7 @@ namespace MDriveSync.Core
                         }
 
                         // 重命名，并判断是否存在重复的文件，如果存在则继续重命名
-                        var newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), fileName);
+                        var newFilePath = Path.Combine(Path.GetDirectoryName(tmpFilePath), fileName);
                         if (File.Exists(newFilePath))
                         {
                             var newFileName = Path.GetFileNameWithoutExtension(fileName);
@@ -498,11 +515,14 @@ namespace MDriveSync.Core
 
                             do
                             {
-                                newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), $"{newFileName} ({i}){newFileExtension}");
+                                newFilePath = Path.Combine(Path.GetDirectoryName(tmpFilePath), $"{newFileName} ({i}){newFileExtension}");
                                 i++;
                             } while (File.Exists(newFilePath));
                         }
                         File.Move(entryptCachePath, newFilePath);
+
+
+                        downloadTask.FilePath = newFilePath;
                     }
                     catch (Exception ex)
                     {
@@ -525,10 +545,15 @@ namespace MDriveSync.Core
                 }
                 else
                 {
-                    var fileName = Path.GetFileName(downloadTask.FilePath);
+                    var fileName = downloadTask.Name;
+
+                    if (!string.IsNullOrWhiteSpace(downloadTask.FilePath))
+                    {
+                        fileName = Path.GetFileName(downloadTask.FilePath);
+                    }
 
                     // 重命名，并判断是否存在重复的文件，如果存在则继续重命名
-                    var newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), fileName);
+                    var newFilePath = Path.Combine(Path.GetDirectoryName(tmpFilePath), fileName);
                     if (File.Exists(newFilePath))
                     {
                         var newFileName = Path.GetFileNameWithoutExtension(fileName);
@@ -537,11 +562,13 @@ namespace MDriveSync.Core
 
                         do
                         {
-                            newFilePath = Path.Combine(Path.GetDirectoryName(downloadTask.FilePath), $"{newFileName} ({i}){newFileExtension}");
+                            newFilePath = Path.Combine(Path.GetDirectoryName(tmpFilePath), $"{newFileName} ({i}){newFileExtension}");
                             i++;
                         } while (File.Exists(newFilePath));
                     }
                     File.Move(tmpFilePath, newFilePath);
+
+                    downloadTask.FilePath = newFilePath;
                 }
 
 
@@ -593,6 +620,91 @@ namespace MDriveSync.Core
                 else
                 {
                     _taskDb.Update(downloadTask);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 异步添加批量下载任务。
+        /// </summary>
+        /// <param name="tasks">批量下载任务列表。</param>
+        /// <param name="job">作业对象。</param>
+        /// <param name="baseSavePath">基础保存路径。</param>
+        public async Task AddDownloadTasksAsync(BatchDownloadRequest param, Job job)
+        {
+            foreach (var fileId in param.FileIds)
+            {
+                try
+                {
+                    var detail = job.GetFileDetail(fileId);
+                    if (detail.IsFolder)
+                    {
+                        // 获取子文件夹下的所有文件
+                        await job.AliyunDriveFetchAllSubFiles(fileId);
+
+                        var parentKey = job.DriveFolders.FirstOrDefault(x => x.Value.FileId == fileId).Key;
+                        if (!string.IsNullOrWhiteSpace(parentKey))
+                        {
+                            var ffs = job.DriveFiles.Where(c => c.Value.IsFile && c.Key.StartsWith(parentKey)).ToList();
+
+                            foreach (var ff in ffs)
+                            {
+                                var downloadTask = new DownloadTask
+                                {
+                                    Id = Guid.NewGuid().ToString("N"),
+                                    Status = DownloadStatus.Pending,
+                                    JobId = param.JobId,
+                                    FileId = ff.Value.FileId,
+                                    DriveId = job.CurrrentDrive.Id,
+                                    AliyunDriveId = job.AliyunDriveId,
+                                    IsEncrypted = job.CurrrentJob.IsEncrypt,
+                                    IsEncryptName = job.CurrrentJob.IsEncryptName,
+                                    Name = ff.Value.Name,
+                                    DefaultSavePath = Path.GetDirectoryName(Path.Combine(param.FilePath, detail.Name, ff.Key.TrimPrefix(parentKey)))
+                                };
+
+                                // 判断是否存在等待中的同名任务
+                                var existTask = downloadTasks.Values.FirstOrDefault(x => x.Status == DownloadStatus.Pending && x.FileId == ff.Value.FileId);
+                                if (existTask == null)
+                                {
+                                    if (downloadTasks.TryAdd(downloadTask.Id, downloadTask))
+                                    {
+                                        StartDownloadTask(downloadTask);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var downloadTask = new DownloadTask
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Status = DownloadStatus.Pending,
+                            JobId = param.JobId,
+                            FileId = fileId,
+                            DriveId = job.CurrrentDrive.Id,
+                            AliyunDriveId = job.AliyunDriveId,
+                            IsEncrypted = job.CurrrentJob.IsEncrypt,
+                            IsEncryptName = job.CurrrentJob.IsEncryptName,
+                            Name = detail.Name,
+                            DefaultSavePath = param.FilePath,
+                        };
+
+                        // 判断是否存在等待中的同名任务
+                        var existTask = downloadTasks.Values.FirstOrDefault(x => x.Status == DownloadStatus.Pending && x.FileId == fileId);
+                        if (existTask == null)
+                        {
+                            if (downloadTasks.TryAdd(downloadTask.Id, downloadTask))
+                            {
+                                StartDownloadTask(downloadTask);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "批量任务创建异常 {@0}", fileId);
                 }
             }
         }
