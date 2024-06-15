@@ -15,7 +15,7 @@ namespace MDriveSync.Core
     /// 定时检查服务
     /// 定时服务就可以在后台运行，且不会影响应用程序的启动和发布过程
     /// </summary>
-    public class TimedHostedService : BackgroundService, IDisposable
+    public class AliyunDriveHostedService : BackgroundService, IDisposable
     {
         //private readonly IServiceScopeFactory _serviceScopeFactory;
         //private readonly ConcurrentDictionary<string, MountDrive> _cloudDrives = new();
@@ -32,8 +32,8 @@ namespace MDriveSync.Core
 
         private Timer _timer;
 
-        public TimedHostedService(
-            ILogger<TimedHostedService> logger,
+        public AliyunDriveHostedService(
+            ILogger<AliyunDriveHostedService> logger,
             IOptionsMonitor<ClientOptions> clientOptions)
         {
             _logger = logger;

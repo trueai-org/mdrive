@@ -19,7 +19,7 @@ namespace MDriveSync.WPF
         private readonly IHost _host;
 
         // 服务实例
-        public static TimedHostedService TimedHostedService { get; private set; }
+        public static AliyunDriveHostedService TimedHostedService { get; private set; }
 
         // 定义一个静态事件，用于传递消息
         public static event EventHandler<string> MessageReceived;
@@ -92,8 +92,8 @@ namespace MDriveSync.WPF
                     //services.AddHostedService<TimedHostedService>();
 
                     // 使用单例模式
-                    services.AddSingleton<TimedHostedService>();
-                    services.AddHostedService(provider => provider.GetRequiredService<TimedHostedService>());
+                    services.AddSingleton<AliyunDriveHostedService>();
+                    services.AddHostedService(provider => provider.GetRequiredService<AliyunDriveHostedService>());
 
                     //// 注册WPF的主窗体
                     //services.AddSingleton<MainWindow>();
@@ -128,7 +128,7 @@ namespace MDriveSync.WPF
         protected override async void OnStartup(StartupEventArgs e)
         {
             await _host.StartAsync();
-            TimedHostedService = _host.Services.GetRequiredService<TimedHostedService>();
+            TimedHostedService = _host.Services.GetRequiredService<AliyunDriveHostedService>();
 
             //var mainWindow = _host.Services.GetRequiredService<MainWindow>();
             //mainWindow.Show();

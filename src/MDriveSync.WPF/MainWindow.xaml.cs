@@ -13,7 +13,7 @@ namespace MDriveSync.WPF
     /// </summary>
     public partial class MainWindow : Window
     {
-        public TimedHostedService Service { get; private set; }
+        public AliyunDriveHostedService Service { get; private set; }
 
         public MainWindow()
         {

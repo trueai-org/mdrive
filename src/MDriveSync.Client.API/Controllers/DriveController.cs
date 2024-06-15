@@ -19,9 +19,9 @@ namespace MDriveSync.Client.API.Controllers
     [ApiController]
     public class DriveController : ControllerBase
     {
-        private readonly TimedHostedService _timedHostedService;
+        private readonly AliyunDriveHostedService _timedHostedService;
 
-        public DriveController(TimedHostedService timedHostedService)
+        public DriveController(AliyunDriveHostedService timedHostedService)
         {
             _timedHostedService = timedHostedService;
         }

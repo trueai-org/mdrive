@@ -24,7 +24,7 @@ namespace MDriveSync.Client.WinForm
         private LocalDirectoryDialog localDirectoryForm;
         private CloudDirectoryDialog cloudDirectoryForm;
         private ManualTokenDialog manualTokenForm;
-        public static TimedHostedService TimedHostedService { get; private set; }
+        public static AliyunDriveHostedService TimedHostedService { get; private set; }
         public Form1()
         {
             InitializeComponent();
@@ -111,8 +111,8 @@ namespace MDriveSync.Client.WinForm
                     //services.AddHostedService<TimedHostedService>();
 
                     // 使用单例模式
-                    services.AddSingleton<TimedHostedService>();
-                    services.AddHostedService(provider => provider.GetRequiredService<TimedHostedService>());
+                    services.AddSingleton<AliyunDriveHostedService>();
+                    services.AddHostedService(provider => provider.GetRequiredService<AliyunDriveHostedService>());
 
                     //// 注册WPF的主窗体
                     //services.AddSingleton<MainWindow>();
@@ -278,7 +278,7 @@ namespace MDriveSync.Client.WinForm
             {
                 await _host.StartAsync();
                 LockBtn();
-                TimedHostedService = _host.Services.GetRequiredService<TimedHostedService>();
+                TimedHostedService = _host.Services.GetRequiredService<AliyunDriveHostedService>();
             }
 
         }
