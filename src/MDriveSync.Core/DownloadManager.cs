@@ -479,7 +479,7 @@ namespace MDriveSync.Core
                     try
                     {
                         // 获取 job 配置
-                        var job = DriveDb.Instacne.Get(downloadTask.DriveId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
+                        var job = AliyunDriveDb.Instance.DB.Get(downloadTask.DriveId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
                         if (job == null)
                         {
                             throw new LogicException("未找到指定的任务配置");
@@ -630,7 +630,7 @@ namespace MDriveSync.Core
         /// <param name="tasks">批量下载任务列表。</param>
         /// <param name="job">作业对象。</param>
         /// <param name="baseSavePath">基础保存路径。</param>
-        public async Task AddDownloadTasksAsync(BatchDownloadRequest param, Job job)
+        public async Task AddDownloadTasksAsync(BatchDownloadRequest param, AliyunJob job)
         {
             foreach (var fileId in param.FileIds)
             {

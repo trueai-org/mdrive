@@ -53,10 +53,17 @@ namespace MDriveSync.Client.API.Controllers
         [HttpGet("export")]
         public IActionResult Export()
         {
-            var drives = DriveDb.Instacne.GetAll();
+            var aliyunDriveConfigs = AliyunDriveDb.Instance.DB.GetAll();
+            var localJobConfigs = LocalStorageDb.Instance.DB.GetAll();
+
+            var config = new ClientOptions
+            {
+                AliyunDrives = aliyunDriveConfigs,
+                LocalStorages = localJobConfigs
+            };
 
             // 导出的文件支持中文，需要使用 UTF-8 编码
-            var json = JsonConvert.SerializeObject(drives, Formatting.Indented);
+            var json = JsonConvert.SerializeObject(config, Formatting.Indented);
             var bytes = Encoding.UTF8.GetBytes(json);
 
             return File(bytes, "application/json", "mdrive.json");
@@ -78,16 +85,17 @@ namespace MDriveSync.Client.API.Controllers
             using var stream = file.OpenReadStream();
             using var reader = new StreamReader(stream);
             var json = reader.ReadToEnd();
-            var items = JsonConvert.DeserializeObject<List<AliyunDriveConfig>>(json);
 
-            var drives = DriveDb.Instacne.GetAll();
+            var config = JsonConvert.DeserializeObject<ClientOptions>(json);
 
-            foreach (var cd in items)
+            // 阿里云配置导入处理
+            var aliyunDrives = AliyunDriveDb.Instance.DB.GetAll();
+            foreach (var cd in config.AliyunDrives)
             {
-                var f = drives.FirstOrDefault(x => x.Id == cd.Id);
+                var f = aliyunDrives.FirstOrDefault(x => x.Id == cd.Id);
                 if (f == null)
                 {
-                    DriveDb.Instacne.Add(cd);
+                    AliyunDriveDb.Instance.DB.Add(cd);
                 }
                 else
                 {
@@ -105,7 +113,37 @@ namespace MDriveSync.Client.API.Controllers
 
                     if (addCount > 0)
                     {
-                        DriveDb.Instacne.Update(f);
+                        AliyunDriveDb.Instance.DB.Update(f);
+                    }
+                }
+            }
+
+            // 本地存储配置导入处理
+            var localStorages = LocalStorageDb.Instance.DB.GetAll();
+            foreach (var cd in config.LocalStorages)
+            {
+                var f = localStorages.FirstOrDefault(x => x.Id == cd.Id);
+                if (f == null)
+                {
+                    LocalStorageDb.Instance.DB.Add(cd);
+                }
+                else
+                {
+                    // 循环配置是否存在，不存在则添加
+                    var addCount = 0;
+                    foreach (var job in cd.Jobs)
+                    {
+                        var j = f.Jobs.FirstOrDefault(x => x.Id == job.Id);
+                        if (j == null)
+                        {
+                            f.Jobs.Add(job);
+                            addCount++;
+                        }
+                    }
+
+                    if (addCount > 0)
+                    {
+                        LocalStorageDb.Instance.DB.Update(f);
                     }
                 }
             }
@@ -165,7 +203,7 @@ namespace MDriveSync.Client.API.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpGet("jobs")]
-        public Result<List<JobConfig>> GetJobs()
+        public Result<List<AliyunJobConfig>> GetJobs()
         {
             var data = _timedHostedService.Jobs().Values
                 .ToList()
@@ -758,7 +796,7 @@ namespace MDriveSync.Client.API.Controllers
         /// </summary>
         /// <param name="cfg"></param>
         [HttpPut("job")]
-        public Result JobUpdate([FromBody] JobConfig cfg)
+        public Result JobUpdate([FromBody] AliyunJobConfig cfg)
         {
             var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(cfg.Id, out var job) && job != null)
@@ -774,7 +812,7 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="cfg"></param>
         /// <returns></returns>
         [HttpPost("job/{driveId}")]
-        public Result JobAdd(string driveId, [FromBody] JobConfig cfg)
+        public Result JobAdd(string driveId, [FromBody] AliyunJobConfig cfg)
         {
             _timedHostedService.JobAdd(driveId, cfg);
             return Result.Ok();
@@ -802,14 +840,14 @@ namespace MDriveSync.Client.API.Controllers
                 _timedHostedService.JobDelete(jobId);
 
                 // 修复 https://github.com/trueai-org/MDriveSync/issues/4
-                var ds = DriveDb.Instacne.GetAll(false);
+                var ds = AliyunDriveDb.Instance.DB.GetAll(false);
                 foreach (var d in ds)
                 {
                     var jo = d?.Jobs?.FirstOrDefault(x => x.Id == jobId);
                     if (jo != null)
                     {
                         d.Jobs.RemoveAll(x => x.Id == jobId);
-                        DriveDb.Instacne.Update(d);
+                        AliyunDriveDb.Instance.DB.Update(d);
                     }
                 }
             }

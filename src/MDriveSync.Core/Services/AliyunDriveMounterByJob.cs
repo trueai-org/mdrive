@@ -38,7 +38,7 @@ namespace MDriveSync.Core.Services
         /// <summary>
         /// 当前作业
         /// </summary>
-        public Job _job;
+        public AliyunJob _job;
 
         private readonly HttpClient _httpClient = new();
 
@@ -58,7 +58,7 @@ namespace MDriveSync.Core.Services
             return await response.Content.ReadAsByteArrayAsync();
         }
 
-        public AliyunDriveMounterByJob(string mountPoint, Job job, ConcurrentDictionary<string, AliyunDriveFileItem> driveFolders, ConcurrentDictionary<string, AliyunDriveFileItem> driveFiles)
+        public AliyunDriveMounterByJob(string mountPoint, AliyunJob job, ConcurrentDictionary<string, AliyunDriveFileItem> driveFolders, ConcurrentDictionary<string, AliyunDriveFileItem> driveFiles)
         {
             _mountPoint = mountPoint;
             _job = job;

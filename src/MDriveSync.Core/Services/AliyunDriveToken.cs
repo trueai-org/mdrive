@@ -31,7 +31,7 @@ namespace MDriveSync.Core.Services
             {
                 return _cache.GetOrCreate($"TOKEN:{id}", c =>
                 {
-                    var config = DriveDb.Instacne.Get(id);
+                    var config = AliyunDriveDb.Instance.DB.Get(id);
                     if (config == null)
                     {
                         throw new Exception("未找到指定的 Drive 配置");

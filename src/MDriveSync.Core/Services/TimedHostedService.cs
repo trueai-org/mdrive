@@ -25,7 +25,7 @@ namespace MDriveSync.Core
         private readonly SemaphoreSlim _semaphoreSlim = new(1, 1);
 
         // 云盘作业
-        private readonly ConcurrentDictionary<string, Job> _jobs = new();
+        private readonly ConcurrentDictionary<string, AliyunJob> _jobs = new();
 
         // 云盘挂载
         private readonly ConcurrentDictionary<string, AliyunDriveMounter> _mounter = new();
@@ -48,13 +48,13 @@ namespace MDriveSync.Core
             // 如果数据库已有，则跳过
             if (_clientOptions?.AliyunDrives?.Count > 0)
             {
-                var drives = DriveDb.Instacne.GetAll();
+                var drives = AliyunDriveDb.Instance.DB.GetAll();
                 foreach (var cd in _clientOptions?.AliyunDrives)
                 {
                     var f = drives.FirstOrDefault(x => x.Id == cd.Id);
                     if (f == null)
                     {
-                        DriveDb.Instacne.Add(cd);
+                        AliyunDriveDb.Instance.DB.Add(cd);
                     }
 
                     //else
@@ -100,7 +100,7 @@ namespace MDriveSync.Core
             {
                 _logger.LogInformation("开始例行检查");
 
-                var ds = DriveDb.Instacne.GetAll();
+                var ds = AliyunDriveDb.Instance.DB.GetAll();
 
                 foreach (var ad in ds)
                 {
@@ -134,7 +134,7 @@ namespace MDriveSync.Core
                     {
                         if (!_jobs.TryGetValue(cf.Id, out var job) || job == null)
                         {
-                            job = new Job(ad, cf, _logger);
+                            job = new AliyunJob(ad, cf, _logger);
                             _jobs[cf.Id] = job;
                         }
 
@@ -163,7 +163,7 @@ namespace MDriveSync.Core
         /// 作业列表
         /// </summary>
         /// <returns></returns>
-        public ConcurrentDictionary<string, Job> Jobs()
+        public ConcurrentDictionary<string, AliyunJob> Jobs()
         {
             return _jobs;
         }
@@ -174,9 +174,9 @@ namespace MDriveSync.Core
         /// <param name="driveId"></param>
         /// <param name="cfg"></param>
         /// <exception cref="LogicException"></exception>
-        public void JobAdd(string driveId, JobConfig cfg)
+        public void JobAdd(string driveId, AliyunJobConfig cfg)
         {
-            var drives = DriveDb.Instacne.GetAll();
+            var drives = AliyunDriveDb.Instance.DB.GetAll();
             var drive = drives.Where(c => c.Id == driveId).FirstOrDefault();
             if (drive == null)
             {
@@ -228,7 +228,7 @@ namespace MDriveSync.Core
             cfg.State = JobState.Disabled;
             cfg.Id = Guid.NewGuid().ToString("N");
 
-            drive.Jobs ??= new List<JobConfig>();
+            drive.Jobs ??= new List<AliyunJobConfig>();
 
             // 禁止作业指向同一目标
             if (!string.IsNullOrWhiteSpace(cfg.Target) && drive.Jobs.Any(x => x.Target == cfg.Target))
@@ -244,7 +244,7 @@ namespace MDriveSync.Core
             // 添加到队列
             if (!_jobs.TryGetValue(cfg.Id, out var job) || job == null)
             {
-                job = new Job(drive, cfg, _logger);
+                job = new AliyunJob(drive, cfg, _logger);
                 _jobs[cfg.Id] = job;
             }
         }
@@ -266,7 +266,7 @@ namespace MDriveSync.Core
         {
             var jobs = Jobs();
 
-            var ds = DriveDb.Instacne.GetAll();
+            var ds = AliyunDriveDb.Instance.DB.GetAll();
             foreach (var kvp in ds)
             {
                 // 是否挂载
@@ -328,7 +328,7 @@ namespace MDriveSync.Core
                 throw new LogicParamException();
             }
 
-            var drive = DriveDb.Instacne.Get(driveId);
+            var drive = AliyunDriveDb.Instance.DB.Get(driveId);
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");
@@ -357,7 +357,7 @@ namespace MDriveSync.Core
         /// </summary>
         public void DriveDelete(string driveId)
         {
-            var drive = DriveDb.Instacne.Get(driveId);
+            var drive = AliyunDriveDb.Instance.DB.Get(driveId);
             if (drive == null)
             {
                 throw new LogicException("云盘不存在");
@@ -426,7 +426,7 @@ namespace MDriveSync.Core
                 throw new LogicException("暂不支持非 Windows 系统挂载云盘，请等待下个版本发布！");
             }
 
-            var ds = DriveDb.Instacne.GetAll();
+            var ds = AliyunDriveDb.Instance.DB.GetAll();
             var drive = ds.FirstOrDefault(x => x.Id == driveId);
             if (drive == null)
                 throw new LogicException("云盘不存在");

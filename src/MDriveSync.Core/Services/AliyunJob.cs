@@ -32,7 +32,7 @@ namespace MDriveSync.Core
     ///
     ///
     /// </summary>
-    public class Job : IDisposable
+    public class AliyunJob : IDisposable
     {
         /// <summary>
         /// 本地文件锁
@@ -149,7 +149,7 @@ namespace MDriveSync.Core
         public ConcurrentDictionary<string, AliyunDriveFileItem> DriveFiles => _driveFiles;
 
         // 作业配置
-        private JobConfig _jobConfig;
+        private AliyunJobConfig _jobConfig;
 
         // 远程备份还原到本地目录
         private string _localRestorePath;
@@ -187,7 +187,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 当前作业
         /// </summary>
-        public JobConfig CurrrentJob => _jobConfig;
+        public AliyunJobConfig CurrrentJob => _jobConfig;
 
         /// <summary>
         /// 进度总数
@@ -209,7 +209,7 @@ namespace MDriveSync.Core
         /// </summary>
         private AliyunDriveMounter _mountDrive;
 
-        public Job(AliyunDriveConfig driveConfig, JobConfig jobConfig, ILogger log)
+        public AliyunJob(AliyunDriveConfig driveConfig, AliyunJobConfig jobConfig, ILogger log)
         {
             _localFileCache = new($"{jobConfig.Id}.d", "cache", true);
             _driveApi = new AliyunDriveApi();
@@ -1179,7 +1179,7 @@ namespace MDriveSync.Core
         /// 更新作业配置（只有空闲、错误、取消、禁用、完成状态才可以更新）
         /// </summary>
         /// <param name="cfg"></param>
-        public void JobUpdate(JobConfig cfg)
+        public void JobUpdate(AliyunJobConfig cfg)
         {
             if (cfg == null)
             {
@@ -1197,7 +1197,7 @@ namespace MDriveSync.Core
                 throw new LogicException("作业标识错误");
             }
 
-            var drive = DriveDb.Instacne.GetAll().Where(c => c.Id == _driveConfig.Id).FirstOrDefault();
+            var drive = AliyunDriveDb.Instance.DB.GetAll().Where(c => c.Id == _driveConfig.Id).FirstOrDefault();
             if (drive == null)
             {
                 throw new LogicException("配置配置错误，请重启程序");
