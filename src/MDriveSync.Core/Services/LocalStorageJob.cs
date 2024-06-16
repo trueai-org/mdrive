@@ -1,5 +1,5 @@
 ﻿using MDriveSync.Core.DB;
-using MDriveSync.Core.Options;
+using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
 using MDriveSync.Infrastructure;
 using MDriveSync.Security;
@@ -951,7 +951,7 @@ namespace MDriveSync.Core
         /// 更新作业配置（只有空闲、错误、取消、禁用、完成状态才可以更新）
         /// </summary>
         /// <param name="cfg"></param>
-        public void JobUpdate(AliyunJobConfig cfg)
+        public void JobUpdate(LocalJobConfig cfg)
         {
             if (cfg == null)
             {
@@ -969,7 +969,7 @@ namespace MDriveSync.Core
                 throw new LogicException("作业标识错误");
             }
 
-            var drive = AliyunDriveDb.Instance.DB.GetAll().Where(c => c.Id == _targetConfig.Id).FirstOrDefault();
+            var drive = LocalStorageDb.Instance.DB.GetAll().Where(c => c.Id == _targetConfig.Id).FirstOrDefault();
             if (drive == null)
             {
                 throw new LogicException("配置配置错误，请重启程序");

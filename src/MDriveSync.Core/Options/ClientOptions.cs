@@ -1,5 +1,4 @@
-﻿using MDriveSync.Core.DB;
-using MDriveSync.Core.Options;
+﻿using MDriveSync.Core.Models;
 
 namespace MDriveSync.Core
 {
@@ -22,8 +21,6 @@ namespace MDriveSync.Core
         /// 版本
         /// 每次发布版本时更新，用于检测是否有新版本
         /// </summary>
-        public string Version { get; set; } = "v2.1.0";
+        public string Version { get; set; } = "v3.0.0";
     }
-
-
 }

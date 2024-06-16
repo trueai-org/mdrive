@@ -1,6 +1,6 @@
 ﻿using MDriveSync.Core.DB;
 
-namespace MDriveSync.Core.Options
+namespace MDriveSync.Core.Models
 {
     /// <summary>
     /// 本地存储作业配置

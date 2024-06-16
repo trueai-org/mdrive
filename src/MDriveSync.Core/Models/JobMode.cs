@@ -1,4 +1,4 @@
-﻿namespace MDriveSync.Core
+﻿namespace MDriveSync.Core.Models
 {
     /// <summary>
     /// 代表作业同步方式

@@ -479,7 +479,7 @@ namespace MDriveSync.Core
                     try
                     {
                         // 获取 job 配置
-                        var job = AliyunDriveDb.Instance.DB.Get(downloadTask.DriveId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
+                        var job = AliyunStorageDb.Instance.DB.Get(downloadTask.DriveId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
                         if (job == null)
                         {
                             throw new LogicException("未找到指定的任务配置");

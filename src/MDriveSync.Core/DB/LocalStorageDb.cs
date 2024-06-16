@@ -1,4 +1,4 @@
-﻿using MDriveSync.Core.Options;
+﻿using MDriveSync.Core.Models;
 
 namespace MDriveSync.Core.DB
 {

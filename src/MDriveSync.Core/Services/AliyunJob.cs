@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.Models;
 using MDriveSync.Core.Options;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
@@ -1198,7 +1199,7 @@ namespace MDriveSync.Core
                 throw new LogicException("作业标识错误");
             }
 
-            var drive = AliyunDriveDb.Instance.DB.GetAll().Where(c => c.Id == _driveConfig.Id).FirstOrDefault();
+            var drive = AliyunStorageDb.Instance.DB.GetAll().Where(c => c.Id == _driveConfig.Id).FirstOrDefault();
             if (drive == null)
             {
                 throw new LogicException("配置配置错误，请重启程序");

@@ -1,4 +1,5 @@
 ﻿using LiteDB;
+using MDriveSync.Core.Models;
 using ServiceStack;
 using System.Collections.Concurrent;
 
@@ -50,6 +51,10 @@ namespace MDriveSync.Core.DB
                 if (type == typeof(AliyunStorageConfig))
                 {
                     return "AliyunDriveConfig";
+                }
+                else if (type == typeof(LocalStorageConfig))
+                {
+                    return "LocalStorageConfig";
                 }
                 return type.Name;
             };

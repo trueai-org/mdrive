@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel;
 
-namespace MDriveSync.Core
+namespace MDriveSync.Core.Models
 {
     /// <summary>
     /// 代表作业的不同状态。

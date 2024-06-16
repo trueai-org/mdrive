@@ -3,7 +3,7 @@
     /// <summary>
     /// 云盘编辑请求
     /// </summary>
-    public class DriveEditRequest : RefreshTokenRequest
+    public class AliyunDriveEditRequest : RefreshTokenRequest
     {
         /// <summary>
         /// 挂载点

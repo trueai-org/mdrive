@@ -1,4 +1,4 @@
-﻿namespace MDriveSync.Core
+﻿namespace MDriveSync.Core.Models
 {
     /// <summary>
     /// 作业配置
@@ -7,7 +7,7 @@
     {
         public T GetClone<T>() where T : BaseJobConfig
         {
-            return (T)this.MemberwiseClone();
+            return (T)MemberwiseClone();
         }
 
         /// <summary>

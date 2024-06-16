@@ -1,4 +1,6 @@
-﻿namespace MDriveSync.Core
+﻿using MDriveSync.Core.Models;
+
+namespace MDriveSync.Core
 {
     /// <summary>
     /// 作业配置

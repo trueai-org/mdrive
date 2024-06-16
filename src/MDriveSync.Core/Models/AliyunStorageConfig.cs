@@ -64,19 +64,19 @@ namespace MDriveSync.Core.Options
         {
             if (isRemove)
             {
-                AliyunDriveDb.Instance.DB.Delete(Id);
+                AliyunStorageDb.Instance.DB.Delete(Id);
             }
             else
             {
-                var current = AliyunDriveDb.Instance.DB.Get(Id);
+                var current = AliyunStorageDb.Instance.DB.Get(Id);
                 if (current != null)
                 {
                     current = this;
-                    AliyunDriveDb.Instance.DB.Update(current);
+                    AliyunStorageDb.Instance.DB.Update(current);
                 }
                 else
                 {
-                    AliyunDriveDb.Instance.DB.Add(this);
+                    AliyunStorageDb.Instance.DB.Add(this);
                 }
             }
 
@@ -131,7 +131,7 @@ namespace MDriveSync.Core.Options
                 return;
             }
 
-            var current = AliyunDriveDb.Instance.DB.Get(Id);
+            var current = AliyunStorageDb.Instance.DB.Get(Id);
             if (current != null)
             {
                 if (isRemove)
@@ -150,7 +150,7 @@ namespace MDriveSync.Core.Options
                     current.Jobs.Add(jobConfig);
                 }
 
-                AliyunDriveDb.Instance.DB.Update(current);
+                AliyunStorageDb.Instance.DB.Update(current);
             }
 
             //// 读取 JSON 文件

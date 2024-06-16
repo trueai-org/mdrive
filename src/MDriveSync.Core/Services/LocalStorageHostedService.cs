@@ -1,5 +1,5 @@
 ﻿using MDriveSync.Core.DB;
-using MDriveSync.Core.Options;
+using MDriveSync.Core.Models;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -232,7 +232,7 @@ namespace MDriveSync.Core
         /// 列表
         /// </summary>
         /// <returns></returns>
-        public List<LocalStorageConfig> Drives()
+        public List<LocalStorageConfig> Storages()
         {
             var jobs = Jobs();
 
@@ -244,7 +244,6 @@ namespace MDriveSync.Core
                 {
                     if (jobs.TryGetValue(j.Id, out var job))
                     {
-                        //j = job.CurrrentJob.GetClone();
                         j.State = job.CurrentState;
                     }
                 });
