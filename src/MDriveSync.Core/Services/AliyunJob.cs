@@ -266,7 +266,6 @@ namespace MDriveSync.Core
                     case JobState.None:
                         {
                             // 初始化
-                            AliyunDriveInitialize();
                             StartJob();
                         }
                         break;
@@ -420,6 +419,8 @@ namespace MDriveSync.Core
         /// <returns></returns>
         public void StartJob()
         {
+            AliyunDriveInitialize();
+
             ChangeState(JobState.Starting);
 
             _log.LogInformation("作业启动中");

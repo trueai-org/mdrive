@@ -1,7 +1,6 @@
 ﻿using MDriveSync.Core.DB;
 using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
-using MDriveSync.Infrastructure;
 using MDriveSync.Security;
 using Microsoft.Extensions.Logging;
 using ServiceStack;
@@ -203,7 +202,7 @@ namespace MDriveSync.Core
                     case JobState.None:
                         {
                             // 初始化
-                            Initialize();
+                          
                             StartJob();
                         }
                         break;
@@ -357,6 +356,8 @@ namespace MDriveSync.Core
         /// <returns></returns>
         public void StartJob()
         {
+            Initialize();
+
             ChangeState(JobState.Starting);
 
             _log.LogInformation("作业启动中");
