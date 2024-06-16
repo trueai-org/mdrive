@@ -163,14 +163,14 @@ namespace MDriveSync.Core
                 }
 
                 // 保存作业
-                var currentJob = Jobs.FirstOrDefault(x => x.Id == jobConfig.Id);
-                if (currentJob != null)
+                var currentJobIndex = Jobs.FindIndex(x => x.Id == jobConfig.Id);
+                if (currentJobIndex >= 0)
                 {
-                    currentJob = jobConfig;
+                    current.Jobs[currentJobIndex] = jobConfig;
                 }
                 else
                 {
-                    Jobs.Add(jobConfig);
+                    current.Jobs.Add(jobConfig);
                 }
 
                 AliyunDriveDb.Instance.DB.Update(current);
@@ -405,14 +405,14 @@ namespace MDriveSync.Core
                 }
 
                 // 保存作业
-                var currentJob = Jobs.FirstOrDefault(x => x.Id == jobConfig.Id);
-                if (currentJob != null)
+                var currentJobIndex = Jobs.FindIndex(x => x.Id == jobConfig.Id);
+                if (currentJobIndex >= 0)
                 {
-                    currentJob = jobConfig;
+                    current.Jobs[currentJobIndex] = jobConfig;
                 }
                 else
                 {
-                    Jobs.Add(jobConfig);
+                    current.Jobs.Add(jobConfig);
                 }
 
                 LocalStorageDb.Instance.DB.Update(current);
