@@ -1,6 +1,5 @@
 ﻿using MDriveSync.Core.DB;
 using MDriveSync.Core.Models;
-using MDriveSync.Core.Options;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using MDriveSync.Security;

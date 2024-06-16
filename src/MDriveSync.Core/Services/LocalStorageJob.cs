@@ -3,6 +3,7 @@ using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
 using MDriveSync.Security;
 using Microsoft.Extensions.Logging;
+using Microsoft.VisualBasic.FileIO;
 using ServiceStack;
 using System.Collections.Concurrent;
 using System.Data;
@@ -10,6 +11,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+using SearchOption = System.IO.SearchOption;
 
 namespace MDriveSync.Core
 {
@@ -165,7 +167,7 @@ namespace MDriveSync.Core
         {
             _log = log;
 
-            _targetDb = new SqliteRepository<LocalStorageTargetFileInfo, string>($"{jobConfig.Id}_local.db", "jobs", true);
+            _targetDb = new SqliteRepository<LocalStorageTargetFileInfo, string>($"{jobConfig.Id}_local.db", "jobs", false);
             _targetConfig = driveConfig;
             _jobConfig = jobConfig;
 
@@ -202,7 +204,7 @@ namespace MDriveSync.Core
                     case JobState.None:
                         {
                             // 初始化
-                          
+
                             StartJob();
                         }
                         break;
@@ -560,9 +562,10 @@ namespace MDriveSync.Core
             // 开始校验
             sw.Restart();
             _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
+
             ChangeState(JobState.Verifying);
 
-            await SyncVerify();
+            SyncVerify();
 
             sw.Stop();
             _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -1659,7 +1662,7 @@ namespace MDriveSync.Core
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+                    var isLinux = IsLinux();
 
                     _log.LogInformation($"Linux: {isLinux}");
 
@@ -1729,14 +1732,26 @@ namespace MDriveSync.Core
             }
         }
 
+        private static bool IsWindows()
+        {
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        }
+
+        private static bool IsLinux()
+        {
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        }
+
         /// <summary>
         /// 同步完成 - 文件校验
         /// </summary>
         /// <returns></returns>
-        private async Task SyncVerify()
+        private void SyncVerify()
         {
             if (CurrentState != JobState.Verifying)
+            {
                 return;
+            }
 
             // 根据同步方式，单向、双向、镜像，对文件进行删除、移动、重命名、下载等处理
             switch (_jobConfig.Mode)
@@ -1744,39 +1759,202 @@ namespace MDriveSync.Core
                 // 镜像同步
                 case JobMode.Mirror:
                     {
-                        //// 计算需要删除的远程文件
-                        //var localFileKeys = _localFiles.Values.Select(c => c.EncryptKey).Select(c => $"{_targetSaveRootPath}/{c}".TrimPath()).ToList();
-                        //var removeFileKeys = _targetFiles.Keys.Except(localFileKeys).ToList();
-                        //if (removeFileKeys.Count > 0)
-                        //{
-                        //    foreach (var k in removeFileKeys)
-                        //    {
-                        //        if (_targetFiles.TryRemove(k, out var v))
-                        //        {
-                        //            _driveApi.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
-                        //        }
-                        //    }
-                        //}
+                        if (_jobConfig.IsEncrypt && _jobConfig.IsPack)
+                        {
+                            // 文件打包模式
+                        }
+                        else
+                        {
+                            // 计算需要删除的远程文件夹
+                            // 注意需要排除根目录
+                            // 优先删除短路径（父路径）
+                            var localFolderKeys = _localFolders.Keys.ToList();
+                            var removeFolderKeys = _targetFolders.Keys.Except(localFolderKeys).Where(c => !string.IsNullOrWhiteSpace(c)).OrderBy(c => c.Length).ToList();
+                            if (removeFolderKeys.Count > 0)
+                            {
+                                foreach (var k in removeFolderKeys)
+                                {
+                                    if (_targetFolders.TryRemove(k, out var v))
+                                    {
+                                        if (Directory.Exists(v.FullName))
+                                        {
+                                            try
+                                            {
+                                                // 如果是 windows 平台并且启动回收站
+                                                if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                {
+                                                    // 删除文件夹到系统回收站
+                                                    // 将文件移动到回收站
+                                                    FileSystem.DeleteDirectory(v.FullName, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                                                }
+                                                else
+                                                {
+                                                    // 彻底删除文件夹
+                                                    Directory.Delete(v.FullName, true);
+                                                }
+                                            }
+                                            catch
+                                            {
+                                                try
+                                                {
+                                                    Directory.Delete(v.FullName, true);
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    _log.LogError(ex, "删除文件夹 {@0} 失败", v.FullName);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
-                        //// 计算需要删除的远程文件夹
-                        //// 注意需要排除云盘根目录
-                        //var localFolderKeys = _localFolders.Keys.Select(c => $"{_targetSaveRootPath}/{c}".TrimPath()).ToList();
-                        //var removeFolderKeys = _targetFolders.Keys
-                        //    .Where(c => !$"{_targetSaveRootPath}/".StartsWith(c))
-                        //    .Except(localFolderKeys).ToList();
+                            if (_jobConfig.IsEncrypt && _jobConfig.IsEncryptName)
+                            {
+                                // 文件加密模式，加密文件名
 
-                        //while (removeFolderKeys.Count > 0)
-                        //{
-                        //    var k = removeFolderKeys.First();
-                        //    if (_targetFolders.TryRemove(k, out var v))
-                        //    {
-                        //        _driveApi.FileDelete(_driveId, v.FileId, AccessToken, _jobConfig.IsRecycleBin);
+                                // 计算需要删除的目标文件
+                                var localFileKeys = _localFiles.Keys.ToList();
 
-                        //        // 如果删除父文件夹时，则移除所有的子文件夹
-                        //        removeFolderKeys.RemoveAll(c => c.StartsWith(k));
-                        //    }
-                        //    removeFolderKeys.Remove(k);
-                        //}
+                                var fs = _targetDb.GetAll(false).Where(c => c.IsFile).ToList();
+                                var removeFileKeys = fs.Select(c => c.LocalFileKey).Except(localFileKeys).ToList();
+                                if (removeFileKeys.Count > 0)
+                                {
+                                    foreach (var k in removeFileKeys)
+                                    {
+                                        var tf = fs.FirstOrDefault(x => x.LocalFileKey == k);
+                                        if (tf != null)
+                                        {
+                                            if (_targetFiles.TryRemove(tf.Key, out var v))
+                                            {
+                                                if (File.Exists(v.FullName))
+                                                {
+                                                    try
+                                                    {
+                                                        if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                        {
+                                                            // 删除文件到系统回收站
+                                                            // 将文件移动到回收站
+                                                            FileSystem.DeleteFile(v.FullName, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                                                        }
+                                                        else
+                                                        {
+                                                            // 彻底删除文件
+                                                            File.Delete(v.FullName);
+                                                        }
+                                                    }
+                                                    catch
+                                                    {
+                                                        try
+                                                        {
+                                                            File.Delete(v.FullName);
+                                                        }
+                                                        catch (Exception ex)
+                                                        {
+                                                            _log.LogError(ex, "删除文件 {@0} 失败", v.FullName);
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            // 删除加密文件
+                                            _targetDb.Delete(tf.Key);
+                                        }
+                                    }
+                                }
+                            }
+                            else if (_jobConfig.IsEncrypt)
+                            {
+                                // 文件加密模式，不加密文件名
+
+                                // 计算需要删除的目标文件
+                                var localFileKeys = _localFiles.Keys.Select(c => c + ".e").ToList();
+                                var removeFileKeys = _targetFiles.Keys.Except(localFileKeys).ToList();
+                                if (removeFileKeys.Count > 0)
+                                {
+                                    foreach (var k in removeFileKeys)
+                                    {
+                                        if (_targetFiles.TryRemove(k, out var v))
+                                        {
+                                            if (File.Exists(v.FullName))
+                                            {
+                                                try
+                                                {
+                                                    if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                    {
+                                                        // 删除文件到系统回收站
+                                                        // 将文件移动到回收站
+                                                        FileSystem.DeleteFile(v.FullName, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                                                    }
+                                                    else
+                                                    {
+                                                        // 彻底删除文件
+                                                        File.Delete(v.FullName);
+                                                    }
+                                                }
+                                                catch
+                                                {
+                                                    try
+                                                    {
+                                                        File.Delete(v.FullName);
+                                                    }
+                                                    catch (Exception ex)
+                                                    {
+                                                        _log.LogError(ex, "删除文件 {@0} 失败", v.FullName);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                // 未加密
+
+                                // 计算需要删除的目标文件
+                                var localFileKeys = _localFiles.Keys.ToList();
+                                var removeFileKeys = _targetFiles.Keys.Except(localFileKeys).ToList();
+                                if (removeFileKeys.Count > 0)
+                                {
+                                    foreach (var k in removeFileKeys)
+                                    {
+                                        if (_targetFiles.TryRemove(k, out var v))
+                                        {
+                                            if (File.Exists(v.FullName))
+                                            {
+                                                try
+                                                {
+                                                    if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                    {
+                                                        // 删除文件到系统回收站
+                                                        // 将文件移动到回收站
+                                                        FileSystem.DeleteFile(v.FullName, UIOption.OnlyErrorDialogs, RecycleOption.SendToRecycleBin);
+                                                    }
+                                                    else
+                                                    {
+                                                        // 彻底删除文件
+                                                        File.Delete(v.FullName);
+                                                    }
+                                                }
+                                                catch
+                                                {
+                                                    try
+                                                    {
+                                                        File.Delete(v.FullName);
+                                                    }
+                                                    catch (Exception ex)
+                                                    {
+                                                        _log.LogError(ex, "删除文件 {@0} 失败", v.FullName);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
                     }
                     break;
 
