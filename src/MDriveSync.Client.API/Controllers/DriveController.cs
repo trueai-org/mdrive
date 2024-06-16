@@ -2,6 +2,7 @@
 using MDriveSync.Core.DB;
 using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
+using MDriveSync.Core.Options;
 using MDriveSync.Core.ViewModels;
 using MDriveSync.Infrastructure;
 using MDriveSync.Security;
@@ -20,10 +21,12 @@ namespace MDriveSync.Client.API.Controllers
     public class DriveController : ControllerBase
     {
         private readonly AliyunDriveHostedService _timedHostedService;
+        private readonly LocalStorageHostedService _localStorageHostedService;
 
-        public DriveController(AliyunDriveHostedService timedHostedService)
+        public DriveController(AliyunDriveHostedService timedHostedService, LocalStorageHostedService localStorageHostedService)
         {
             _timedHostedService = timedHostedService;
+            _localStorageHostedService = localStorageHostedService;
         }
 
         /// <summary>
@@ -41,7 +44,7 @@ namespace MDriveSync.Client.API.Controllers
         /// </summary>
         /// <returns></returns>
         [HttpGet("drives")]
-        public List<AliyunDriveConfig> GetDrives()
+        public List<AliyunStorageConfig> GetDrives()
         {
             return _timedHostedService.Drives();
         }
@@ -1152,7 +1155,6 @@ namespace MDriveSync.Client.API.Controllers
 
             return Result.Fail("作业不存在");
         }
-
 
         /// <summary>
         /// 暂停下载任务。

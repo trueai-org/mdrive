@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.Options;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using MDriveSync.Security;
@@ -126,7 +127,7 @@ namespace MDriveSync.Core
         private string _driveId;
 
         // 客户端信息
-        private AliyunDriveConfig _driveConfig;
+        private AliyunStorageConfig _driveConfig;
 
         /// <summary>
         /// 阿里云盘备份盘/资源盘 ID
@@ -136,7 +137,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 当前云盘
         /// </summary>
-        public AliyunDriveConfig CurrrentDrive => _driveConfig;
+        public AliyunStorageConfig CurrrentDrive => _driveConfig;
 
         /// <summary>
         /// 云盘所有文件夹
@@ -209,7 +210,7 @@ namespace MDriveSync.Core
         /// </summary>
         private AliyunDriveMounter _mountDrive;
 
-        public AliyunJob(AliyunDriveConfig driveConfig, AliyunJobConfig jobConfig, ILogger log)
+        public AliyunJob(AliyunStorageConfig driveConfig, AliyunJobConfig jobConfig, ILogger log)
         {
             _localFileCache = new($"{jobConfig.Id}.d", "cache", true);
             _driveApi = new AliyunDriveApi();

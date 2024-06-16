@@ -2,6 +2,7 @@
 using DokanNet.Logging;
 using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
+using MDriveSync.Core.Options;
 using Microsoft.Extensions.Caching.Memory;
 using Polly;
 using RestSharp;
@@ -95,7 +96,7 @@ namespace MDriveSync.Core.Services
         /// <summary>
         /// 客户端信息
         /// </summary>
-        private AliyunDriveConfig _driveConfig;
+        private AliyunStorageConfig _driveConfig;
 
         /// <summary>
         /// 挂载点配置
@@ -152,7 +153,7 @@ namespace MDriveSync.Core.Services
         /// <param name="driveConfig">云盘配置</param>
         /// <param name="driveMountConfig">挂载配置</param>
         /// <param name="alias">别名</param>
-        public AliyunDriveMounter(AliyunDriveConfig driveConfig, AliyunDriveMountConfig driveMountConfig, string alias = "")
+        public AliyunDriveMounter(AliyunStorageConfig driveConfig, AliyunDriveMountConfig driveMountConfig, string alias = "")
         {
             _log = Log.Logger;
             _cache = new MemoryCache(new MemoryCacheOptions());

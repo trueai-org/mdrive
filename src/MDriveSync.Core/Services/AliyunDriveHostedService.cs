@@ -59,7 +59,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 初始化新增作业
         /// </summary>
-        public void InitAddJob(List<AliyunDriveConfig> aliyunDriveConfigs)
+        public void InitAddJob(List<AliyunStorageConfig> aliyunDriveConfigs)
         {
             var drives = AliyunDriveDb.Instance.DB.GetAll();
             foreach (var cd in aliyunDriveConfigs)
@@ -270,7 +270,7 @@ namespace MDriveSync.Core
         /// 云盘列表
         /// </summary>
         /// <returns></returns>
-        public List<AliyunDriveConfig> Drives()
+        public List<AliyunStorageConfig> Drives()
         {
             var jobs = Jobs();
 
@@ -306,7 +306,7 @@ namespace MDriveSync.Core
                 throw new LogicParamException();
             }
 
-            var drive = new AliyunDriveConfig()
+            var drive = new AliyunStorageConfig()
             {
                 Id = Guid.NewGuid().ToString("N"),
                 RefreshToken = request.RefreshToken,

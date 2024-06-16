@@ -1,4 +1,5 @@
 ﻿using LiteDB;
+using ServiceStack;
 using System.Collections.Concurrent;
 
 namespace MDriveSync.Core.DB
@@ -40,10 +41,18 @@ namespace MDriveSync.Core.DB
             }
 
             var connectionString = $"Filename={dbPath};Connection=shared;";
-       
+
             _db = new LiteDatabase(connectionString);
 
-            //_db.GetCollection<T>().EnsureIndex(x => x.Id);
+            // 设置 litedb 别名
+            BsonMapper.Global.ResolveCollectionName = type =>
+            {
+                if (type == typeof(AliyunStorageConfig))
+                {
+                    return "AliyunDriveConfig";
+                }
+                return type.Name;
+            };
         }
 
         // 增加
