@@ -37,10 +37,18 @@ namespace MDriveSync.Core
         private static byte[] ComputeFileSampleHashHex(string filePath, string algorithm, int seed)
         {
             const int sampleSize = 1024; // 每个采样点的大小
-            const int numberOfRandomSamples = 16; // 随机采样点的数量
+
+            const int minRandomSamples = 16; // 最小随机采样点数量
+            const int maxRandomSamples = 64; // 最大随机采样点数量
+            const long sizePerSample = 1 * 1024 * 1024; // 每1MB增加一个采样点
 
             using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
             long fileLength = stream.Length;
+
+            // 根据文件大小动态计算随机采样点数量
+            // 计算随机采样点数量
+            int numberOfRandomSamples = (int)(fileLength / sizePerSample);
+            numberOfRandomSamples = Math.Max(minRandomSamples, Math.Min(maxRandomSamples, numberOfRandomSamples));
 
             // 如果文件较小，直接计算整个文件的哈希值
             if (fileLength <= sampleSize * (3 + numberOfRandomSamples))

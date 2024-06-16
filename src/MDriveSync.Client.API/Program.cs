@@ -112,8 +112,14 @@ namespace MDriveSync.Client.API
                 //builder.Services.AddHostedService<TimedHostedService>();
 
                 // 使用单例模式
+
+                // 阿里云盘后台服务
                 builder.Services.AddSingleton<AliyunDriveHostedService>();
                 builder.Services.AddHostedService(provider => provider.GetRequiredService<AliyunDriveHostedService>());
+
+                // 本地存储后台服务
+                builder.Services.AddSingleton<LocalStorageHostedService>();
+                builder.Services.AddHostedService(provider => provider.GetRequiredService<LocalStorageHostedService>());
 
                 var app = builder.Build();
 

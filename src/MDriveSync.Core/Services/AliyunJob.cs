@@ -789,7 +789,7 @@ namespace MDriveSync.Core
                     _log.LogInformation($"同步文件夹中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
                 }
             });
-            _log.LogInformation($"同步文件夹完成，总文件夹数：{_localFiles.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
+            _log.LogInformation($"同步文件夹完成，总文件夹数：{_localFolders.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
 
             now = DateTime.Now;
             process = 0;

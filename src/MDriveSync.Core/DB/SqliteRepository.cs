@@ -1,5 +1,6 @@
 ﻿using FastMember;
 using ServiceStack.OrmLite;
+using System.Linq.Expressions;
 using System.Runtime.Caching;
 
 namespace MDriveSync.Core.DB
@@ -200,6 +201,17 @@ namespace MDriveSync.Core.DB
                 return GetCachedData();
             }
             return null;
+        }
+
+        /// <summary>
+        /// 获取单个满足条件的实体。
+        /// </summary>
+        /// <param name="predicate">查询条件表达式。</param>
+        /// <returns>满足条件的单个实体。</returns>
+        public T Single(Expression<Func<T, bool>> predicate)
+        {
+            using var db = _dbFactory.Open();
+            return db.Single(predicate);
         }
 
         private List<T> GetCachedData()

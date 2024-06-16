@@ -115,14 +115,19 @@
         public JobMetadata Metadata { get; set; }
 
         /// <summary>
-        /// 文件加密
+        /// 启用加密
         /// </summary>
         public bool IsEncrypt { get; set; }
 
         /// <summary>
-        /// 文件名加密
+        /// 启用文件名加密（与文件打包模式互斥，因为文件打包时文件名都存储到包中了）
         /// </summary>
         public bool IsEncryptName { get; set; }
+
+        /// <summary>
+        /// 启用文件打包
+        /// </summary>
+        public bool IsPack { get; set; }
 
         /// <summary>
         /// Hash 算法（SHA256、BLAKE3）

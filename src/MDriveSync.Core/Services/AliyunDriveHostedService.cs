@@ -48,26 +48,34 @@ namespace MDriveSync.Core
             // 如果数据库已有，则跳过
             if (_clientOptions?.AliyunDrives?.Count > 0)
             {
-                var drives = AliyunDriveDb.Instance.DB.GetAll();
-                foreach (var cd in _clientOptions?.AliyunDrives)
-                {
-                    var f = drives.FirstOrDefault(x => x.Id == cd.Id);
-                    if (f == null)
-                    {
-                        AliyunDriveDb.Instance.DB.Add(cd);
-                    }
-
-                    //else
-                    //{
-                    //    f = cd;
-                    //    DriveDb.Instacne.Update(f);
-                    //}
-                }
+                InitAddJob(_clientOptions.AliyunDrives);
             }
 
             _timer = new Timer(DoWork, null, TimeSpan.Zero, TimeSpan.FromMinutes(1));
 
             return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 初始化新增作业
+        /// </summary>
+        public void InitAddJob(List<AliyunDriveConfig> aliyunDriveConfigs)
+        {
+            var drives = AliyunDriveDb.Instance.DB.GetAll();
+            foreach (var cd in aliyunDriveConfigs)
+            {
+                var f = drives.FirstOrDefault(x => x.Id == cd.Id);
+                if (f == null)
+                {
+                    AliyunDriveDb.Instance.DB.Add(cd);
+                }
+
+                //else
+                //{
+                //    f = cd;
+                //    DriveDb.Instacne.Update(f);
+                //}
+            }
         }
 
         public override async Task StopAsync(CancellationToken stoppingToken)
