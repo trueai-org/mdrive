@@ -1,5 +1,6 @@
 ﻿using MDriveSync.Core.DB;
 using ServiceStack.DataAnnotations;
+using System.Reflection.Metadata.Ecma335;
 
 namespace MDriveSync.Core.Models
 {
@@ -160,6 +161,8 @@ namespace MDriveSync.Core.Models
         [Ignore]
         public string SpeedString => Speed switch
         {
+            // 如果 <=0 返回 -
+            var s when s <= 0 => "-",
             var s when s >= 1024 * 1024 * 1024 => $"{s / 1024 / 1024 / 1024:F2} GB/s",
             var s when s >= 1024 * 1024 => $"{s / 1024 / 1024:F2} MB/s",
             var s when s >= 1024 => $"{s / 1024:F2} KB/s",
@@ -172,9 +175,9 @@ namespace MDriveSync.Core.Models
         public string AliyunDriveId { get; set; }
 
         /// <summary>
-        /// 云盘 ID（云盘作业标识）
+        /// 云盘存储 ID / 本地存储 ID
         /// </summary>
-        public string DriveId { get; set; }
+        public string StorageConfigId { get; set; }
 
         /// <summary>
         /// 作业 ID
@@ -182,7 +185,7 @@ namespace MDriveSync.Core.Models
         public string JobId { get; set; }
 
         /// <summary>
-        /// 文件 ID
+        /// 文件 ID / Key
         /// </summary>
         public string FileId { get; set; }
 
@@ -200,6 +203,11 @@ namespace MDriveSync.Core.Models
         /// 错误消息
         /// </summary>
         public string Error { get; set; }
+
+        /// <summary>
+        /// 是否为本地文件
+        /// </summary>
+        public bool IsLocalFile { get; set; }
     }
 
     /// <summary>
@@ -216,6 +224,11 @@ namespace MDriveSync.Core.Models
         public string JobId { get; set; }
 
         public string FileId { get; set; }
+
+        /// <summary>
+        /// 是否为本地文件
+        /// </summary>
+        public bool IsLocalFile { get; set; }
     }
 
     /// <summary>
@@ -223,11 +236,19 @@ namespace MDriveSync.Core.Models
     /// </summary>
     public class BatchDownloadRequest
     {
+        /// <summary>
+        /// 文件唯一标识或 keys
+        /// </summary>
         public List<string> FileIds { get; set; } = new List<string>();
 
         public string JobId { get; set; }
 
         public string FilePath { get; set; }
+
+        /// <summary>
+        /// 是否为本地文件
+        /// </summary>
+        public bool IsLocalFile { get; set; }
     }
 
     /// <summary>

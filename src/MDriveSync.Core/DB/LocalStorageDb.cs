@@ -7,7 +7,7 @@ namespace MDriveSync.Core.DB
     /// </summary>
     public class LocalStorageDb : SingletonBase<LocalStorageDb>
     {
-        private readonly LiteRepository<LocalStorageConfig, string> _db = new("drive.db", false);
+        private readonly LiteRepository<LocalStorageConfig, string> _db = new("mdrive.db", false);
 
         public LiteRepository<LocalStorageConfig, string> DB
         {

@@ -97,12 +97,12 @@ namespace MDriveSync.Core
         /// <summary>
         /// 本地存储配置
         /// </summary>
-        private LocalStorageConfig _targetConfig;
+        private LocalStorageConfig _currentStorageConfig;
 
         /// <summary>
         /// 本地存储配置
         /// </summary>
-        public LocalStorageConfig CurrrentLocalStorage => _targetConfig;
+        public LocalStorageConfig CurrrentLocalStorage => _currentStorageConfig;
 
         /// <summary>
         /// 云盘所有文件夹
@@ -167,8 +167,8 @@ namespace MDriveSync.Core
         {
             _log = log;
 
-            _targetDb = new SqliteRepository<LocalStorageTargetFileInfo, string>($"{jobConfig.Id}_local.db", "jobs", false);
-            _targetConfig = driveConfig;
+            _targetDb = new SqliteRepository<LocalStorageTargetFileInfo, string>($"job_local_{jobConfig.Id}.db", "", false);
+            _currentStorageConfig = driveConfig;
             _jobConfig = jobConfig;
 
             // 非禁用状态时，创建默认为 none 状态
@@ -442,7 +442,7 @@ namespace MDriveSync.Core
         {
             get
             {
-                return AliyunDriveToken.Instance.GetAccessToken(_targetConfig.Id);
+                return AliyunDriveToken.Instance.GetAccessToken(_currentStorageConfig.Id);
             }
         }
 
@@ -976,7 +976,7 @@ namespace MDriveSync.Core
                 throw new LogicException("作业标识错误");
             }
 
-            var drive = LocalStorageDb.Instance.DB.GetAll().Where(c => c.Id == _targetConfig.Id).FirstOrDefault();
+            var drive = LocalStorageDb.Instance.DB.GetAll().Where(c => c.Id == _currentStorageConfig.Id).FirstOrDefault();
             if (drive == null)
             {
                 throw new LogicException("配置配置错误，请重启程序");
@@ -1008,7 +1008,7 @@ namespace MDriveSync.Core
             _jobConfig.Mode = cfg.Mode;
             _jobConfig.Restore = cfg.Restore;
 
-            _targetConfig.SaveJob(_jobConfig);
+            _currentStorageConfig.SaveJob(_jobConfig);
         }
 
         /// <summary>
@@ -1109,7 +1109,7 @@ namespace MDriveSync.Core
                 }
                 CurrentState = state;
                 _jobConfig.State = state;
-                _targetConfig.SaveJob(_jobConfig);
+                _currentStorageConfig.SaveJob(_jobConfig);
             }
             else if (state == JobState.Deleted)
             {
@@ -1119,7 +1119,7 @@ namespace MDriveSync.Core
                 {
                     throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能删除作业");
                 }
-                _targetConfig.SaveJob(_jobConfig, true);
+                _currentStorageConfig.SaveJob(_jobConfig, true);
             }
             else if (state == JobState.None)
             {
@@ -1131,7 +1131,7 @@ namespace MDriveSync.Core
                 }
                 CurrentState = state;
                 _jobConfig.State = state;
-                _targetConfig.SaveJob(_jobConfig);
+                _currentStorageConfig.SaveJob(_jobConfig);
             }
             else
             {
@@ -1724,7 +1724,7 @@ namespace MDriveSync.Core
                     }
 
                     // 保存配置
-                    _targetConfig.Save();
+                    _currentStorageConfig.Save();
 
                     sw.Stop();
                     _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -2114,7 +2114,7 @@ namespace MDriveSync.Core
                 TotalSize = _targetFiles.Values.Sum(c => c.Length)
             };
 
-            _targetConfig.SaveJob(_jobConfig);
+            _currentStorageConfig.SaveJob(_jobConfig);
 
             // 校验通过 -> 空闲
             ChangeState(JobState.Idle);
@@ -2644,6 +2644,64 @@ namespace MDriveSync.Core
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// 获取本地文件信息，通过 key
+        /// </summary>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public LocalStorageFileInfo GetLocalFileDetailByKey(string key = "")
+        {
+            if (_jobConfig.IsEncrypt && _jobConfig.IsPack)
+            {
+            }
+            else
+            {
+                if (_targetFolders.ContainsKey(key) && _targetFolders.TryGetValue(key, out var v) && v != null)
+                {
+                    return v;
+                }
+                else if (!_jobConfig.IsEncrypt && _targetFiles.ContainsKey(key) && _targetFiles.TryGetValue(key, out var f) && f != null)
+                {
+                    return f;
+                }
+                else
+                {
+                    return _targetDb.Get(key);
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// 获取文件夹下的所有文件，包含子文件
+        /// </summary>
+        /// <param name="parentKey"></param>
+        /// <returns></returns>
+        public List<LocalStorageFileInfo> GetLocalFilesByKey(string parentKey = "")
+        {
+            if (_jobConfig.IsEncrypt && _jobConfig.IsPack)
+            {
+            }
+            else
+            {
+                if (_targetFolders.ContainsKey(parentKey) && _targetFolders.TryGetValue(parentKey, out var v) && v != null)
+                {
+                    if (!_jobConfig.IsEncrypt)
+                    {
+                        // 未加密
+                        return _targetFiles.Values.Where(c => c.Key.StartsWith(parentKey)).ToList();
+                    }
+                    else
+                    {
+                        return _targetDb.GetAll(false).Where(c => c.IsFile && c.Key.StartsWith(parentKey)).Select(c => (LocalStorageFileInfo)c).ToList();
+                    }
+                }
+            }
+
+            return new List<LocalStorageFileInfo>();
         }
 
         #endregion 本地存储

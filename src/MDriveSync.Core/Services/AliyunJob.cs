@@ -127,7 +127,7 @@ namespace MDriveSync.Core
         private string _driveId;
 
         // 客户端信息
-        private AliyunStorageConfig _driveConfig;
+        private AliyunStorageConfig _currentStorageConfig;
 
         /// <summary>
         /// 阿里云盘备份盘/资源盘 ID
@@ -137,7 +137,7 @@ namespace MDriveSync.Core
         /// <summary>
         /// 当前云盘
         /// </summary>
-        public AliyunStorageConfig CurrrentDrive => _driveConfig;
+        public AliyunStorageConfig CurrrentStorageConfig => _currentStorageConfig;
 
         /// <summary>
         /// 云盘所有文件夹
@@ -219,7 +219,7 @@ namespace MDriveSync.Core
             // 本地缓存
             _cache = new MemoryCache(new MemoryCacheOptions());
 
-            _driveConfig = driveConfig;
+            _currentStorageConfig = driveConfig;
             _jobConfig = jobConfig;
 
             // 上传请求
@@ -564,7 +564,7 @@ namespace MDriveSync.Core
         {
             get
             {
-                return AliyunDriveToken.Instance.GetAccessToken(_driveConfig.Id);
+                return AliyunDriveToken.Instance.GetAccessToken(_currentStorageConfig.Id);
             }
         }
 
@@ -1199,7 +1199,7 @@ namespace MDriveSync.Core
                 throw new LogicException("作业标识错误");
             }
 
-            var drive = AliyunStorageDb.Instance.DB.GetAll().Where(c => c.Id == _driveConfig.Id).FirstOrDefault();
+            var drive = AliyunStorageDb.Instance.DB.GetAll().Where(c => c.Id == _currentStorageConfig.Id).FirstOrDefault();
             if (drive == null)
             {
                 throw new LogicException("配置配置错误，请重启程序");
@@ -1244,7 +1244,7 @@ namespace MDriveSync.Core
             _jobConfig.MountConfig.MountReadOnly = cfg.MountConfig?.MountReadOnly ?? false;
             _jobConfig.MountConfig.MountPoint = cfg?.MountConfig?.MountPoint;
 
-            _driveConfig.SaveJob(_jobConfig);
+            _currentStorageConfig.SaveJob(_jobConfig);
         }
 
         /// <summary>
@@ -1345,7 +1345,7 @@ namespace MDriveSync.Core
                 }
                 CurrentState = state;
                 _jobConfig.State = state;
-                _driveConfig.SaveJob(_jobConfig);
+                _currentStorageConfig.SaveJob(_jobConfig);
             }
             else if (state == JobState.Deleted)
             {
@@ -1355,7 +1355,7 @@ namespace MDriveSync.Core
                 {
                     throw new LogicException($"当前作业处于 {CurrentState.GetDescription()} 状态，不能删除作业");
                 }
-                _driveConfig.SaveJob(_jobConfig, true);
+                _currentStorageConfig.SaveJob(_jobConfig, true);
             }
             else if (state == JobState.None)
             {
@@ -1367,7 +1367,7 @@ namespace MDriveSync.Core
                 }
                 CurrentState = state;
                 _jobConfig.State = state;
-                _driveConfig.SaveJob(_jobConfig);
+                _currentStorageConfig.SaveJob(_jobConfig);
             }
             else
             {
@@ -1907,7 +1907,7 @@ namespace MDriveSync.Core
                     AliyunDriveInitVipInfo();
 
                     // 保存配置
-                    _driveConfig.Save();
+                    _currentStorageConfig.Save();
 
                     sw.Stop();
                     _log.LogInformation($"作业初始化完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -2133,7 +2133,7 @@ namespace MDriveSync.Core
                 TotalSize = _driveFiles.Values.Sum(c => c.Size ?? 0)
             };
 
-            _driveConfig.SaveJob(_jobConfig);
+            _currentStorageConfig.SaveJob(_jobConfig);
 
             // 校验通过 -> 空闲
             ChangeState(JobState.Idle);
@@ -3002,7 +3002,7 @@ namespace MDriveSync.Core
                 _driveId = data.ResourceDriveId;
             }
 
-            _driveConfig.Name = !string.IsNullOrWhiteSpace(data.NickName) ? data.NickName : data.Name;
+            _currentStorageConfig.Name = !string.IsNullOrWhiteSpace(data.NickName) ? data.NickName : data.Name;
         }
 
         /// <summary>
@@ -3013,9 +3013,9 @@ namespace MDriveSync.Core
         {
             var data = _driveApi.SpaceInfo(AccessToken);
 
-            _driveConfig.Metadata ??= new();
-            _driveConfig.Metadata.UsedSize = data?.PersonalSpaceInfo?.UsedSize;
-            _driveConfig.Metadata.TotalSize = data?.PersonalSpaceInfo?.TotalSize;
+            _currentStorageConfig.Metadata ??= new();
+            _currentStorageConfig.Metadata.UsedSize = data?.PersonalSpaceInfo?.UsedSize;
+            _currentStorageConfig.Metadata.TotalSize = data?.PersonalSpaceInfo?.TotalSize;
         }
 
         /// <summary>
@@ -3025,10 +3025,10 @@ namespace MDriveSync.Core
         private void AliyunDriveInitVipInfo()
         {
             var data = _driveApi.VipInfo(AccessToken);
-            _driveConfig.Metadata ??= new();
-            _driveConfig.Metadata.Identity = data?.Identity;
-            _driveConfig.Metadata.Level = data?.Level;
-            _driveConfig.Metadata.Expire = data?.ExpireDateTime;
+            _currentStorageConfig.Metadata ??= new();
+            _currentStorageConfig.Metadata.Identity = data?.Identity;
+            _currentStorageConfig.Metadata.Level = data?.Level;
+            _currentStorageConfig.Metadata.Expire = data?.ExpireDateTime;
         }
 
         /// <summary>
@@ -3938,7 +3938,7 @@ private async Task AliyunDriveUploadFile(LocalFileInfo localFileInfo, bool needP
             //_mountDrive = new AliyunDriveMounterByJob(mountPoint, this, _driveFolders, _driveFiles);
             //_mountDrive.Mount();
 
-            _mountDrive = new AliyunDriveMounter(_driveConfig, _jobConfig.MountConfig, _jobConfig.Name);
+            _mountDrive = new AliyunDriveMounter(_currentStorageConfig, _jobConfig.MountConfig, _jobConfig.Name);
             _mountDrive.Mount();
         }
 

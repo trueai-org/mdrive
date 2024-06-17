@@ -31,9 +31,9 @@ namespace MDriveSync.Core
         // 下载速度限制（字节/秒）
         private int downloadSpeedLimit = 0;
 
-        private LiteRepository<DownloadTask, string> _taskDb = new("drive.db", false);
+        private LiteRepository<DownloadTask, string> _taskDb = new("task.db", false);
 
-        private LiteRepository<DownloadManagerSetting, string> _settingDb = new("drive.db", false);
+        private LiteRepository<DownloadManagerSetting, string> _settingDb = new("mdrive.db", false);
 
         private DownloadManager()
         {
@@ -166,7 +166,8 @@ namespace MDriveSync.Core
             string driveId,
             string aliyunDriveId,
             bool isEncrypt,
-            bool isEncryptName)
+            bool isEncryptName,
+            bool isLocalFile)
         {
             var downloadTask = new DownloadTask
             {
@@ -176,10 +177,11 @@ namespace MDriveSync.Core
                 Status = DownloadStatus.Pending,
                 JobId = jobId,
                 FileId = fileId,
-                DriveId = driveId,
+                StorageConfigId = driveId,
                 AliyunDriveId = aliyunDriveId,
                 IsEncrypted = isEncrypt,
                 IsEncryptName = isEncryptName,
+                IsLocalFile = isLocalFile
             };
 
             if (downloadTasks.TryAdd(downloadTask.Id, downloadTask))
@@ -390,86 +392,112 @@ namespace MDriveSync.Core
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(tmpFilePath));
 
-                // 如果 url 为空或作业创建超过 5 分钟，则重新获取 url
-                if (string.IsNullOrWhiteSpace(downloadTask.Url) || (DateTime.Now - downloadTask.CreateTime).TotalMinutes > 5)
+                if (downloadTask.IsLocalFile)
                 {
-                    var token = AliyunDriveToken.Instance.GetAccessToken(downloadTask.DriveId);
-                    var api = new AliyunDriveApi();
-                    var urlResponse = api.GetDownloadUrl(downloadTask.AliyunDriveId, downloadTask.FileId, token);
-                    downloadTask.Url = urlResponse.Url;
-                }
+                    // 本地文件
+                    downloadTask.Status = DownloadStatus.Downloading;
+                    downloadTask.StartTime = DateTime.Now;
 
-                downloadTask.Status = DownloadStatus.Downloading;
-                downloadTask.StartTime = DateTime.Now;
-
-                var response = await httpClient.GetAsync(downloadTask.Url, HttpCompletionOption.ResponseHeadersRead);
-                response.EnsureSuccessStatusCode();
-
-                downloadTask.TotalBytes = response.Content.Headers.ContentLength ?? 0;
-
-                using (var stream = await response.Content.ReadAsStreamAsync())
-                using (var fileStream = new FileStream(tmpFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
-                {
-                    var buffer = new byte[1024 * 1024];
-                    int bytesRead;
-                    var stopwatch = Stopwatch.StartNew();
-                    var lastDownloadedBytes = 0L;
-
-                    while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                    var localFilePath = downloadTask.Url;
+                    var fileInfo = new FileInfo(localFilePath);
+                    if (!fileInfo.Exists)
                     {
-                        if (downloadTask.Status == DownloadStatus.Paused || downloadTask.Status == DownloadStatus.Canceled)
+                        throw new LogicException($"文件 {localFilePath} 不存在");
+                    }
+
+                    // 文件拷贝到临时路径
+                    File.Copy(localFilePath, tmpFilePath, true);
+
+                    downloadTask.TotalBytes = fileInfo.Length;
+                    downloadTask.Speed = 0;
+                    downloadTask.EndTime = DateTime.Now;
+                }
+                else
+                {
+                    // 云盘文件
+
+                    // 如果 url 为空或作业创建超过 5 分钟，则重新获取 url
+                    if (string.IsNullOrWhiteSpace(downloadTask.Url) || (DateTime.Now - downloadTask.CreateTime).TotalMinutes > 5)
+                    {
+                        var token = AliyunDriveToken.Instance.GetAccessToken(downloadTask.StorageConfigId);
+                        var api = new AliyunDriveApi();
+                        var urlResponse = api.GetDownloadUrl(downloadTask.AliyunDriveId, downloadTask.FileId, token);
+                        downloadTask.Url = urlResponse.Url;
+                    }
+
+                    downloadTask.Status = DownloadStatus.Downloading;
+                    downloadTask.StartTime = DateTime.Now;
+
+                    var response = await httpClient.GetAsync(downloadTask.Url, HttpCompletionOption.ResponseHeadersRead);
+                    response.EnsureSuccessStatusCode();
+
+                    downloadTask.TotalBytes = response.Content.Headers.ContentLength ?? 0;
+
+                    using (var stream = await response.Content.ReadAsStreamAsync())
+                    using (var fileStream = new FileStream(tmpFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                    {
+                        var buffer = new byte[1024 * 1024];
+                        int bytesRead;
+                        var stopwatch = Stopwatch.StartNew();
+                        var lastDownloadedBytes = 0L;
+
+                        while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
                         {
-                            // 直接返回，不再继续下载
-                            return;
-                        }
-
-                        await fileStream.WriteAsync(buffer, 0, bytesRead);
-                        downloadTask.DownloadedBytes += bytesRead;
-
-                        //// 全局下载速度限制
-                        //if (downloadSpeedLimit > 0)
-                        //{
-                        //    var globalSpeed = GetGlobalDownloadSpeed();
-                        //    while (globalSpeed > downloadSpeedLimit)
-                        //    {
-                        //        await Task.Delay(100);
-
-                        //        downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
-
-                        //        // 更新结束时间
-                        //        downloadTask.EndTime = DateTime.Now;
-
-                        //        globalSpeed = GetGlobalDownloadSpeed();
-                        //    }
-                        //}
-
-                        // 全局下载速度限制
-                        if (downloadSpeedLimit > 0)
-                        {
-                            var globalSpeed = GetGlobalDownloadSpeed();
-                            while (globalSpeed > downloadSpeedLimit)
+                            if (downloadTask.Status == DownloadStatus.Paused || downloadTask.Status == DownloadStatus.Canceled)
                             {
-                                await Task.Delay(200);
-
-                                downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
-                                downloadTask.EndTime = DateTime.Now;
-
-                                globalSpeed = GetGlobalDownloadSpeed();
+                                // 直接返回，不再继续下载
+                                return;
                             }
-                        }
 
-                        // 计算下载速度
-                        if (stopwatch.Elapsed.TotalSeconds > 1)
-                        {
-                            downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
-                            lastDownloadedBytes = downloadTask.DownloadedBytes;
-                            stopwatch.Restart();
+                            await fileStream.WriteAsync(buffer, 0, bytesRead);
+                            downloadTask.DownloadedBytes += bytesRead;
 
-                            // 更新结束时间
-                            downloadTask.EndTime = DateTime.Now;
+                            //// 全局下载速度限制
+                            //if (downloadSpeedLimit > 0)
+                            //{
+                            //    var globalSpeed = GetGlobalDownloadSpeed();
+                            //    while (globalSpeed > downloadSpeedLimit)
+                            //    {
+                            //        await Task.Delay(100);
+
+                            //        downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
+
+                            //        // 更新结束时间
+                            //        downloadTask.EndTime = DateTime.Now;
+
+                            //        globalSpeed = GetGlobalDownloadSpeed();
+                            //    }
+                            //}
+
+                            // 全局下载速度限制
+                            if (downloadSpeedLimit > 0)
+                            {
+                                var globalSpeed = GetGlobalDownloadSpeed();
+                                while (globalSpeed > downloadSpeedLimit)
+                                {
+                                    await Task.Delay(200);
+
+                                    downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
+                                    downloadTask.EndTime = DateTime.Now;
+
+                                    globalSpeed = GetGlobalDownloadSpeed();
+                                }
+                            }
+
+                            // 计算下载速度
+                            if (stopwatch.Elapsed.TotalSeconds > 1)
+                            {
+                                downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
+                                lastDownloadedBytes = downloadTask.DownloadedBytes;
+                                stopwatch.Restart();
+
+                                // 更新结束时间
+                                downloadTask.EndTime = DateTime.Now;
+                            }
                         }
                     }
                 }
+
 
                 // 下载完成后，判断文件是否需要解密，如果需要解密，则解密文件
                 if (downloadTask.IsEncrypted)
@@ -479,10 +507,22 @@ namespace MDriveSync.Core
                     try
                     {
                         // 获取 job 配置
-                        var job = AliyunStorageDb.Instance.DB.Get(downloadTask.DriveId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
-                        if (job == null)
+                        BaseJobConfig job = null;
+                        if (downloadTask.IsLocalFile)
                         {
-                            throw new LogicException("未找到指定的任务配置");
+                            job = LocalStorageDb.Instance.DB.Get(downloadTask.StorageConfigId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
+                            if (job == null)
+                            {
+                                throw new LogicException("未找到指定的任务配置");
+                            }
+                        }
+                        else
+                        {
+                            job = AliyunStorageDb.Instance.DB.Get(downloadTask.StorageConfigId)?.Jobs?.FirstOrDefault(x => x.Id == downloadTask.JobId);
+                            if (job == null)
+                            {
+                                throw new LogicException("未找到指定的任务配置");
+                            }
                         }
 
                         var fileName = downloadTask.Name?.TrimSuffix(".e");
@@ -630,7 +670,7 @@ namespace MDriveSync.Core
         /// <param name="tasks">批量下载任务列表。</param>
         /// <param name="job">作业对象。</param>
         /// <param name="baseSavePath">基础保存路径。</param>
-        public async Task AddDownloadTasksAsync(BatchDownloadRequest param, AliyunJob job)
+        public async Task AddDownloadAliyunJobTasksAsync(BatchDownloadRequest param, AliyunJob job)
         {
             foreach (var fileId in param.FileIds)
             {
@@ -655,11 +695,12 @@ namespace MDriveSync.Core
                                     Status = DownloadStatus.Pending,
                                     JobId = param.JobId,
                                     FileId = ff.Value.FileId,
-                                    DriveId = job.CurrrentDrive.Id,
+                                    StorageConfigId = job.CurrrentStorageConfig.Id,
                                     AliyunDriveId = job.AliyunDriveId,
                                     IsEncrypted = job.CurrrentJob.IsEncrypt,
                                     IsEncryptName = job.CurrrentJob.IsEncryptName,
                                     Name = ff.Value.Name,
+                                    IsLocalFile = param.IsLocalFile,
                                     DefaultSavePath = Path.GetDirectoryName(Path.Combine(param.FilePath, detail.Name, ff.Key.TrimPrefix(parentKey)))
                                 };
 
@@ -683,7 +724,7 @@ namespace MDriveSync.Core
                             Status = DownloadStatus.Pending,
                             JobId = param.JobId,
                             FileId = fileId,
-                            DriveId = job.CurrrentDrive.Id,
+                            StorageConfigId = job.CurrrentStorageConfig.Id,
                             AliyunDriveId = job.AliyunDriveId,
                             IsEncrypted = job.CurrrentJob.IsEncrypt,
                             IsEncryptName = job.CurrrentJob.IsEncryptName,
@@ -705,6 +746,97 @@ namespace MDriveSync.Core
                 catch (Exception ex)
                 {
                     Log.Error(ex, "批量任务创建异常 {@0}", fileId);
+                }
+            }
+        }
+
+        /// <summary>
+        /// 异步添加批量下载任务。
+        /// </summary>
+        /// <param name="tasks">批量下载任务列表。</param>
+        /// <param name="job">作业对象。</param>
+        /// <param name="baseSavePath">基础保存路径。</param>
+        public void AddDownloadLocalJobTasks(BatchDownloadRequest param, LocalStorageJob job)
+        {
+            foreach (var key in param.FileIds)
+            {
+                try
+                {
+                    var detail = job.GetLocalFileDetailByKey(key);
+                    if (detail == null)
+                    {
+                        continue;
+                    }
+
+                    if (!detail.IsFile)
+                    {
+                        // 获取子文件夹下的所有文件
+                        var ffs = job.GetLocalFilesByKey(key);
+
+
+                        foreach (var ff in ffs)
+                        {
+                            var downloadTask = new DownloadTask
+                            {
+                                Id = Guid.NewGuid().ToString("N"),
+                                Status = DownloadStatus.Pending,
+
+                                FileId = ff.Key,
+                                JobId = param.JobId,
+                                StorageConfigId = job.CurrrentLocalStorage.Id,
+                                IsEncrypted = job.CurrrentJob.IsEncrypt,
+                                IsEncryptName = job.CurrrentJob.IsEncryptName,
+
+                                Name = ff.Name,
+                                IsLocalFile = param.IsLocalFile,
+                                DefaultSavePath = Path.GetDirectoryName(Path.Combine(param.FilePath, detail.Name, ff.Key.TrimPrefix(key))),
+                                Url = ff.FullName,
+                            };
+
+                            // 判断是否存在等待中的同名任务
+                            var existTask = downloadTasks.Values.FirstOrDefault(x => x.Status == DownloadStatus.Pending && x.FileId == ff.Key);
+                            if (existTask == null)
+                            {
+                                if (downloadTasks.TryAdd(downloadTask.Id, downloadTask))
+                                {
+                                    StartDownloadTask(downloadTask);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        var downloadTask = new DownloadTask
+                        {
+                            Id = Guid.NewGuid().ToString("N"),
+                            Status = DownloadStatus.Pending,
+
+                            FileId = key,
+                            JobId = param.JobId,
+                            StorageConfigId = job.CurrrentLocalStorage.Id,
+                            IsEncrypted = job.CurrrentJob.IsEncrypt,
+                            IsEncryptName = job.CurrrentJob.IsEncryptName,
+
+                            Name = detail.Name,
+                            IsLocalFile = param.IsLocalFile,
+                            DefaultSavePath = param.FilePath,
+                            Url = detail.FullName
+                        };
+
+                        // 判断是否存在等待中的同名任务
+                        var existTask = downloadTasks.Values.FirstOrDefault(x => x.Status == DownloadStatus.Pending && x.FileId == key);
+                        if (existTask == null)
+                        {
+                            if (downloadTasks.TryAdd(downloadTask.Id, downloadTask))
+                            {
+                                StartDownloadTask(downloadTask);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Error(ex, "批量任务创建异常 {@0}", key);
                 }
             }
         }

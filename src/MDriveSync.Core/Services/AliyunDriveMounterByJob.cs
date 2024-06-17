@@ -529,8 +529,8 @@ namespace MDriveSync.Core.Services
             // diskSpaceInfo.UsedSpace - 云盘已使用的空间
             // diskSpaceInfo.FreeSpace - 云盘的剩余空间
 
-            totalNumberOfBytes = _job.CurrrentDrive?.Metadata?.TotalSize ?? long.MaxValue;
-            totalNumberOfFreeBytes = _job.CurrrentDrive?.Metadata?.UsedSize ?? 0;
+            totalNumberOfBytes = _job.CurrrentStorageConfig?.Metadata?.TotalSize ?? long.MaxValue;
+            totalNumberOfFreeBytes = _job.CurrrentStorageConfig?.Metadata?.UsedSize ?? 0;
             freeBytesAvailable = totalNumberOfBytes > 0 ? totalNumberOfBytes - totalNumberOfFreeBytes : long.MaxValue;
 
             return NtStatus.Success;
