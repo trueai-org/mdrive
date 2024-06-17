@@ -170,11 +170,6 @@ docker run --name mdrive -d --restart=always \
 - [√] 支持导入/导出配置。
 - [√] 支持还原/下载云盘文件。
 
-## 友情链接
-
-- [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
-- [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
-
 ## 启动配置
 
 - 只读模式：WebUI 下如果开启只读模式，则允许编辑和修改，只能查看，默认 `ReadOnly: false`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e READ_ONLY=true`。
@@ -465,7 +460,7 @@ docker run --name mdrive -d --restart=always \
 
 ## GUI 路线图
 
-- [3.x] WebUI 版本更新提示
+- [3.x] WebUI 版本更新提示，支持热更新支持，使用子程序提供热更新服务。
 - App 启动时，通过接口获取欢迎语，检查版本等
 - App 增加下次作业时间
 - App 增加公告
@@ -561,8 +556,13 @@ docker run --name mdrive -d --restart=always \
 
 <a href="https://github.com/trueai-org/MDriveSync/graphs/contributors"><img src="https://opencollective.com/MDriveSync/contributors.svg?width=890" /></a>
 
+## 友情链接
+
+- [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
+- [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
+
 ## 鸣谢
 
 - 感谢阿里云盘共创团对 MDrive 的支持。
-- 感谢 Duplicati 对本产品初期的支持。
+- 感谢 Duplicati 对本产品的支持。
 - [WinSW](https://github.com/winsw/winsw) 系统服务，将本程序安装作为 Windows 服务运行。 
