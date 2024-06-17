@@ -170,5 +170,23 @@ namespace MDriveSync.Client.API.Controllers
             }
             return Result.Ok(new List<LocalStorageTargetFileInfo>());
         }
+
+        /// <summary>
+        /// 获取文件详情
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="fullName"></param>
+        /// <returns></returns>
+        [HttpGet("file/{jobId}")]
+        public Result<LocalStorageFileInfo> GetDetail(string jobId, [FromQuery] string fullName)
+        {
+            var jobs = _localStorageHostedService.Jobs();
+            if (jobs.TryGetValue(jobId, out var job) && job != null)
+            {
+                var data = job.GetLocalFileDetail(fullName);
+                return Result.Ok(data);
+            }
+            return Result.Ok<LocalStorageFileInfo>(null);
+        }
     }
 }

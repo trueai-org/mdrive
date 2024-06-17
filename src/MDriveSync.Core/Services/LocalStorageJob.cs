@@ -2612,6 +2612,40 @@ namespace MDriveSync.Core
             return list;
         }
 
+        /// <summary>
+        /// 获取文件/文件夹详情
+        /// </summary>
+        /// <param name="fullName"></param>
+        /// <returns></returns>
+        public LocalStorageFileInfo GetLocalFileDetail(string fullName = "")
+        {
+            if (_jobConfig.IsEncrypt && _jobConfig.IsPack)
+            {
+            }
+            else
+            {
+                // 如果没有目标文件，则重新扫描
+                if (_targetFiles.Count <= 0)
+                {
+                    InitTargetRootPath();
+                    ScanTargetFiles();
+                }
+                if (string.IsNullOrWhiteSpace(fullName))
+                {
+                    fullName = new DirectoryInfo(_targetSaveRootPath).FullName;
+                }
+
+                return _targetFolders.Values.Where(c => c.FullName == fullName).FirstOrDefault();
+
+                //if (_targetFolders.TryGetValue(fullName, out var v) && v != null)
+                //{
+                //    return v;
+                //}
+            }
+
+            return null;
+        }
+
         #endregion 本地存储
 
         #region 文件监听事件

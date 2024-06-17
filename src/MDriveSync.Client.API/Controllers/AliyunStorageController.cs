@@ -228,14 +228,15 @@ namespace MDriveSync.Client.API.Controllers
         /// <param name="jobId"></param>
         /// <returns></returns>
         [HttpGet("files/{jobId}")]
-        public async Task<List<AliyunDriveFileItem>> GetDrivleFiles(string jobId, [FromQuery] string parentId = "")
+        public async Task<Result<List<AliyunDriveFileItem>>> GetDrivleFiles(string jobId, [FromQuery] string parentId = "")
         {
             var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {
-                return await job.GetDrivleFiles(parentId);
+                var data = await job.GetDrivleFiles(parentId);
+                return Result.Ok(data);
             }
-            return new List<AliyunDriveFileItem>();
+            return Result.Ok(new List<AliyunDriveFileItem>());
         }
 
         /// <summary>
