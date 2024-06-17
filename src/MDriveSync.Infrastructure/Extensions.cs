@@ -168,5 +168,32 @@ namespace MDriveSync.Infrastructure
                 return $"{size:F2} B";
             }
         }
+
+
+        /// <summary>
+        /// 查询条件扩展
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="query"></param>
+        /// <param name="condition"></param>
+        /// <param name="predicate"></param>
+        /// <returns></returns>
+        public static IEnumerable<T> WhereIf<T>(this IEnumerable<T> query, bool condition, Func<T, bool> predicate)
+        {
+            return condition ? query.Where(predicate) : query;
+        }
+
+        /// <summary>
+        /// 查询条件扩展
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="query"></param>
+        /// <param name="condition"></param>
+        /// <param name="predicate"></param>
+        /// <returns></returns>
+        public static IEnumerable<T> WhereIf<T>(this IEnumerable<T> query, bool condition, Func<T, int, bool> predicate)
+        {
+            return condition ? query.Where(predicate) : query;
+        }
     }
 }

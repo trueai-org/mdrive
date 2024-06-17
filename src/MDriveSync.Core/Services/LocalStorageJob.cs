@@ -549,7 +549,7 @@ namespace MDriveSync.Core
 
                 _log.LogInformation("开始执行同步");
 
-                await SyncFiles(cancellationToken);
+                SyncFiles(cancellationToken);
 
                 sw.Stop();
                 _log.LogInformation($"同步作业完成，用时：{sw.ElapsedMilliseconds}ms");
@@ -579,7 +579,7 @@ namespace MDriveSync.Core
         /// 同步本地文件到目标
         /// </summary>
         /// <returns></returns>
-        private async Task SyncFiles(CancellationToken token)
+        private void SyncFiles(CancellationToken token)
         {
             ScanLocalFiles();
 
@@ -687,7 +687,10 @@ namespace MDriveSync.Core
                                 dirInfo.Attributes &= ~FileAttributes.ReadOnly;
                             }
 
-                            _targetFolders[item.Key] = item.Value;
+                            _targetFolders[item.Key].CreationTime = dirInfo.CreationTime;
+                            _targetFolders[item.Key].LastWriteTime = dirInfo.LastWriteTime;
+                            _targetFolders[item.Key].IsHidden = dirInfo.Attributes.HasFlag(FileAttributes.Hidden);
+                            _targetFolders[item.Key].IsReadOnly = dirInfo.Attributes.HasFlag(FileAttributes.ReadOnly);
                         }
                     }
                 }
@@ -719,7 +722,7 @@ namespace MDriveSync.Core
             processCount = total;
 
             // 并行上传
-            await Parallel.ForEachAsync(_localFiles, options, async (item, cancellationToken) =>
+            Parallel.ForEach(_localFiles, options, (item, cancellationToken) =>
             {
                 try
                 {
@@ -1269,7 +1272,6 @@ namespace MDriveSync.Core
             // 加载子目录文件
             Parallel.ForEach(childrenDirs, options, LoadFiles);
 
-
             void LoadFiles(string dir)
             {
                 try
@@ -1339,7 +1341,6 @@ namespace MDriveSync.Core
             }
 
             _log.LogInformation($"扫描目标文件，总文件数：{_targetFiles.Count}, 扫描文件用时: {(DateTime.Now - now).TotalMilliseconds}ms");
-
         }
 
         /// <summary>
@@ -1639,6 +1640,24 @@ namespace MDriveSync.Core
             return ld;
         }
 
+        /// <summary>
+        /// 判断是否是 Windows 系统
+        /// </summary>
+        /// <returns></returns>
+        private static bool IsWindows()
+        {
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+        }
+
+        /// <summary>
+        /// 判断是否是 Linux 系统
+        /// </summary>
+        /// <returns></returns>
+        private static bool IsLinux()
+        {
+            return RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        }
+
         #endregion 私有方法
 
         #region 本地存储
@@ -1730,16 +1749,6 @@ namespace MDriveSync.Core
             {
                 throw new LogicException("其他作业正在初始化中，请稍后重试");
             }
-        }
-
-        private static bool IsWindows()
-        {
-            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        }
-
-        private static bool IsLinux()
-        {
-            return RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
         }
 
         /// <summary>
@@ -1954,7 +1963,6 @@ namespace MDriveSync.Core
                                 }
                             }
                         }
-
                     }
                     break;
 
@@ -2262,7 +2270,6 @@ namespace MDriveSync.Core
 
                     var encryptCacheFile = Path.Combine(encryptCachePath, $"{Guid.NewGuid():N}.cache");
 
-
                     try
                     {
                         using FileStream inputFileStream = new FileStream(localFileInfo.FullName, FileMode.Open, FileAccess.Read);
@@ -2497,6 +2504,113 @@ namespace MDriveSync.Core
             _targetFolders.TryAdd(ld.Key, ld);
         }
 
+        /// <summary>
+        /// 获取文件/文件夹
+        /// </summary>
+        /// <param name="parentFullName"></param>
+        public List<LocalStorageTargetFileInfo> GetLocalFiles(string parentFullName = "")
+        {
+            var list = new List<LocalStorageTargetFileInfo>();
+
+            if (_jobConfig.IsEncrypt && _jobConfig.IsPack)
+            {
+            }
+            else
+            {
+                // 如果没有目标文件，则重新扫描
+                if (_targetFiles.Count <= 0)
+                {
+                    InitTargetRootPath();
+                    ScanTargetFiles();
+                }
+
+                var p = _targetFolders
+                    .WhereIf(string.IsNullOrWhiteSpace(parentFullName), c => c.Key == "")
+                    .WhereIf(!string.IsNullOrWhiteSpace(parentFullName), c => c.Value.FullName == parentFullName)
+                    .FirstOrDefault();
+
+                parentFullName = p.Value.FullName;
+                if (!string.IsNullOrWhiteSpace(parentFullName))
+                {
+                    _targetFolders.Values.Where(c => c.ParentFullName == parentFullName)
+                        .OrderBy(c => c.Name)
+                        .ToList()
+                        .ForEach(c =>
+                        {
+                            list.Add(new LocalStorageTargetFileInfo()
+                            {
+                                Name = c.Name,
+                                CreationTime = c.CreationTime,
+                                LastWriteTime = c.LastWriteTime,
+                                FullName = c.FullName,
+                                Hash = c.Hash,
+                                IsExists = c.IsExists,
+                                IsFile = c.IsFile,
+                                IsHidden = c.IsHidden,
+                                IsReadOnly = c.IsReadOnly,
+                                Key = c.Key,
+                                Length = c.Length,
+
+                                LocalFileHash = c.Hash,
+                                LocalFileKey = c.Key,
+                                LocalFileName = c.Name
+                            });
+                        });
+                }
+
+                if (_jobConfig.IsEncrypt && _jobConfig.IsEncryptName)
+                {
+                    var allValues = _targetDb.GetAll(false).Where(c => c.IsFile).ToList();
+                    allValues.Where(c => c.ParentFullName == parentFullName)
+                        .OrderBy(c => c.LocalFileName)
+                        .ToList()
+                        .ForEach(c =>
+                        {
+                            list.Add(c);
+                        });
+                }
+                else if (_jobConfig.IsEncrypt)
+                {
+                    var allValues = _targetDb.GetAll(false).Where(c => c.IsFile).ToList();
+                    allValues.Where(c => c.ParentFullName == parentFullName)
+                        .OrderBy(c => c.LocalFileName)
+                        .ToList()
+                        .ForEach(c =>
+                        {
+                            list.Add(c);
+                        });
+                }
+                else
+                {
+                    _targetFiles.Values.Where(c => c.ParentFullName == parentFullName)
+                        .OrderBy(c => c.Name)
+                        .ToList()
+                        .ForEach(c =>
+                        {
+                            list.Add(new LocalStorageTargetFileInfo()
+                            {
+                                Name = c.Name,
+                                CreationTime = c.CreationTime,
+                                LastWriteTime = c.LastWriteTime,
+                                FullName = c.FullName,
+                                Hash = c.Hash,
+                                IsExists = c.IsExists,
+                                IsFile = c.IsFile,
+                                IsHidden = c.IsHidden,
+                                IsReadOnly = c.IsReadOnly,
+                                Key = c.Key,
+                                Length = c.Length,
+
+                                LocalFileHash = c.Hash,
+                                LocalFileKey = c.Key,
+                                LocalFileName = c.Name
+                            });
+                        });
+                }
+            }
+
+            return list;
+        }
 
         #endregion 本地存储
 

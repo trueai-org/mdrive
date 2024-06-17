@@ -47,7 +47,7 @@ namespace MDriveSync.Client.API.Controllers
                     j.State = c.CurrentState;
                     j.Metadata ??= new();
                     j.Metadata.Message = c.ProcessMessage;
-            
+
                     return j;
                 }).ToList();
             return Result.Ok(data);
@@ -151,6 +151,24 @@ namespace MDriveSync.Client.API.Controllers
             }
 
             return Result.Ok();
+        }
+
+        /// <summary>
+        /// 获取文件/文件夹列表
+        /// </summary>
+        /// <param name="jobId"></param>
+        /// <param name="parentFullName">父级完整路径</param>
+        /// <returns></returns>
+        [HttpGet("files/{jobId}")]
+        public Result<List<LocalStorageTargetFileInfo>> GetFiles(string jobId, [FromQuery] string parentFullName = "")
+        {
+            var jobs = _localStorageHostedService.Jobs();
+            if (jobs.TryGetValue(jobId, out var job) && job != null)
+            {
+                var data = job.GetLocalFiles(parentFullName);
+                return Result.Ok(data);
+            }
+            return Result.Ok(new List<LocalStorageTargetFileInfo>());
         }
     }
 }

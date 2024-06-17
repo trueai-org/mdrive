@@ -179,8 +179,8 @@ namespace MDriveSync.Core
 
             foreach (var member in _members)
             {
-                // 默认忽略 FullName
-                if (member.Name == nameof(FullName))
+                // 默认忽略 FullName || ParentFullName
+                if (member.Name == nameof(FullName) || member.Name == nameof(ParentFullName))
                 {
                     continue;
                 }
@@ -212,6 +212,11 @@ namespace MDriveSync.Core
         /// </summary>
         [Index]
         public string FullName { get; set; }
+
+        /// <summary>
+        /// 文件/文件夹的父级文件夹完整路径
+        /// </summary>
+        public string ParentFullName => Directory.GetParent(FullName).FullName;
 
         /// <summary>
         /// 文件名
