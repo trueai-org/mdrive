@@ -15,7 +15,6 @@
 ```bash
 # 阿里云镜像（推荐国内使用）
 docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
-
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 --user root \
