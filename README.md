@@ -13,7 +13,7 @@
 > Docker 版本
 
 ```bash
-# 阿里云镜像（国内推荐使用）
+# 阿里云镜像（推荐国内使用）
 docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
@@ -35,7 +35,7 @@ docker run --name mdrive -d --restart=always \
 > Windows 版本
 
 ```bash
-a. 通过 https://github.com/trueai-org/mdrive/releases 下载 windows 最新免安装版，例如：MDrvie-SelfContained-x64.zip
+a. 通过 https://github.com/trueai-org/mdrive/releases 下载 windows 最新免安装版，例如：MDrvie-win-x64.zip
 b. 解压并执行 MDriveSync.Client.API.exe
 c. 打开网站 http://localhost:8080/
 d. 安装为系统服务（可选），右键文件以管理员身份运行 `一键安装或卸载*.bat`，选择安装或卸载服务。
