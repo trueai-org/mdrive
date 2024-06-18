@@ -661,7 +661,12 @@ namespace MDriveSync.Core
                         // 处理时间、隐藏、只读，如果不一致
                         if (!LocalStorageFileInfo.FastAreObjectsEqual(item.Value, _targetFolders[item.Key]))
                         {
-                            var dirInfo = new DirectoryInfo(_targetFolders[item.Key].FullName);
+                            var saveParentPath = $"{_targetSaveRootPath}/{item.Key.TrimPath()}";
+                            var dirInfo = new DirectoryInfo(saveParentPath);
+                            if(!dirInfo.Exists)
+                            {
+                                dirInfo.Create();
+                            }
 
                             // 处理时间
                             dirInfo.CreationTime = item.Value.CreationTime;
