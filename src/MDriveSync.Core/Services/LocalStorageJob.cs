@@ -1457,7 +1457,7 @@ namespace MDriveSync.Core
             var baseDirName = baseDirInfo.Name;
 
             var subPath = directoryInfo.FullName.TrimPrefix(rootDirFullPath);
-            return $"{baseDirName}/{subPath}".TrimPath();
+            return $"{baseDirName}/{subPath.TrimPath()}";
         }
 
         /// <summary>
@@ -1472,7 +1472,7 @@ namespace MDriveSync.Core
             var rootPathName = rootInfo.Name;
 
             var subPath = fileFullPath.TrimPrefix(rootInfo.FullName);
-            return $"{rootPathName}/{subPath}".TrimPath();
+            return $"{rootPathName}/{subPath.TrimPath()}";
         }
 
         /// <summary>
@@ -1487,7 +1487,7 @@ namespace MDriveSync.Core
             var rootName = rootInfo.Name;
 
             var subPath = Path.GetDirectoryName(fileInfo.FullName).TrimPrefix(rootInfo.FullName);
-            return $"{rootName}/{subPath}".TrimPath();
+            return $"{rootName}/{subPath.TrimPath()}";
         }
 
         /// <summary>
@@ -1725,22 +1725,18 @@ namespace MDriveSync.Core
                     _jobConfig.Sources.Clear();
                     foreach (var item in sources)
                     {
-                        var path = item.TrimPath();
-                        if (isLinux && !string.IsNullOrWhiteSpace(path))
+                        if (isLinux && item.StartsWith('/'))
                         {
-                            // Linux
-                            path = $"/{path}";
-                            var dir = new DirectoryInfo(path);
+                            var dir = new DirectoryInfo(item);
                             if (!dir.Exists)
                             {
                                 dir.Create();
                             }
-                            _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
+                            _jobConfig.Sources.Add($"{dir.FullName.TrimPath()}");
                         }
                         else
                         {
-                            // Windows
-                            var dir = new DirectoryInfo(path);
+                            var dir = new DirectoryInfo(item);
                             if (!dir.Exists)
                             {
                                 dir.Create();
@@ -2317,7 +2313,7 @@ namespace MDriveSync.Core
                         //outputFileStream1.Close();
 
                         // 计算文件存储路径
-                        var targetFileFullName = $"{saveParentPath}/{name}".TrimPath();
+                        var targetFileFullName = $"{saveParentPath}/{name}";
 
                         // 更新上传文件信息
                         // 将文件重命名为
@@ -2419,7 +2415,7 @@ namespace MDriveSync.Core
             Directory.CreateDirectory(saveParentPath);
 
             // 计算文件存储路径
-            var targetFileFullName = $"{saveParentPath}/{localFileInfo.Name}".TrimPath();
+            var targetFileFullName = $"{saveParentPath}/{localFileInfo.Name.TrimPath()}";
 
             // 计算 hash
             if (string.IsNullOrWhiteSpace(localFileInfo.Hash))

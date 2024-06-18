@@ -1859,11 +1859,14 @@ namespace MDriveSync.Core
 
                     _log.LogInformation($"Linux: {isLinux}");
 
-                    // 格式化路径
-                    _localRestorePath = _jobConfig.Restore.TrimPath();
-                    if (isLinux && !string.IsNullOrWhiteSpace(_localRestorePath))
+                    // 处理 RestoreRootPath
+                    if (isLinux && (_jobConfig.Restore?.StartsWith("/") ?? false))
                     {
-                        _localRestorePath = $"/{_localRestorePath}";
+                        _localRestorePath = "/" + _jobConfig.Restore.TrimPath();
+                    }
+                    else
+                    {
+                        _localRestorePath = _jobConfig.Restore.TrimPath();
                     }
 
                     _driveSavePath = _jobConfig.Target.TrimPrefix();
@@ -1873,22 +1876,18 @@ namespace MDriveSync.Core
                     _jobConfig.Sources.Clear();
                     foreach (var item in sources)
                     {
-                        var path = item.TrimPath();
-                        if (isLinux && !string.IsNullOrWhiteSpace(path))
+                        if (isLinux && item.StartsWith('/'))
                         {
-                            // Linux
-                            path = $"/{path}";
-                            var dir = new DirectoryInfo(path);
+                            var dir = new DirectoryInfo(item);
                             if (!dir.Exists)
                             {
                                 dir.Create();
                             }
-                            _jobConfig.Sources.Add($"/{dir.FullName.TrimPath()}");
+                            _jobConfig.Sources.Add($"{dir.FullName.TrimPath()}");
                         }
                         else
                         {
-                            // Windows
-                            var dir = new DirectoryInfo(path);
+                            var dir = new DirectoryInfo(item);
                             if (!dir.Exists)
                             {
                                 dir.Create();
