@@ -28,5 +28,7 @@ jobs:
           context: .
           file: ./src/MDriveSync.Client.API/Dockerfile
           push: true
-          tags: ${{ secrets.ACR_REGISTRY }}/trueai-org/mdrive:${{ steps.meta.outputs.tags }}
+          tags: |
+            ${{ secrets.ACR_REGISTRY }}/trueai-org/mdrive:${{ steps.meta.outputs.version }}
+            ${{ secrets.ACR_REGISTRY }}/trueai-org/mdrive:latest
           labels: ${{ steps.meta.outputs.labels }}
