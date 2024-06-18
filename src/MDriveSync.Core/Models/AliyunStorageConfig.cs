@@ -134,11 +134,6 @@ namespace MDriveSync.Core.Options
             var current = AliyunStorageDb.Instance.DB.Get(Id);
             if (current != null)
             {
-                if (isRemove)
-                {
-                    current.Jobs.RemoveAll(c => c.Id == jobConfig.Id);
-                }
-
                 // 保存作业
                 var currentJobIndex = Jobs.FindIndex(x => x.Id == jobConfig.Id);
                 if (currentJobIndex >= 0)
@@ -148,6 +143,11 @@ namespace MDriveSync.Core.Options
                 else
                 {
                     current.Jobs.Add(jobConfig);
+                }
+
+                if (isRemove)
+                {
+                    current.Jobs.RemoveAll(c => c.Id == jobConfig.Id);
                 }
 
                 AliyunStorageDb.Instance.DB.Update(current);

@@ -99,11 +99,6 @@ namespace MDriveSync.Core.Models
             var current = LocalStorageDb.Instance.DB.Get(Id);
             if (current != null)
             {
-                if (isRemove)
-                {
-                    current.Jobs.RemoveAll(c => c.Id == jobConfig.Id);
-                }
-
                 // 保存作业
                 var currentJobIndex = Jobs.FindIndex(x => x.Id == jobConfig.Id);
                 if (currentJobIndex >= 0)
@@ -113,6 +108,11 @@ namespace MDriveSync.Core.Models
                 else
                 {
                     current.Jobs.Add(jobConfig);
+                }
+
+                if (isRemove)
+                {
+                    current.Jobs.RemoveAll(c => c.Id == jobConfig.Id);
                 }
 
                 LocalStorageDb.Instance.DB.Update(current);

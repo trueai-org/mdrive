@@ -985,7 +985,22 @@ namespace MDriveSync.Core
             // 禁止作业指向同一目标
             if (!string.IsNullOrWhiteSpace(cfg.Target) && drive.Jobs.Any(x => x.Target == cfg.Target && x.Id != cfg.Id))
             {
-                throw new LogicException("多个作业禁止指向云盘同一个目标目录");
+                throw new LogicException("多个作业禁止指向同一个目标目录");
+            }
+
+            // 目标目录不能为源目录或源目录的子目录
+            if (cfg.Sources.Count > 0 && !string.IsNullOrWhiteSpace(cfg.Target))
+            {
+                var tarDir = new DirectoryInfo(cfg.Target);
+                foreach (var source in cfg.Sources)
+                {
+                    var sourceDir = new DirectoryInfo(source);
+
+                    if (sourceDir.FullName.Equals(tarDir.FullName, StringComparison.OrdinalIgnoreCase) || tarDir.FullName.StartsWith(sourceDir.FullName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        throw new LogicException("目标目录不能为源目录或源目录的子目录");
+                    }
+                }
             }
 
             // 清除表达式所有作业
