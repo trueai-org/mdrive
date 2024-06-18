@@ -1713,7 +1713,7 @@ namespace MDriveSync.Core
                     // 处理 TargetRootPath
                     if (IsLinux() && (_jobConfig.Target?.StartsWith("/") ?? false))
                     {
-                        _targetSaveRootPath = "/" + _targetSaveRootPath.TrimPath(); ;
+                        _targetSaveRootPath = "/" + _jobConfig.Target.TrimPath();
                     }
                     else
                     {

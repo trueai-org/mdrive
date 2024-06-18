@@ -10,22 +10,29 @@
 
 ### 快速启动
 
-> docker 版本（近期 docker 国内无法使用，可以使用 https://docker.m.daocloud.io 加速）
+> Docker 版本（近期 docker hub 国内无法使用，可以使用 https://docker.m.daocloud.io 加速，或使用阿里云镜像）
 
 ```bash
+# 阿里云镜像（国内专用）
+docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
+docker run --name mdrive -d --restart=always \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -p 8080:8080 --user root registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
+
+# Docker Hub 镜像
 docker pull trueaiorg/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 --user root trueaiorg/mdrive
 
-# or ghcr.io
+# GitHub 镜像
 docker pull ghcr.io/trueai-org/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 --user root ghcr.io/trueai-org/mdrive
 ```
 
-> windows 版本
+> Windows 版本
 
 ```bash
 a. 通过 https://github.com/trueai-org/mdrive/releases 下载 windows 最新免安装版，例如：MDrvie-SelfContained-x64.zip
