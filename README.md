@@ -15,21 +15,34 @@
 ```bash
 # 阿里云镜像（推荐国内使用）
 docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
+
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 --user root registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
+ -p 8080:8080 --user root \
+ -e TZ=Asia/Shanghai \
+ -v /etc/localtime:/etc/localtime:ro \
+ -v /etc/timezone:/etc/timezone:ro \
+ registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
 
 # Docker Hub 镜像
 docker pull trueaiorg/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 --user root trueaiorg/mdrive
+ -p 8080:8080 --user root \
+ -e TZ=Asia/Shanghai \
+ -v /etc/localtime:/etc/localtime:ro \
+ -v /etc/timezone:/etc/timezone:ro \
+ trueaiorg/mdrive
 
 # GitHub 镜像
 docker pull ghcr.io/trueai-org/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 --user root ghcr.io/trueai-org/mdrive
+ -p 8080:8080 --user root \
+ -e TZ=Asia/Shanghai \
+ -v /etc/localtime:/etc/localtime:ro \
+ -v /etc/timezone:/etc/timezone:ro \
+ ghcr.io/trueai-org/mdrive
 ```
 
 > Windows 版本
