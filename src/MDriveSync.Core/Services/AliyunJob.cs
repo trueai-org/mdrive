@@ -1872,7 +1872,7 @@ namespace MDriveSync.Core
                     _driveSavePath = _jobConfig.Target.TrimPrefix();
 
                     // 格式化备份目录
-                    var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
+                    var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
                     _jobConfig.Sources.Clear();
                     foreach (var item in sources)
                     {
@@ -1883,7 +1883,7 @@ namespace MDriveSync.Core
                             {
                                 dir.Create();
                             }
-                            _jobConfig.Sources.Add($"{dir.FullName.TrimPath()}");
+                            _jobConfig.Sources.Add(dir.FullName);
                         }
                         else
                         {

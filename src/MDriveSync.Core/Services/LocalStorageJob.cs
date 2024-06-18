@@ -663,7 +663,7 @@ namespace MDriveSync.Core
                         {
                             var saveParentPath = $"{_targetSaveRootPath}/{item.Key.TrimPath()}";
                             var dirInfo = new DirectoryInfo(saveParentPath);
-                            if(!dirInfo.Exists)
+                            if (!dirInfo.Exists)
                             {
                                 dirInfo.Create();
                             }
@@ -1706,7 +1706,7 @@ namespace MDriveSync.Core
                     _log.LogInformation($"Linux: {isLinux}");
 
                     // 处理 RestoreRootPath
-                    if (IsLinux() && (_jobConfig.Restore?.StartsWith("/") ?? false))
+                    if (isLinux && (_jobConfig.Restore?.StartsWith("/") ?? false))
                     {
                         _tartgetRestoreRootPath = "/" + _jobConfig.Restore.TrimPath();
                     }
@@ -1716,7 +1716,7 @@ namespace MDriveSync.Core
                     }
 
                     // 处理 TargetRootPath
-                    if (IsLinux() && (_jobConfig.Target?.StartsWith("/") ?? false))
+                    if (isLinux && (_jobConfig.Target?.StartsWith("/") ?? false))
                     {
                         _targetSaveRootPath = "/" + _jobConfig.Target.TrimPath();
                     }
@@ -1726,7 +1726,7 @@ namespace MDriveSync.Core
                     }
 
                     // 格式化备份目录
-                    var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
+                    var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Distinct().ToList();
                     _jobConfig.Sources.Clear();
                     foreach (var item in sources)
                     {
@@ -1737,7 +1737,7 @@ namespace MDriveSync.Core
                             {
                                 dir.Create();
                             }
-                            _jobConfig.Sources.Add($"{dir.FullName.TrimPath()}");
+                            _jobConfig.Sources.Add(dir.FullName);
                         }
                         else
                         {
