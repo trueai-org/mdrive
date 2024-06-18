@@ -20,7 +20,6 @@ ARG BUILD_CONFIGURATION=Release
 RUN dotnet publish "./MDriveSync.Client.API.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
-USER root  # 确保以 root 用户运行
 WORKDIR /app
 COPY --from=publish /app/publish .
 ENTRYPOINT ["dotnet", "MDriveSync.Client.API.dll"]

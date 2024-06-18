@@ -16,13 +16,13 @@
 docker pull trueaiorg/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 trueaiorg/mdrive
+ -p 8080:8080 --user root trueaiorg/mdrive
 
 # or ghcr.io
 docker pull ghcr.io/trueai-org/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 ghcr.io/trueai-org/mdrive
+ -p 8080:8080 --user root ghcr.io/trueai-org/mdrive
 ```
 
 > windows 版本
@@ -83,7 +83,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/db:/app/db:rw \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -e READ_ONLY=true \
- -p 18080:8080 trueaiorg/mdrive
+ -p 18080:8080 --user root trueaiorg/mdrive
 
 # 确保目录存在
 # 确保映射/挂载了备份目录
@@ -102,7 +102,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/appsettings.json:/app/appsettings.json:rw \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 trueaiorg/mdrive
+ -p 8080:8080 --user root trueaiorg/mdrive
 
 # 调试日志
 docker logs mdrive
@@ -122,7 +122,7 @@ docker run --name mdrive -d --restart=always \
  -v /home/mdrive/db:/app/db \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
- -p 8080:8080 trueaiorg/mdrive
+ -p 8080:8080 --user root trueaiorg/mdrive
 
 # 更多权限，容器内以 root 用户启动：--user root
 
