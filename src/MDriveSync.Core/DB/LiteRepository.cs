@@ -1,7 +1,6 @@
 ﻿using LiteDB;
 using MDriveSync.Core.Models;
 using ServiceStack;
-using System.Collections.Concurrent;
 
 namespace MDriveSync.Core.DB
 {
@@ -20,18 +19,13 @@ namespace MDriveSync.Core.DB
     {
         private static readonly object _lock = new();
         private readonly LiteDatabase _db;
-        private readonly ConcurrentDictionary<TId, T> _cache = new();
-        private readonly bool? _useCache;
 
         /// <summary>
         /// 创建 LiteDB 数据库的实例。
         /// </summary>
         /// <param name="dbName">数据库名称，例如：log.db</param>
-        /// <param name="noCache">是否使用缓存</param>
-        public LiteRepository(string dbName, bool? noCache = null)
+        public LiteRepository(string dbName)
         {
-            _useCache = noCache;
-
             var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", dbName);
             lock (_lock)
             {
@@ -65,10 +59,6 @@ namespace MDriveSync.Core.DB
         {
             var col = _db.GetCollection<T>();
             col.Insert(entity);
-            if (_useCache == true)
-            {
-                _cache.TryAdd(entity.Id, entity);
-            }
         }
 
         // 批量增加，优化处理超过 10000 条记录的情况
@@ -83,15 +73,6 @@ namespace MDriveSync.Core.DB
             {
                 var batch = entityList.Skip(i).Take(batchSize);
                 col.InsertBulk(batch);
-
-                // 更新缓存
-                if (_useCache == true)
-                {
-                    foreach (var entity in batch)
-                    {
-                        _cache.TryAdd(entity.Id, entity);
-                    }
-                }
             }
         }
 
@@ -100,10 +81,6 @@ namespace MDriveSync.Core.DB
         {
             var col = _db.GetCollection<T>();
             col.Delete(new BsonValue(id));
-            if (_useCache == true)
-            {
-                _cache.TryRemove(id, out _);
-            }
         }
 
         // 修改
@@ -111,45 +88,20 @@ namespace MDriveSync.Core.DB
         {
             var col = _db.GetCollection<T>();
             col.Update(entity);
-            if (_useCache == true)
-            {
-                _cache[entity.Id] = entity;
-            }
         }
 
         // 查询所有
-        public List<T> GetAll(bool? useCache = null)
+        public List<T> GetAll()
         {
-            if (useCache == null)
-                useCache = _useCache;
-
-            if (useCache == true)
-            {
-                if (!_cache.Any())
-                {
-                    return GetAll(false);
-                }
-                return _cache.Values.ToList();
-            }
-            else
-            {
-                var col = _db.GetCollection<T>();
-                return col.FindAll().ToList();
-            }
+            var col = _db.GetCollection<T>();
+            return col.FindAll().ToList();
         }
 
         // 根据ID查询
         public T Get(TId id)
         {
-            if (_useCache == true && _cache.TryGetValue(id, out T entity))
-            {
-                return entity;
-            }
-            else
-            {
-                var col = _db.GetCollection<T>();
-                return col.FindById(new BsonValue(id));
-            }
+            var col = _db.GetCollection<T>();
+            return col.FindById(new BsonValue(id));
         }
     }
 }

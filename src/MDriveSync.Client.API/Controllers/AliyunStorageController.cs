@@ -845,7 +845,7 @@ namespace MDriveSync.Client.API.Controllers
                 _timedHostedService.JobDelete(jobId);
 
                 // 修复 https://github.com/trueai-org/MDriveSync/issues/4
-                var ds = AliyunStorageDb.Instance.DB.GetAll(false);
+                var ds = AliyunStorageDb.Instance.DB.GetAll();
                 foreach (var d in ds)
                 {
                     var jo = d?.Jobs?.FirstOrDefault(x => x.Id == jobId);

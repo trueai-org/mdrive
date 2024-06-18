@@ -138,7 +138,7 @@ namespace MDriveSync.Client.API.Controllers
                 // 删除作业，清除服务
                 _localStorageHostedService.JobDelete(jobId);
 
-                var ds = AliyunStorageDb.Instance.DB.GetAll(false);
+                var ds = AliyunStorageDb.Instance.DB.GetAll();
                 foreach (var d in ds)
                 {
                     var jo = d?.Jobs?.FirstOrDefault(x => x.Id == jobId);
