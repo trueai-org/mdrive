@@ -10,10 +10,10 @@
 
 ### 快速启动
 
-> Docker 版本（近期 docker hub 国内无法使用，可以使用 https://docker.m.daocloud.io 加速，或使用阿里云镜像）
+> Docker 版本
 
 ```bash
-# 阿里云镜像（国内专用）
+# 阿里云镜像（国内推荐使用）
 docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
 docker run --name mdrive -d --restart=always \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
@@ -70,7 +70,22 @@ g. 磁盘挂载支持（可选），下载并安装驱动（http://localhost:808
 
 ### Docker 部署
 
+近期 Docker Hub 国内无法使用，可以使用 https://docker.m.daocloud.io 加速，或使用阿里云镜像。
+
 https://hub.docker.com/r/trueaiorg/mdrive
+
+**从阿里云 Registry 中拉取镜像**
+
+> docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive:[镜像版本号]
+
+**从 Docker Hub 中拉取镜像**
+
+> docker pull trueaiorg/mdrive:[镜像版本号]
+
+**从 GitHub Registry 中拉取镜像**
+
+> docker pull ghcr.io/trueai-org/mdrive:[镜像版本号]
+
 
 ```
 # 拉取镜像
