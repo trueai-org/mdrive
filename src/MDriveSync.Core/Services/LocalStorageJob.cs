@@ -1307,7 +1307,7 @@ namespace MDriveSync.Core
                     {
                         IsFile = false,
                         Hash = string.Empty,
-                        Key = dirInfo.FullName.TrimPath().TrimPrefix(rootInfo.FullName).TrimPath(),
+                        Key = dirInfo.FullName.TrimPrefix(rootInfo.FullName).TrimPath(),
                         Length = 0,
                         FullName = dirInfo.FullName,
                         Name = dirInfo.Name,
@@ -1333,7 +1333,7 @@ namespace MDriveSync.Core
                         {
                             IsFile = true,
                             Hash = string.Empty,
-                            Key = fileInfo.FullName.TrimPath().TrimPrefix(rootInfo.FullName).TrimPath(),
+                            Key = fileInfo.FullName.TrimPrefix(rootInfo.FullName).TrimPath(),
                             Length = fileInfo.Length,
                             FullName = fileInfo.FullName,
                             CreationTime = fileInfo.CreationTime,
@@ -2360,7 +2360,7 @@ namespace MDriveSync.Core
                             IsFile = true,
                             Hash = string.Empty,
                             Length = targetFileInfo.Length,
-                            Key = targetFileInfo.FullName.TrimPath().TrimPrefix(rootInfo.FullName).TrimPath(),
+                            Key = targetFileInfo.FullName.TrimPrefix(rootInfo.FullName).TrimPath(),
                             Name = targetFileInfo.Name,
 
                             IsExists = targetFileInfo.Exists,
