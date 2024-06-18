@@ -123,6 +123,9 @@ docker run --name mdrive -d --restart=always \
  -v /data:/data:ro \
  -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
  -p 8080:8080 trueaiorg/mdrive
+
+# 更多权限，容器内以 root 用户启动：--user root
+
 ```
 
 ### Windows 服务部署

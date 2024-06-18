@@ -607,7 +607,7 @@ namespace MDriveSync.Core
                     // 如果目标目录不存在，则创建
                     if (!_targetFolders.ContainsKey(item.Key))
                     {
-                        var saveParentPath = $"{_targetSaveRootPath}/{item.Key}".TrimPath();
+                        var saveParentPath = $"{_targetSaveRootPath}/{item.Key.TrimPath()}";
                         var dirInfo = new DirectoryInfo(saveParentPath);
                         if (!dirInfo.Exists)
                         {
@@ -1700,14 +1700,25 @@ namespace MDriveSync.Core
 
                     _log.LogInformation($"Linux: {isLinux}");
 
-                    // 格式化路径
-                    _tartgetRestoreRootPath = _jobConfig.Restore.TrimPath();
-                    if (isLinux && !string.IsNullOrWhiteSpace(_tartgetRestoreRootPath))
+                    // 处理 RestoreRootPath
+                    if (IsLinux() && (_jobConfig.Restore?.StartsWith("/") ?? false))
                     {
-                        _tartgetRestoreRootPath = $"/{_tartgetRestoreRootPath}";
+                        _tartgetRestoreRootPath = "/" + _jobConfig.Restore.TrimPath();
+                    }
+                    else
+                    {
+                        _tartgetRestoreRootPath = _jobConfig.Restore.TrimPath();
                     }
 
-                    _targetSaveRootPath = _jobConfig.Target.TrimPrefix();
+                    // 处理 TargetRootPath
+                    if (IsLinux() && (_jobConfig.Target?.StartsWith("/") ?? false))
+                    {
+                        _targetSaveRootPath = "/" + _targetSaveRootPath.TrimPath(); ;
+                    }
+                    else
+                    {
+                        _targetSaveRootPath = _jobConfig.Target.TrimPath();
+                    }
 
                     // 格式化备份目录
                     var sources = _jobConfig.Sources.Where(c => !string.IsNullOrWhiteSpace(c)).Select(c => c.TrimPath()).Distinct().ToList();
@@ -2494,8 +2505,7 @@ namespace MDriveSync.Core
         private void InitTargetRootPath()
         {
             // 目标根目录初始化
-            var rootPath = _targetSaveRootPath.TrimPath();
-            var rootInfo = new DirectoryInfo(rootPath);
+            var rootInfo = new DirectoryInfo(_targetSaveRootPath);
             if (!rootInfo.Exists)
             {
                 rootInfo.Create();
