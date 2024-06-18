@@ -1428,28 +1428,6 @@ namespace MDriveSync.Core
         }
 
         /// <summary>
-        /// 清理下载缓存
-        /// </summary>
-        private void ClearDownloadCache(string saveRootPath)
-        {
-            // 清理临时文件
-            var tempPath = Path.Combine(saveRootPath, ".duplicaticache");
-            if (Directory.Exists(tempPath))
-            {
-                Directory.Delete(tempPath, true);
-            }
-
-            var tmpFiles = Directory.GetFiles(saveRootPath, "*.duplicatidownload", SearchOption.AllDirectories);
-            foreach (var file in tmpFiles)
-            {
-                if (File.Exists(file))
-                {
-                    File.Delete(file);
-                }
-            }
-        }
-
-        /// <summary>
         /// 获取文件夹路径 key
         /// 将本地路径转为 {备份根目录}/{子目录}
         /// </summary>
@@ -1461,8 +1439,8 @@ namespace MDriveSync.Core
             var baseDirInfo = new DirectoryInfo(rootDirFullPath);
             var baseDirName = baseDirInfo.Name;
 
-            var subPath = directoryInfo.FullName.TrimPrefix(rootDirFullPath);
-            return $"{baseDirName}/{subPath.TrimPath()}";
+            var subPath = directoryInfo.FullName.TrimPath().TrimPrefix(rootDirFullPath.TrimPath());
+            return $"{baseDirName}/{subPath.TrimPath()}".TrimPath();
         }
 
         /// <summary>
@@ -1476,23 +1454,8 @@ namespace MDriveSync.Core
             var rootInfo = new DirectoryInfo(rootPath);
             var rootPathName = rootInfo.Name;
 
-            var subPath = fileFullPath.TrimPrefix(rootInfo.FullName);
-            return $"{rootPathName}/{subPath.TrimPath()}";
-        }
-
-        /// <summary>
-        /// 获取文件路径 key
-        /// </summary>
-        /// <param name="rootPath"></param>
-        /// <param name="fileInfo"></param>
-        /// <returns></returns>
-        private string GetFileKeyPath(string rootPath, FileInfo fileInfo)
-        {
-            var rootInfo = new DirectoryInfo(rootPath);
-            var rootName = rootInfo.Name;
-
-            var subPath = Path.GetDirectoryName(fileInfo.FullName).TrimPrefix(rootInfo.FullName);
-            return $"{rootName}/{subPath.TrimPath()}";
+            var subPath = fileFullPath.TrimPath().TrimPrefix(rootInfo.FullName.TrimPath());
+            return $"{rootPathName}/{subPath.TrimPath()}".TrimPath();
         }
 
         /// <summary>

@@ -1641,7 +1641,7 @@ namespace MDriveSync.Core
         private string GetDirectoryKey(string localRootPath, DirectoryInfo directoryInfo)
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
-            var subPath = directoryInfo.FullName.TrimPrefix(localRootInfo.FullName);
+            var subPath = directoryInfo.FullName.TrimPath().TrimPrefix(localRootInfo.FullName.TrimPath());
             return $"{localRootInfo.Name}/{subPath}".TrimPath();
         }
 
@@ -1654,7 +1654,7 @@ namespace MDriveSync.Core
         private string GetFileKey(string localRootPath, string fileFullPath)
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
-            var subPath = fileFullPath.TrimPrefix(localRootInfo.FullName);
+            var subPath = fileFullPath.TrimPath().TrimPrefix(localRootInfo.FullName.TrimPath());
             return $"{localRootInfo.Name}/{subPath}".TrimPath();
         }
 
@@ -1667,10 +1667,7 @@ namespace MDriveSync.Core
         private string GetFileKeyPath(string localRootPath, FileInfo fileInfo)
         {
             var localRootInfo = new DirectoryInfo(localRootPath);
-
-            // fix: GetDirectoryName none / end
-            var subPath = Path.GetDirectoryName(fileInfo.FullName).TrimPath()
-            .TrimPrefix(localRootInfo.FullName.TrimPath());
+            var subPath = Path.GetDirectoryName(fileInfo.FullName).TrimPath().TrimPrefix(localRootInfo.FullName.TrimPath());
             return $"{localRootInfo.Name}/{subPath}".TrimPath();
         }
 
