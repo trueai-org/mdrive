@@ -31,7 +31,7 @@ namespace MDriveSync.Core
         // 下载速度限制（字节/秒）
         private int downloadSpeedLimit = 0;
 
-        private LiteRepository<DownloadTask, string> _taskDb = new("task.db", false);
+        private LiteRepository<DownloadTask, string> _taskDb = new("mdrive.db", false);
 
         private LiteRepository<DownloadManagerSetting, string> _settingDb = new("mdrive.db", false);
 
