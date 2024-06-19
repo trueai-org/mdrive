@@ -42,6 +42,18 @@ docker run --name mdrive -d --restart=always \
  -v /etc/localtime:/etc/localtime:ro \
  -v /etc/timezone:/etc/timezone:ro \
  ghcr.io/trueai-org/mdrive
+
+# 演示站点启动配置
+docker pull registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
+docker run --name mdrive -d --restart=always \
+ -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456 \
+ -e DEMO=true \
+ -p 8080:8080 --user root \
+ -v /root/mdrive/data:/app/data:rw \
+ -e TZ=Asia/Shanghai \
+ -v /etc/localtime:/etc/localtime:ro \
+ -v /etc/timezone:/etc/timezone:ro \
+ registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
 ```
 
 > Windows 版本
