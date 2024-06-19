@@ -209,6 +209,7 @@ docker run --name mdrive -d --restart=always \
 
 - 只读模式：WebUI 下如果开启只读模式，则允许编辑和修改，只能查看，默认 `ReadOnly: false`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e READ_ONLY=true`。
 - 基础认证：WebUI 账号和密码，如果开启则打开网站管理后台时需要输入账号和密码，默认启用 `BasicAuth`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 ` -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456`。
+- 演示模式：网站配置为演示模式，只能查看和下载，功能受限，默认 `Demo: null`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e DEMO=true`。
 
 ## 系统配置
 
@@ -221,6 +222,10 @@ docker run --name mdrive -d --restart=always \
 {
   // 网站配置为只读模式
   "ReadOnly": null,
+
+  // 网站配置为演示模式
+  "Demo": null,
+
   // 网站登录授权账号密码
   "BasicAuth": {
     "User": "",
@@ -468,6 +473,7 @@ docker run --name mdrive -d --restart=always \
 
 ## 路线图
 
+- [3.5] 支持 Linux 磁盘挂载。
 - [3.x] 支持超时自动锁定管理后台。
 - [3.x] 支持在线上传。
 - [3.x] 多模块支持，支持 Duplicati、Kopia 模块，直接进行加密。

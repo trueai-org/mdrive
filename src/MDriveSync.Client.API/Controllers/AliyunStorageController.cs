@@ -57,6 +57,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpGet("export")]
         public IActionResult Export()
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             var aliyunDriveConfigs = AliyunStorageDb.Instance.DB.GetAll();
             var localJobConfigs = LocalStorageDb.Instance.DB.GetAll();
 
@@ -81,6 +86,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("import")]
         public Result Import([FromForm] IFormFile file)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             if (file == null)
             {
                 return Result.Fail("文件不能为空");
@@ -162,6 +172,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("mount/{driveId}")]
         public Result DriveMount(string driveId)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveMount(driveId);
             return Result.Ok();
         }
@@ -174,6 +189,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("unmount/{driveId}")]
         public Result DriveUnmount(string driveId)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveUnmount(driveId);
             return Result.Ok();
         }
@@ -186,6 +206,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("job/mount/{jobId}")]
         public Result DriveJobMount(string jobId)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveJobMount(jobId);
             return Result.Ok();
         }
@@ -198,6 +223,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("job/unmount/{jobId}")]
         public Result DriveJobUnmount(string jobId)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveJobUnmount(jobId);
             return Result.Ok();
         }
@@ -767,6 +797,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost()]
         public Result DriveAdd([FromBody] AliyunDriveEditRequest cfg)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveAdd(cfg);
             return Result.Ok();
         }
@@ -780,6 +815,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPut("{driveId}")]
         public Result DriveEdit(string driveId, [FromBody] AliyunDriveEditRequest cfg)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveEdit(driveId, cfg);
             return Result.Ok();
         }
@@ -792,6 +832,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpDelete("{driveId}")]
         public Result DriveDelete(string driveId)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.DriveDelete(driveId);
             return Result.Ok();
         }
@@ -819,6 +864,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("job/{driveId}")]
         public Result JobAdd(string driveId, [FromBody] AliyunJobConfig cfg)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _timedHostedService.JobAdd(driveId, cfg);
             return Result.Ok();
         }
@@ -832,6 +882,14 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPut("job/{jobId}/{state}")]
         public Result JobStateChange(string jobId, JobState state)
         {
+            if (state == JobState.Deleted)
+            {
+                if (GlobalConfiguration.IsDemoMode == true)
+                {
+                    throw new LogicException("演示模式，禁止操作");
+                }
+            }
+
             var jobs = _timedHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {

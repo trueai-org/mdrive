@@ -2,6 +2,7 @@
 using MDriveSync.Core.DB;
 using MDriveSync.Core.Models;
 using MDriveSync.Core.ViewModels;
+using MDriveSync.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MDriveSync.Client.API.Controllers
@@ -61,6 +62,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost()]
         public Result StorageAdd([FromBody] LocalStorageEditRequest cfg)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _localStorageHostedService.DriveAdd(cfg.Name);
             return Result.Ok();
         }
@@ -74,6 +80,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPut("{storageId}")]
         public Result StorageEdit(string storageId, [FromBody] LocalStorageEditRequest cfg)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _localStorageHostedService.DriveEdit(storageId, cfg.Name);
             return Result.Ok();
         }
@@ -86,6 +97,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpDelete("{storageId}")]
         public Result StorageDelete(string storageId)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _localStorageHostedService.DriveDelete(storageId);
             return Result.Ok();
         }
@@ -113,6 +129,11 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPost("job/{storageId}")]
         public Result JobAdd(string storageId, [FromBody] LocalJobConfig cfg)
         {
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                throw new LogicException("演示模式，禁止操作");
+            }
+
             _localStorageHostedService.JobAdd(storageId, cfg);
             return Result.Ok();
         }
@@ -126,6 +147,14 @@ namespace MDriveSync.Client.API.Controllers
         [HttpPut("job/{jobId}/{state}")]
         public Result JobStateChange(string jobId, JobState state)
         {
+            if (state == JobState.Deleted)
+            {
+                if (GlobalConfiguration.IsDemoMode == true)
+                {
+                    throw new LogicException("演示模式，禁止操作");
+                }
+            }
+
             var jobs = _localStorageHostedService.Jobs();
             if (jobs.TryGetValue(jobId, out var job) && job != null)
             {

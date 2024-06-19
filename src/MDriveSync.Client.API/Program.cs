@@ -3,6 +3,7 @@ using MDriveSync.Core.BaseAuth;
 using MDriveSync.Core.Dashboard;
 using MDriveSync.Core.Filters;
 using MDriveSync.Core.Middlewares;
+using MDriveSync.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Quartz.Logging;
 using Serilog;
@@ -160,6 +161,7 @@ namespace MDriveSync.Client.API
                 var passwordFromConfig = builder.Configuration["BasicAuth:Password"];
                 var user = string.IsNullOrEmpty(userFromConfig) ?
                                Environment.GetEnvironmentVariable("BASIC_AUTH_USER") : userFromConfig;
+
                 var password = string.IsNullOrEmpty(passwordFromConfig) ?
                                   Environment.GetEnvironmentVariable("BASIC_AUTH_PASSWORD") : passwordFromConfig;
 
@@ -202,10 +204,22 @@ namespace MDriveSync.Client.API
                         isReadOnlyMode = ro;
                     }
                 }
+
                 if (isReadOnlyMode == true)
                 {
                     app.UseMiddleware<ReadOnlyMiddleware>(isReadOnlyMode);
                 }
+
+                // 演示模式处理
+                var isDemoMode = builder.Configuration.GetSection("Demo").Get<bool?>();
+                if (isDemoMode != true)
+                {
+                    if (bool.TryParse(Environment.GetEnvironmentVariable("DEMO"), out var demo) && demo)
+                    {
+                        isDemoMode = demo;
+                    }
+                }
+                GlobalConfiguration.IsDemoMode = isDemoMode;
 
                 app.MapControllers();
 

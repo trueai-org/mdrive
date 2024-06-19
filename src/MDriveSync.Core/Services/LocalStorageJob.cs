@@ -970,6 +970,16 @@ namespace MDriveSync.Core
                 throw new LogicException("参数错误，请填写必填选项，且符合规范");
             }
 
+            if (GlobalConfiguration.IsDemoMode == true)
+            {
+                if (_jobConfig.Sources.Except(cfg.Sources).Any()
+                    || cfg.Sources.Except(_jobConfig.Sources).Any()
+                    || _jobConfig.Target != cfg.Target)
+                {
+                    throw new LogicException("演示模式，禁止修改来源和目标");
+                }
+            }
+
             var allowJobStates = new[] { JobState.Idle, JobState.Error, JobState.Cancelled, JobState.Disabled, JobState.Completed };
             if (!allowJobStates.Contains(CurrentState))
             {
