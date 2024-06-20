@@ -34,11 +34,10 @@ jobs:
           echo "发布目录内容："
           dir src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish
 
-      - name: 删除 PDB 和 XML 文件
+      - name: 删除 PDB 和 部分XML 文件
         run: |
           # 删除目录中的 .pdb 和 .xml 文件（如果存在）
           Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.pdb -Force -ErrorAction SilentlyContinue
-          Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.xml -Force -ErrorAction SilentlyContinue
 
       - name: 压缩构建产物
         run: |
