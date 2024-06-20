@@ -1,0 +1,56 @@
+name: Build and Release .NET Application
+
+on:
+  push:
+    branches:
+      - main  # 修改为你的主分支名称
+
+jobs:
+  build_and_release:
+    name: 构建并发布 .NET 应用程序
+    runs-on: windows-latest
+
+    steps:
+      - name: 检出仓库代码
+        uses: actions/checkout@v3  # 使用最新稳定版本
+
+      - name: 设置 .NET 环境
+        uses: actions/setup-dotnet@v3  # 使用最新稳定版本
+        with:
+          dotnet-version: '8.0.x'  # 确保使用的 .NET 版本与你的项目版本匹配
+
+      - name: 构建并发布 .NET 应用程序
+        run: |
+          dotnet publish src/MDriveSync.Client.API/Properties/PublishProfiles/Client.Publish.SelfContained.win.x64.pubxml -c Release -o publish
+
+      - name: 删除 PDB 和 XML 文件
+        run: |
+          # 删除目录中的 .pdb 和 .xml 文件（如果存在）
+          Remove-Item publish/*.pdb -Force -ErrorAction SilentlyContinue
+          Remove-Item publish/*.xml -Force -ErrorAction SilentlyContinue
+
+      - name: 压缩构建产物
+        run: |
+          # 将发布目录中的文件压缩为 zip 文件
+          Compress-Archive -Path publish/* -DestinationPath "MDrive-win-x64-v${{ github.sha }}.zip"
+
+      - name: 创建 GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: "v${{ github.sha }}"
+          release_name: "Release v${{ github.sha }}"
+          draft: false
+          prerelease: false
+
+      - name: 上传 ZIP 文件到 release
+        uses: actions/upload-release-asset@v2  # 使用最新稳定版本
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: "MDrive-win-x64-v${{ github.sha }}.zip"
+          asset_name: "MDrive-win-x64-v${{ github.sha }}.zip"
+          asset_content_type: application/zip
