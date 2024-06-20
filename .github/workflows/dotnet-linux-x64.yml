@@ -51,6 +51,10 @@ jobs:
           mkdir -p temp_publish
           cp -r src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/* temp_publish/
 
+      - name: 复制 run_app.sh 脚本
+        run: |
+          cp src/scripts/run_app.sh temp_publish/
+
       - name: 压缩构建产物
         run: |
           # 将发布目录中的文件压缩为 zip 文件
