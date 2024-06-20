@@ -72,7 +72,7 @@ g. 磁盘挂载支持（可选），下载并安装驱动（http://localhost:808
 
 ```bash
 a. 通过 https://github.com/trueai-org/mdrive/releases 下载 linux 最新免安装版，例如：MDrive-linux-x64.zip
-b. 解压到当前目录: tar -xzf MDrive-linux-x64-v3.2.11-alpha.tar.gz
+b. 解压到当前目录: tar -xzf MDrive-linux-x64-<VERSION>.tar.gz
 c. 执行: run_app.sh
 c. 启动方式1: sh run_app.sh
 d. 启动方式2: chmod +x run_app.sh && ./run_app.sh
