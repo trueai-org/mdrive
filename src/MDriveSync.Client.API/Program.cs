@@ -286,15 +286,15 @@ namespace MDriveSync.Client.API
                 }
 
                 // 根据不同的操作系统使用不同的命令
-                if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                if (GlobalConfiguration.IsWindows())
                 {
                     Process.Start(new ProcessStartInfo("cmd", $"/c start {url}")); // Windows
                 }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+                else if (GlobalConfiguration.IsLinux())
                 {
                     // Process.Start("xdg-open", url); // Linux
                 }
-                else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+                else if (GlobalConfiguration.IsMacOS())
                 {
                     Process.Start("open", url); // MacOS
                 }
