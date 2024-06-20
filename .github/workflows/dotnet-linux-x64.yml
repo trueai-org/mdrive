@@ -50,7 +50,7 @@ jobs:
       - name: 检查 ZIP 文件
         run: |
           echo "生成的 ZIP 文件："
-          ls "MDrive-linux-x64-v${{ github.event.release.tag_name }}.zip"
+          ls "MDrive-linux-x64-${{ github.event.release.tag_name }}.zip"
 
       - name: 上传 ZIP 文件到 release
         uses: actions/upload-release-asset@v1  # 使用最新稳定版本
