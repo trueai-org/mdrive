@@ -46,10 +46,17 @@ jobs:
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/WinSW-x64.exe
           rm -rf src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/wwwroot/driver/
 
+      - name: 创建临时目录并复制发布文件
+        run: |
+          mkdir -p temp_publish
+          cp -r src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/* temp_publish/
+
       - name: 压缩构建产物
         run: |
           # 将发布目录中的文件压缩为 zip 文件
-          zip -r "MDrive-linux-x64-${{ github.event.release.tag_name }}.zip" src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*
+          cd temp_publish
+          zip -r "../MDrive-linux-x64-${{ github.event.release.tag_name }}.zip" ./*
+          cd ..
 
       - name: 检查 ZIP 文件
         run: |
