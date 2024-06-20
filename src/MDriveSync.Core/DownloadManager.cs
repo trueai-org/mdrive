@@ -235,9 +235,19 @@ namespace MDriveSync.Core
             }
 
             // 根据平台类型返回特定的文件夹
-            if (Platform.IsClientWindows)
+            if (GlobalConfiguration.IsWindows())
             {
                 // Windows平台的特殊文件夹
+                return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            }
+            else if (GlobalConfiguration.IsMacOS())
+            {
+                // MacOS平台的特殊文件夹
+                return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            }
+            else if (GlobalConfiguration.IsLinux())
+            {
+                // Linux平台的特殊文件夹
                 return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             }
             else
@@ -245,6 +255,7 @@ namespace MDriveSync.Core
                 // 非Windows平台的特殊文件夹
                 return Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             }
+
         }
 
         /// <summary>
@@ -258,7 +269,7 @@ namespace MDriveSync.Core
                 if (downloadTask.Status == DownloadStatus.Completed)
                 {
                     // 根据平台类型打开文件夹
-                    if (Platform.IsClientWindows)
+                    if (GlobalConfiguration.IsWindows())
                     {
                         // 如果下载完成，则打开文件夹并选中文件
                         Process.Start("explorer.exe", "/select," + downloadTask.FilePath);
@@ -271,7 +282,7 @@ namespace MDriveSync.Core
                 else
                 {
                     // 打开对应的文件夹，不选中文件
-                    if (Platform.IsClientWindows)
+                    if (GlobalConfiguration.IsWindows())
                     {
                         Process.Start("explorer.exe", "/select," + Path.GetDirectoryName(downloadTask.FilePath));
                     }
