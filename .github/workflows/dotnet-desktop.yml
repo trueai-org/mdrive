@@ -23,10 +23,17 @@ jobs:
         run: dotnet restore src/MDriveSync.Client.API
 
       - name: 列出目录内容 (调试步骤)
-        run: dir src/MDriveSync.Client.API/Properties/PublishProfiles
+        run: |
+          echo "PublishProfiles 目录内容："
+          dir src/MDriveSync.Client.API/Properties/PublishProfiles
 
       - name: 构建并发布 .NET 应用程序
         run: dotnet publish src/MDriveSync.Client.API -c Release /p:PublishProfile=Client.Publish.SelfContained.win.x64.pubxml
+
+      - name: 列出发布目录内容 (调试步骤)
+        run: |
+          echo "发布目录内容："
+          dir src/MDriveSync.Client.API/bin/Release/net8.0/publish
 
       - name: 删除 PDB 和 XML 文件
         run: |
