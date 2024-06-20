@@ -1,9 +1,8 @@
 name: Build and Release .NET Application
 
 on:
-  push:
-    branches:
-      - main  # 修改为你的主分支名称
+  release:
+    types: [published]
 
 jobs:
   build_and_release:
@@ -44,25 +43,14 @@ jobs:
       - name: 压缩构建产物
         run: |
           # 将发布目录中的文件压缩为 zip 文件
-          Compress-Archive -Path src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/* -DestinationPath "MDrive-win-x64-v${{ github.sha }}.zip"
-
-      - name: 创建 GitHub Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: "v${{ github.sha }}"
-          release_name: "Release v${{ github.sha }}"
-          draft: false
-          prerelease: false
+          Compress-Archive -Path src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/* -DestinationPath "MDrive-win-x64-v${{ github.event.release.tag_name }}.zip"
 
       - name: 上传 ZIP 文件到 release
         uses: actions/upload-release-asset@v1  # 使用最新稳定版本
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: "MDrive-win-x64-v${{ github.sha }}.zip"
-          asset_name: "MDrive-win-x64-v${{ github.sha }}.zip"
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: "MDrive-win-x64-v${{ github.event.release.tag_name }}.zip"
+          asset_name: "MDrive-win-x64-v${{ github.event.release.tag_name }}.zip"
           asset_content_type: application/zip
