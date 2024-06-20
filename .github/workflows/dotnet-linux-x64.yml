@@ -44,6 +44,7 @@ jobs:
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*.xml
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*.bat
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/WinSW-x64.exe
+          rm -rf src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/wwwroot/driver/
 
       - name: 压缩构建产物
         run: |
