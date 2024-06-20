@@ -56,7 +56,7 @@ docker run --name mdrive -d --restart=always \
  registry.cn-guangzhou.aliyuncs.com/trueai-org/mdrive
 ```
 
-> Windows 版本（不需要安装 dotnet 环境）
+> Windows 版本
 
 ```bash
 a. 通过 https://github.com/trueai-org/mdrive/releases 下载 windows 最新免安装版，例如：MDrvie-win-x64.zip
@@ -68,7 +68,7 @@ f. 使用系统自带的 `任务计划程序`（可选），创建基本任务�
 g. 磁盘挂载支持（可选），下载并安装驱动（http://localhost:8080/driver/Dokan_x64.msi），将云盘挂载到本地，像管理本地文件一样管理远程文件。
 ```
 
-> Linux 版本（不需要安装 dotnet 环境）
+> Linux 版本
 
 ```bash
 a. 通过 https://github.com/trueai-org/mdrive/releases 下载 linux 最新免安装版，例如：MDrive-linux-x64.zip
