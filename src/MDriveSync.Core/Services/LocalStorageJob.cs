@@ -1633,24 +1633,6 @@ namespace MDriveSync.Core
             return ld;
         }
 
-        /// <summary>
-        /// 判断是否是 Windows 系统
-        /// </summary>
-        /// <returns></returns>
-        private static bool IsWindows()
-        {
-            return RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
-        }
-
-        /// <summary>
-        /// 判断是否是 Linux 系统
-        /// </summary>
-        /// <returns></returns>
-        private static bool IsLinux()
-        {
-            return RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
-        }
-
         #endregion 私有方法
 
         #region 本地存储
@@ -1674,12 +1656,14 @@ namespace MDriveSync.Core
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    var isLinux = IsLinux();
+                    var isLinux = GlobalConfiguration.IsLinux();
+                    var isMacOS = GlobalConfiguration.IsMacOS();
+                    var isWindows = GlobalConfiguration.IsWindows();
 
-                    _log.LogInformation($"Linux: {isLinux}");
+                    _log.LogInformation($"Linux: {isLinux}, macOS: {isMacOS}, Windows: {isWindows}");
 
                     // 处理 RestoreRootPath
-                    if (isLinux && (_jobConfig.Restore?.StartsWith("/") ?? false))
+                    if ((isLinux || isMacOS) && (_jobConfig.Restore?.StartsWith("/") ?? false))
                     {
                         _tartgetRestoreRootPath = "/" + _jobConfig.Restore.TrimPath();
                     }
@@ -1689,7 +1673,7 @@ namespace MDriveSync.Core
                     }
 
                     // 处理 TargetRootPath
-                    if (isLinux && (_jobConfig.Target?.StartsWith("/") ?? false))
+                    if ((isLinux || isMacOS) && (_jobConfig.Target?.StartsWith("/") ?? false))
                     {
                         _targetSaveRootPath = "/" + _jobConfig.Target.TrimPath();
                     }
@@ -1703,7 +1687,7 @@ namespace MDriveSync.Core
                     _jobConfig.Sources.Clear();
                     foreach (var item in sources)
                     {
-                        if (isLinux && item.StartsWith('/'))
+                        if ((isLinux || isMacOS) && item.StartsWith('/'))
                         {
                             var dir = new DirectoryInfo(item);
                             if (!dir.Exists)
@@ -1790,7 +1774,7 @@ namespace MDriveSync.Core
                                             try
                                             {
                                                 // 如果是 windows 平台并且启动回收站
-                                                if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                if (GlobalConfiguration.IsWindows() && _jobConfig.IsRecycleBin)
                                                 {
                                                     // 删除文件夹到系统回收站
                                                     // 将文件移动到回收站
@@ -1840,7 +1824,7 @@ namespace MDriveSync.Core
                                                 {
                                                     try
                                                     {
-                                                        if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                        if (GlobalConfiguration.IsWindows() && _jobConfig.IsRecycleBin)
                                                         {
                                                             // 删除文件到系统回收站
                                                             // 将文件移动到回收站
@@ -1889,7 +1873,7 @@ namespace MDriveSync.Core
                                             {
                                                 try
                                                 {
-                                                    if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                    if (GlobalConfiguration.IsWindows() && _jobConfig.IsRecycleBin)
                                                     {
                                                         // 删除文件到系统回收站
                                                         // 将文件移动到回收站
@@ -1934,7 +1918,7 @@ namespace MDriveSync.Core
                                             {
                                                 try
                                                 {
-                                                    if (IsWindows() && _jobConfig.IsRecycleBin)
+                                                    if (GlobalConfiguration.IsWindows() && _jobConfig.IsRecycleBin)
                                                     {
                                                         // 删除文件到系统回收站
                                                         // 将文件移动到回收站

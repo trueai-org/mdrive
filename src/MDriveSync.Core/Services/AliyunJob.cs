@@ -1862,12 +1862,15 @@ namespace MDriveSync.Core
                     var sw = new Stopwatch();
                     sw.Start();
 
-                    var isLinux = RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
-                    _log.LogInformation($"Linux: {isLinux}");
+                    var isLinux = GlobalConfiguration.IsLinux();
+                    var isMacOS = GlobalConfiguration.IsMacOS();
+                    var isWindows = GlobalConfiguration.IsWindows();
+
+                    _log.LogInformation($"Linux: {isLinux}, macOS: {isMacOS}, Windows: {isWindows}");
 
                     // 处理 RestoreRootPath
-                    if (isLinux && (_jobConfig.Restore?.StartsWith("/") ?? false))
+                    if ((isLinux || isMacOS) && (_jobConfig.Restore?.StartsWith("/") ?? false))
                     {
                         _localRestorePath = "/" + _jobConfig.Restore.TrimPath();
                     }
@@ -1883,7 +1886,7 @@ namespace MDriveSync.Core
                     _jobConfig.Sources.Clear();
                     foreach (var item in sources)
                     {
-                        if (isLinux && item.StartsWith('/'))
+                        if ((isLinux || isMacOS) && item.StartsWith('/'))
                         {
                             var dir = new DirectoryInfo(item);
                             if (!dir.Exists)
