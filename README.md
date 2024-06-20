@@ -95,7 +95,7 @@ d. 启动方式2: chmod +x run_app_osx.sh && ./run_app_osx.sh
 
 ![作业](/docs/screenshots/job.gif)
 ![挂载](/docs/screenshots/mount.png)
-
+![macOS](/docs/screenshots/macOS.png)
 
 ### 压缩与加密
 
