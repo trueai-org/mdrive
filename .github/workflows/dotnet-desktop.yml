@@ -19,13 +19,14 @@ jobs:
         with:
           dotnet-version: '8.0.x'  # 确保使用的 .NET 版本与你的项目版本匹配
 
+      - name: 还原 NuGet 包
+        run: dotnet restore src/MDriveSync.Client.API
+
       - name: 列出目录内容 (调试步骤)
-        run: |
-          dir src/MDriveSync.Client.API/Properties/PublishProfiles
+        run: dir src/MDriveSync.Client.API/Properties/PublishProfiles
 
       - name: 构建并发布 .NET 应用程序
-        run: |
-          dotnet publish src/MDriveSync.Client.API --no-build -c Release /p:PublishProfile=Client.Publish.SelfContained.win.x64.pubxml
+        run: dotnet publish src/MDriveSync.Client.API -c Release /p:PublishProfile=Client.Publish.SelfContained.win.x64.pubxml
 
       - name: 删除 PDB 和 XML 文件
         run: |
