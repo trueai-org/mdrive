@@ -41,6 +41,9 @@ jobs:
         run: |
           # 删除目录中的 .pdb 文件（如果存在）
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*.pdb
+          rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*.xml
+          rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*.bat
+          rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/WinSW-x64.exe
 
       - name: 压缩构建产物
         run: |
