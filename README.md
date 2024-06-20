@@ -2,7 +2,7 @@
 
 多平台、模块化、可挂载、安全、加密的云盘自动同步、备份工具，支持本地存储、阿里云盘等，支持镜像、备份等同步模式，完全免费开源。
 
-提供 Docker、Windows、Linux、Web 等多平台版本。
+提供 Docker、Windows、Linux、macOS、Web 等多平台版本。
 
 支持 **AES256-GCM、ChaCha20-Poly1305** 加密，支持 **Zstd、LZ4、Snappy** 压缩，支持 **SHA256、BLAKE3** 等哈希算法，**任何第三方、服务商都无法查看数据，保护您的数据安全和隐私**。
 
