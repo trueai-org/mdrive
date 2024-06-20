@@ -4,6 +4,9 @@ on:
   release:
     types: [published]
 
+permissions:
+  contents: write  # 确保有写入发布的权限
+
 jobs:
   build_and_release:
     name: 构建并发布 .NET 应用程序
@@ -34,15 +37,20 @@ jobs:
           echo "发布目录内容："
           dir src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish
 
-      - name: 删除 PDB 和 部分XML 文件
+      - name: 删除 PDB 和部分 XML 文件
         run: |
-          # 删除目录中的 .pdb 和 .xml 文件（如果存在）
+          # 删除目录中的 .pdb 和部分 .xml 文件（如果存在）
           Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.pdb -Force -ErrorAction SilentlyContinue
 
       - name: 压缩构建产物
         run: |
           # 将发布目录中的文件压缩为 zip 文件
           Compress-Archive -Path src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/* -DestinationPath "MDrive-win-x64-v${{ github.event.release.tag_name }}.zip"
+
+      - name: 检查 ZIP 文件
+        run: |
+          echo "生成的 ZIP 文件："
+          dir MDrive-win-x64-v${{ github.event.release.tag_name }}.zip
 
       - name: 上传 ZIP 文件到 release
         uses: actions/upload-release-asset@v1  # 使用最新稳定版本
