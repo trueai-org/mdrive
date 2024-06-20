@@ -82,9 +82,9 @@ d. 启动方式2: chmod +x run_app.sh && ./run_app.sh
 ```bash
 a. 通过 https://github.com/trueai-org/mdrive/releases 下载 macOS 最新免安装版，例如：MDrive-osx-x64.zip
 b. 解压到当前目录: tar -xzf MDrive-osx-x64-<VERSION>.tar.gz
-c. 执行: run_app.sh
-c. 启动方式1: sh run_app.sh
-d. 启动方式2: chmod +x run_app.sh && ./run_app.sh
+c. 执行: run_app_osx.sh
+c. 启动方式1: sh run_app_osx.sh
+d. 启动方式2: chmod +x run_app_osx.sh && ./run_app_osx.sh
 ```
 
 ### 在线预览

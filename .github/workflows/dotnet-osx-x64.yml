@@ -50,7 +50,7 @@ jobs:
         run: |
           mkdir -p temp_publish
           cp -r src/MDriveSync.Client.API/bin/Release/net8.0/osx-x64/publish/* temp_publish/
-          cp scripts/run_app.sh temp_publish/
+          cp scripts/run_app_osx.sh temp_publish/
 
       - name: 压缩构建产物为 tar.gz
         run: |

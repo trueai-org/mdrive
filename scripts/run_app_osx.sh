@@ -12,6 +12,9 @@ if [ ! -f "$DIR/$APP_NAME" ]; then
   exit 1
 fi
 
+# 移除应用程序的隔离属性
+xattr -d com.apple.quarantine "$DIR/$APP_NAME"
+
 # 赋予应用程序执行权限
 chmod +x "$DIR/$APP_NAME"
 
