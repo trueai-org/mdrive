@@ -37,7 +37,6 @@ namespace MDriveSync.Infrastructure
         public static bool IsMacOS()
         {
             return RuntimeInformation.IsOSPlatform(OSPlatform.OSX)
-                || Environment.OSVersion.Platform == PlatformID.Unix
                 || Environment.OSVersion.Platform == PlatformID.MacOSX;
         }
     }
