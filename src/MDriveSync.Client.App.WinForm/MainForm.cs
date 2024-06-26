@@ -75,7 +75,7 @@ namespace MDriveSync.Client.App.WinForm
         {
             this.Show();
             this.WindowState = FormWindowState.Normal;
-            notifyIcon.Visible = false;
+            notifyIcon.Visible = true; // 始终显示
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
