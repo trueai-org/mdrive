@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+ï»¿using Microsoft.Extensions.Configuration;
 using Microsoft.Web.WebView2.WinForms;
 using System.Reflection;
 
@@ -16,7 +16,7 @@ namespace MDriveSync.Client.WinFormAPI
         {
             InitializeComponent();
 
-            // ´ÓÅäÖÃÎÄ¼şÖĞ¶ÁÈ¡ URL£¬Èç¹ûÃ»ÓĞÔòÊ¹ÓÃÄ¬ÈÏÖµ
+            // ä»é…ç½®æ–‡ä»¶ä¸­è¯»å– URLï¼Œå¦‚æœæ²¡æœ‰åˆ™ä½¿ç”¨é»˜è®¤å€¼
             var configuration = Program.Configuration;
             apiUrl = configuration.GetValue<string>("urls")?.Replace("*", "localhost") ?? "http://localhost:8080";
 
@@ -24,7 +24,7 @@ namespace MDriveSync.Client.WinFormAPI
             webView = new WebView2
             {
                 Dock = DockStyle.Fill,
-                Source = new Uri($"{apiUrl}") // Ö¸Ïò Web API µÄ URL
+                Source = new Uri($"{apiUrl}") // æŒ‡å‘ Web API çš„ URL
             };
             this.Controls.Add(webView);
 
@@ -36,14 +36,14 @@ namespace MDriveSync.Client.WinFormAPI
                 Visible = true
             };
 
-            // Ê¹ÓÃ×ÊÔ´ÖĞµÄ PNG Í¼Ïñ
+            // ä½¿ç”¨èµ„æºä¸­çš„ PNG å›¾åƒ
             this.Icon = LoadIconFromResource("MDriveSync.Client.WinFormAPI.Resources.logo.png", 64, 64);
 
             notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
 
             // Initialize ContextMenuStrip
             contextMenuStrip = new ContextMenuStrip();
-            exitMenuItem = new ToolStripMenuItem("ÍË³ö", null, ExitMenuItem_Click);
+            exitMenuItem = new ToolStripMenuItem("é€€å‡º", null, ExitMenuItem_Click);
             contextMenuStrip.Items.Add(exitMenuItem);
             notifyIcon.ContextMenuStrip = contextMenuStrip;
 
@@ -70,17 +70,17 @@ namespace MDriveSync.Client.WinFormAPI
         {
             if (e.CloseReason == CloseReason.UserClosing)
             {
-                e.Cancel = true; // È¡Ïû¹Ø±Õ²Ù×÷
-                this.WindowState = FormWindowState.Minimized; // ×îĞ¡»¯´°¿Ú
-                this.Hide(); // Òş²Ø´°¿Ú
-                notifyIcon.Visible = true; // ÏÔÊ¾ NotifyIcon
+                e.Cancel = true; // å–æ¶ˆå…³é—­æ“ä½œ
+                this.WindowState = FormWindowState.Minimized; // æœ€å°åŒ–çª—å£
+                this.Hide(); // éšè—çª—å£
+                notifyIcon.Visible = true; // æ˜¾ç¤º NotifyIcon
             }
         }
 
         private void ExitMenuItem_Click(object sender, EventArgs e)
         {
             notifyIcon.Visible = false;
-            notifyIcon.Dispose(); // È·±£Í¼±ê±»ÊÍ·Å
+            notifyIcon.Dispose(); // ç¡®ä¿å›¾æ ‡è¢«é‡Šæ”¾
             Application.Exit();
         }
 

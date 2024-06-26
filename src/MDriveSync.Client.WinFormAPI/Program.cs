@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Hosting;
+锘縰sing Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -30,11 +30,11 @@ namespace MDriveSync.Client.WinFormAPI
                 {
                     var env = context.HostingEnvironment;
 
-                    // 添加 appsettings.json 配置文件
+                    // 娣诲姞 appsettings.json 閰嶇疆鏂囦欢
                     config.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                           .AddJsonFile($"appsettings.{env.EnvironmentName}.json", optional: true, reloadOnChange: true);
 
-                    // 添加环境变量
+                    // 娣诲姞鐜鍙橀噺
                     config.AddEnvironmentVariables();
                 })
                 .ConfigureWebHostDefaults(webBuilder =>

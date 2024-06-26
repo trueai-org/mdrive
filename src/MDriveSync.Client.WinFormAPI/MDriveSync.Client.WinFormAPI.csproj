@@ -43,6 +43,12 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<None Update="zh\**\*">
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
+		</None>
+	</ItemGroup>
+	
+	<ItemGroup>
 		<ProjectReference Include="..\MDriveSync.Client.App\MDriveSync.Client.App.csproj" />
 	</ItemGroup>
 
