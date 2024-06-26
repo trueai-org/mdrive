@@ -1,4 +1,4 @@
-﻿namespace MDriveSync.Client.WinFormAPI
+﻿namespace MDriveSync.Client.App.WinForm
 {
     partial class MainForm
     {

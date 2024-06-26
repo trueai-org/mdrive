@@ -5,7 +5,7 @@ using Microsoft.Extensions.Hosting;
 using Serilog;
 using Serilog.Debugging;
 
-namespace MDriveSync.Client.WinFormAPI
+namespace MDriveSync.Client.App.WinForm
 {
     internal static class Program
     {

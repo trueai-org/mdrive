@@ -31,9 +31,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Infrastructure",
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{3CE27DBE-FA45-41B6-A170-A721CD66562B}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Client.WinFormAPI", "src\MDriveSync.Client.WinFormAPI\MDriveSync.Client.WinFormAPI.csproj", "{585E1ED7-B1D9-4EEE-AF65-32853A05FA9E}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Client.App", "src\MDriveSync.Client.App\MDriveSync.Client.App.csproj", "{F648E4A2-E525-426F-A12C-F9ADAF8E211D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Client.App", "src\MDriveSync.Client.App\MDriveSync.Client.App.csproj", "{F648E4A2-E525-426F-A12C-F9ADAF8E211D}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MDriveSync.Client.App.WinForm", "src\MDriveSync.Client.App.WinForm\MDriveSync.Client.App.WinForm.csproj", "{664D3037-D417-43A4-B9A8-2909C5D9D874}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -65,14 +65,14 @@ Global
 		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{4D5DF593-BC91-4803-99AA-7872DFA98987}.Release|Any CPU.Build.0 = Release|Any CPU
-		{585E1ED7-B1D9-4EEE-AF65-32853A05FA9E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{585E1ED7-B1D9-4EEE-AF65-32853A05FA9E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{585E1ED7-B1D9-4EEE-AF65-32853A05FA9E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{585E1ED7-B1D9-4EEE-AF65-32853A05FA9E}.Release|Any CPU.Build.0 = Release|Any CPU
 		{F648E4A2-E525-426F-A12C-F9ADAF8E211D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{F648E4A2-E525-426F-A12C-F9ADAF8E211D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F648E4A2-E525-426F-A12C-F9ADAF8E211D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F648E4A2-E525-426F-A12C-F9ADAF8E211D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{664D3037-D417-43A4-B9A8-2909C5D9D874}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{664D3037-D417-43A4-B9A8-2909C5D9D874}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{664D3037-D417-43A4-B9A8-2909C5D9D874}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{664D3037-D417-43A4-B9A8-2909C5D9D874}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

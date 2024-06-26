@@ -2,7 +2,7 @@
 using Microsoft.Web.WebView2.WinForms;
 using System.Reflection;
 
-namespace MDriveSync.Client.WinFormAPI
+namespace MDriveSync.Client.App.WinForm
 {
     public partial class MainForm : Form
     {
