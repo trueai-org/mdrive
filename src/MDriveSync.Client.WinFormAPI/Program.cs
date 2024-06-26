@@ -39,7 +39,7 @@ namespace MDriveSync.Client.WinFormAPI
                 })
                 .ConfigureWebHostDefaults(webBuilder =>
                 {
-                    webBuilder.UseStartup<MDriveSync.Client.API.Startup>();
+                    webBuilder.UseStartup<App.Startup>();
                 })
                 .UseSerilog((context, services, configuration) =>
                 {

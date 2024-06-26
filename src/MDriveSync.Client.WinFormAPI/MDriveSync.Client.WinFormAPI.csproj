@@ -5,6 +5,9 @@
 		<TargetFramework>net8.0-windows</TargetFramework>
 		<UseWindowsForms>true</UseWindowsForms>
 		<ImplicitUsings>enable</ImplicitUsings>
+		<SatelliteResourceLanguages>zh</SatelliteResourceLanguages>
+		<InvariantGlobalization>true</InvariantGlobalization>
+		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
 	</PropertyGroup>
 
 	<ItemGroup>
@@ -12,15 +15,11 @@
 	</ItemGroup>
 
 	<ItemGroup>
-		<ProjectReference Include="..\MDriveSync.Client.API\MDriveSync.Client.API.csproj" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Update="appsettings.Development.json">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</None>
 		<None Update="appsettings.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+
+			<!-- 排除它们从单文件发布 -->
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</None>
 	</ItemGroup>
 
@@ -28,15 +27,23 @@
 		<Content Include="..\MDriveSync.Client.API\wwwroot\**\*">
 			<Link>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</Link>
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+
+			<!-- 排除它们从单文件发布 -->
+			<ExcludeFromSingleFile>true</ExcludeFromSingleFile>
 		</Content>
 	</ItemGroup>
 
 	<ItemGroup>
-	  <None Remove="Resources\logo.png" />
+		<None Remove="Resources\logo.png" />
 	</ItemGroup>
 
 	<ItemGroup>
-	  <EmbeddedResource Include="Resources\logo.png" />
+		<EmbeddedResource Include="Resources\logo.png" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\MDriveSync.Client.App\MDriveSync.Client.App.csproj" />
 	</ItemGroup>
 
 </Project>

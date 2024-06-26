@@ -1,3 +1,4 @@
+using MDriveSync.Client.App;
 using MDriveSync.Infrastructure;
 using Quartz.Logging;
 using Serilog;

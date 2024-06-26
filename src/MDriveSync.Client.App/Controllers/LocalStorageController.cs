@@ -5,7 +5,7 @@ using MDriveSync.Core.ViewModels;
 using MDriveSync.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 
-namespace MDriveSync.Client.API.Controllers
+namespace MDriveSync.Client.App.Controllers
 {
     /// <summary>
     /// 本地存储控制器

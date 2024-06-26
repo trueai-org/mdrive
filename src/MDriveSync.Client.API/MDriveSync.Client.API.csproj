@@ -15,6 +15,7 @@
 	</ItemGroup>
 
 	<ItemGroup>
+		<ProjectReference Include="..\MDriveSync.Client.App\MDriveSync.Client.App.csproj" />
 		<ProjectReference Include="..\MDriveSync.Core\MDriveSync.Core.csproj" />
 	</ItemGroup>
 

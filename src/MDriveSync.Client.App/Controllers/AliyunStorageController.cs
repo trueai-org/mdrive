@@ -6,12 +6,13 @@ using MDriveSync.Core.Options;
 using MDriveSync.Core.ViewModels;
 using MDriveSync.Infrastructure;
 using MDriveSync.Security;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Net.Http.Headers;
 using Newtonsoft.Json;
 using System.Text;
 
-namespace MDriveSync.Client.API.Controllers
+namespace MDriveSync.Client.App.Controllers
 {
     /// <summary>
     /// 阿里云盘存储控制器

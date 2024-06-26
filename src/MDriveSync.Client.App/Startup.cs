@@ -4,10 +4,14 @@ using MDriveSync.Core.Dashboard;
 using MDriveSync.Core.Filters;
 using MDriveSync.Core.Middlewares;
 using MDriveSync.Infrastructure;
+using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Serilog;
 
-namespace MDriveSync.Client.API
+namespace MDriveSync.Client.App
 {
     public class Startup
     {
@@ -49,7 +53,7 @@ namespace MDriveSync.Client.API
             services.AddHostedService(provider => provider.GetRequiredService<LocalStorageHostedService>());
         }
 
-        public void Configure(IApplicationBuilder app, IWebHostEnvironment env)
+        public void Configure(IApplicationBuilder app, IHostEnvironment env)
         {
             if (env.IsDevelopment())
             {
