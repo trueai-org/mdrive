@@ -54,6 +54,7 @@ jobs:
             rm -f src/MDriveSync.Client.API/bin/Release/net8.0/linux-x64/publish/*.pdb
           else
             echo "Preserving .pdb files for pre-release versions..."
+          fi
             
       - name: 创建临时目录并复制发布文件
         run: |
