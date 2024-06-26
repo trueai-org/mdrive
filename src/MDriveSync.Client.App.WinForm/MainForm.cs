@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Web.WebView2.WinForms;
+using Serilog;
 using System.Reflection;
 
 namespace MDriveSync.Client.App.WinForm
@@ -16,38 +17,49 @@ namespace MDriveSync.Client.App.WinForm
         {
             InitializeComponent();
 
-            // 从配置文件中读取 URL，如果没有则使用默认值
-            var configuration = Program.Configuration;
-            apiUrl = configuration.GetValue<string>("urls")?.Replace("*", "localhost") ?? "http://localhost:8080";
-
-            // Initialize WebView2
-            webView = new WebView2
+            try
             {
-                Dock = DockStyle.Fill,
-                Source = new Uri($"{apiUrl}") // 指向 Web API 的 URL
-            };
-            this.Controls.Add(webView);
+                // 从配置文件中读取 URL，如果没有则使用默认值
+                var configuration = Program.Configuration;
+                apiUrl = configuration.GetValue<string>("urls")?.Replace("*", "localhost") ?? "http://localhost:8080";
 
-            // Initialize NotifyIcon
-            notifyIcon = new NotifyIcon
+                // Initialize WebView2
+                webView = new WebView2
+                {
+                    Dock = DockStyle.Fill,
+                    Source = new Uri($"{apiUrl}") // 指向 Web API 的 URL
+                };
+                this.Controls.Add(webView);
+
+                // Initialize NotifyIcon
+                notifyIcon = new NotifyIcon
+                {
+                    Icon = this.Icon,
+                    Text = "MDrive",
+                    Visible = true
+                };
+
+                // 使用资源中的 PNG 图像
+                // 获取当前程序集名称，而不是写死
+                var assemblyName = Assembly.GetExecutingAssembly().GetName().Name;
+                this.Icon = LoadIconFromResource($"{assemblyName}.Resources.logo.png", 64, 64);
+
+                notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
+
+                // Initialize ContextMenuStrip
+                contextMenuStrip = new ContextMenuStrip();
+                exitMenuItem = new ToolStripMenuItem("退出", null, ExitMenuItem_Click);
+                contextMenuStrip.Items.Add(exitMenuItem);
+                notifyIcon.ContextMenuStrip = contextMenuStrip;
+
+                this.Resize += MainForm_Resize;
+            }
+            catch (Exception ex)
             {
-                Icon = this.Icon,
-                Text = "MDrive",
-                Visible = true
-            };
+                Log.Logger.Error(ex, "初始化失败，请重试");
 
-            // 使用资源中的 PNG 图像
-            this.Icon = LoadIconFromResource("MDriveSync.Client.WinFormAPI.Resources.logo.png", 64, 64);
-
-            notifyIcon.DoubleClick += NotifyIcon_DoubleClick;
-
-            // Initialize ContextMenuStrip
-            contextMenuStrip = new ContextMenuStrip();
-            exitMenuItem = new ToolStripMenuItem("退出", null, ExitMenuItem_Click);
-            contextMenuStrip.Items.Add(exitMenuItem);
-            notifyIcon.ContextMenuStrip = contextMenuStrip;
-
-            this.Resize += MainForm_Resize;
+                MessageBox.Show("初始化失败，请重试");
+            }
         }
 
         private void MainForm_Resize(object sender, EventArgs e)
