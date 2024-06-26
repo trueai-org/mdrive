@@ -40,11 +40,20 @@ jobs:
       - name: 删除 PDB 和部分 XML 文件
         run: |
           # 删除目录中的 .pdb 文件（如果存在）
-          rm -f src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/*.pdb
+          # rm -f src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/*.pdb
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/*.xml
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/*.bat
           rm -f src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/WinSW-x64.exe
           rm -rf src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/wwwroot/driver/
+          
+      - name: 条件性删除 PDB 文件
+        run: |
+          # 根据版本标签包含 beta, rc, alpha 的条件来决定是否删除 .pdb 文件
+          if [[ ! "${{ github.event.release.tag_name }}" =~ (beta|rc|alpha) ]]; then
+            echo "Deleting .pdb files..."
+            rm -f src/MDriveSync.Client.API/bin/Release/net8.0/osx-arm64/publish/*.pdb
+          else
+            echo "Preserving .pdb files for pre-release versions..."
 
       - name: 创建临时目录并复制发布文件
         run: |

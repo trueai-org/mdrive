@@ -37,10 +37,20 @@ jobs:
           echo "发布目录内容："
           dir src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish
 
-      - name: 删除 PDB 和部分 XML 文件
+      # - name: 删除 PDB 和部分 XML 文件
+      #   run: |
+      #     # 删除目录中的 .pdb 和部分 .xml 文件（如果存在）
+      #     Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.pdb -Force -ErrorAction SilentlyContinue
+
+      - name: 条件性删除 PDB 文件
         run: |
-          # 删除目录中的 .pdb 和部分 .xml 文件（如果存在）
-          Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.pdb -Force -ErrorAction SilentlyContinue
+          $tagName = "${{ github.event.release.tag_name }}"
+          if (-not ($tagName -match "beta|rc|alpha")) {
+            echo "Deleting .pdb files..."
+            Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.pdb -Force -ErrorAction SilentlyContinue
+          } else {
+            echo "Preserving .pdb files for pre-release versions..."
+          }
 
       - name: 压缩构建产物
         run: |
