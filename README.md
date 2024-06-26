@@ -241,6 +241,7 @@ docker run --name mdrive -d --restart=always \
 - 只读模式：WebUI 下如果开启只读模式，则允许编辑和修改，只能查看，默认 `ReadOnly: false`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e READ_ONLY=true`。
 - 基础认证：WebUI 账号和密码，如果开启则打开网站管理后台时需要输入账号和密码，默认启用 `BasicAuth`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 ` -e BASIC_AUTH_USER=admin -e BASIC_AUTH_PASSWORD=123456`。
 - 演示模式：网站配置为演示模式，只能查看和下载，功能受限，默认 `Demo: null`。使用方式，可以通过修改 `appsettings.json` 或 docker 使用环境变量 `-e DEMO=true`。
+- 调试模式：非正式版（alpha、beta、rc）默认输出调试错误代码行号，正式版不包含 `.pdb` 文件。
 
 ## 系统配置
 
