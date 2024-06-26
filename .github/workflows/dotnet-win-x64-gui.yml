@@ -55,12 +55,12 @@ jobs:
       - name: 压缩构建产物
         run: |
           # 将发布目录中的文件压缩为 zip 文件
-          Compress-Archive -Path src/MDriveSync.Client.WinFormAPI/bin/Release/net8.0-windows/publish/win-x64/* -DestinationPath "MDrive-win-gui-x64-${{ github.event.release.tag_name }}.zip"
+          Compress-Archive -Path src/MDriveSync.Client.WinFormAPI/bin/Release/net8.0-windows/publish/win-x64/* -DestinationPath "MDrive-win-x64-gui-${{ github.event.release.tag_name }}.zip"
 
       - name: 检查 ZIP 文件
         run: |
           echo "生成的 ZIP 文件："
-          dir MDrive-win-gui-x64-${{ github.event.release.tag_name }}.zip
+          dir MDrive-win-x64-gui-${{ github.event.release.tag_name }}.zip
 
       - name: 上传 ZIP 文件到 release
         uses: actions/upload-release-asset@v1  # 使用最新稳定版本
@@ -68,6 +68,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "MDrive-win-gui-x64-${{ github.event.release.tag_name }}.zip"
-          asset_name: "MDrive-win-gui-x64-${{ github.event.release.tag_name }}.zip"
+          asset_path: "MDrive-win-x64-gui-${{ github.event.release.tag_name }}.zip"
+          asset_name: "MDrive-win-x64-gui-${{ github.event.release.tag_name }}.zip"
           asset_content_type: application/zip
