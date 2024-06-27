@@ -478,7 +478,7 @@ namespace MDriveSync.Core
                     //await Task.Delay(20000, cancellationToken);
 
                     // 实现文件作业逻辑
-                    await StartSyncJob(cancellationToken);
+                    StartSyncJob(cancellationToken);
 
                     //ChangeState(JobState.Idle);
 
@@ -496,10 +496,16 @@ namespace MDriveSync.Core
 
                     ChangeState(JobState.Error);
                 }
+
+                await Task.CompletedTask;
             });
         }
 
-        public async Task StartSyncJob(CancellationToken cancellationToken)
+        /// <summary>
+        /// 开始作业
+        /// </summary>
+        /// <param name="cancellationToken"></param>
+        public void StartSyncJob(CancellationToken cancellationToken)
         {
             if (cancellationToken.IsCancellationRequested)
             {
@@ -553,25 +559,27 @@ namespace MDriveSync.Core
 
                 sw.Stop();
                 _log.LogInformation($"同步作业完成，用时：{sw.ElapsedMilliseconds}ms");
+
+                // 开始校验
+                sw.Restart();
+                _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
+
+                ChangeState(JobState.Verifying);
+
+                SyncVerify();
+
+                sw.Stop();
+                _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
+
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "同步作业完成执行异常");
+
+                throw ex;
             }
 
-            // 开始校验
-            sw.Restart();
-            _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
-
-            ChangeState(JobState.Verifying);
-
-            SyncVerify();
-
-            sw.Stop();
-            _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
-
             swAll.Stop();
-
             ProcessMessage = $"执行完成，总用时 {swAll.ElapsedMilliseconds / 1000} 秒";
         }
 
