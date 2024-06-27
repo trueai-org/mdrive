@@ -11,7 +11,6 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
 using System.Net;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -682,7 +681,7 @@ namespace MDriveSync.Core
                 }
 
                 // 加载所有文件列表
-                AliyunDriveSearchFiles(_driveId);
+                AliyunDriveSearchFiles();
 
                 // 加载备份文件夹下的所有文件夹
                 //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
@@ -696,21 +695,23 @@ namespace MDriveSync.Core
 
                 sw.Stop();
                 _log.LogInformation($"同步作业完成，用时：{sw.ElapsedMilliseconds}ms");
+
+                // 开始校验
+                sw.Restart();
+                _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
+                ChangeState(JobState.Verifying);
+
+                await AliyunDriveVerify();
+
+                sw.Stop();
+                _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
+
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "同步作业完成执行异常");
+                throw ex;
             }
-
-            // 开始校验
-            sw.Restart();
-            _log.LogInformation($"同步作业结束：{DateTime.Now:G}");
-            ChangeState(JobState.Verifying);
-
-            await AliyunDriveVerify();
-
-            sw.Stop();
-            _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
 
             swAll.Stop();
 
@@ -875,7 +876,7 @@ namespace MDriveSync.Core
                 _log.LogInformation("加载云盘存储文件列表...");
 
                 // 所有文件列表
-                AliyunDriveSearchFiles(_driveId);
+                AliyunDriveSearchFiles();
 
                 //await FetchAllFilesAsync(_driveId, saveParentFileId, 100);
 
@@ -2154,7 +2155,7 @@ namespace MDriveSync.Core
         /// <param name="driveId"></param>
         /// <param name="limit"></param>
         /// <returns></returns>
-        private void AliyunDriveSearchFiles(string driveId, int limit = 100)
+        private void AliyunDriveSearchFiles(int limit = 100)
         {
             try
             {
