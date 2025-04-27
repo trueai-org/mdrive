@@ -6,6 +6,16 @@
 
 支持 **AES256-GCM、ChaCha20-Poly1305** 加密，支持 **Zstd、LZ4、Snappy** 压缩，支持 **SHA256、BLAKE3** 等哈希算法，**任何第三方、服务商都无法查看数据，保护您的数据安全和隐私**。
 
+## 预览
+
+> 账号：admin，密码：123456
+
+<http://g.googlec.cc:18080/>
+
+![作业](/docs/screenshots/job.gif)
+![挂载](/docs/screenshots/mount.png)
+![macOS](/docs/screenshots/macOS.png)
+
 ## 安装与使用
 
 ### 快速启动
@@ -86,16 +96,6 @@ c. 执行: run_app_osx.sh
 c. 启动方式1: sh run_app_osx.sh
 d. 启动方式2: chmod +x run_app_osx.sh && ./run_app_osx.sh
 ```
-
-### 在线预览
-
-> 账号：admin，密码：123456
-
-<http://8.138.19.239:8080>
-
-![作业](/docs/screenshots/job.gif)
-![挂载](/docs/screenshots/mount.png)
-![macOS](/docs/screenshots/macOS.png)
 
 ### 压缩与加密
 
