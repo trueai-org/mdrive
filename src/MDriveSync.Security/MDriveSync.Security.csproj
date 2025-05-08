@@ -12,6 +12,7 @@
 		<PackageReference Include="EasyCompressor.Snappier" Version="2.0.2" />
 		<PackageReference Include="EasyCompressor.ZstdSharp" Version="2.0.2" />
 		<PackageReference Include="FastMember" Version="1.5.0" />
+		<PackageReference Include="System.IO.Hashing" Version="9.0.4" />
 		<PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
 		<PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="8.0.0" />
 
