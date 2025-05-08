@@ -4,11 +4,12 @@
 
 提供 Docker、Windows、Linux、macOS、Web 等多平台版本。
 
+> 任何第三方、服务商都无法查看数据，保护您的数据安全和隐私。
+
 - 加密算法：**AES256-GCM（默认）、ChaCha20-Poly1305**
 - 压缩算法：**Zstd（默认）、LZ4、Snappy**
 - 哈希算法：**SHA256（默认）、SHA1、SHA3、MD5、XXH3、XXH128、BLAKE3**
 
-**任何第三方、服务商都无法查看数据，保护您的数据安全和隐私。**
 
 ## 预览
 
