@@ -11,8 +11,8 @@
 - 加密算法：**AES256-GCM（Default）、ChaCha20-Poly1305。**
 - 压缩算法：**Zstd（Default）、LZ4、Snappy。**
 - 哈希算法：**SHA256（Default）、SHA1、SHA3、MD5、XXH3、XXH128、BLAKE3。**
-- 分块算法：**Buzhash+（Default）、FastCDC+、FastCDC**
-- 分块策略：**Balanced（Default）、Dynamic、Fixed**
+- 分块算法：**Buzhash+（Default）、FastCDC+、FastCDC。**
+- 分块策略：**Balanced（Default）、Dynamic、Fixed。**
 
 ## 预览
 
