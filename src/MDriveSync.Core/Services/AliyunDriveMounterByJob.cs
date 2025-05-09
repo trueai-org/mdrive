@@ -192,7 +192,8 @@ namespace MDriveSync.Core.Services
                             };
                             // 使用 Range 请求下载文件的特定部分
                             int endOffset = (int)offset + buffer.Length - 1;
-                            var content = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                            var content = DownloadFileSegment(url, (int)offset, endOffset)
+                            .ConfigureAwait(false).GetAwaiter().GetResult();
                             return content;
                         });
                         isCached = true;
@@ -229,7 +230,8 @@ namespace MDriveSync.Core.Services
                         }
 
                         int endOffset = (int)offset + buffer.Length - 1;
-                        partialContent = DownloadFileSegment(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                        partialContent = DownloadFileSegment(url, (int)offset, endOffset)
+                            .ConfigureAwait(false).GetAwaiter().GetResult();
                     }
 
                     // 确保不会复制超出 buffer 大小的数据

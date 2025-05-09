@@ -423,7 +423,8 @@ namespace MDriveSync.Core.Services
                             // 使用 Range 请求下载文件的特定部分
                             //int endOffset = (int)offset + buffer.Length - 1;
                             int endOffset = (int)Math.Min(offset + buffer.Length - 1, (int)f.Size - 1);
-                            var content = DownloadFile(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                            var content = DownloadFile(url, (int)offset, endOffset)
+                            .ConfigureAwait(false).GetAwaiter().GetResult();
                             return content;
                         });
                         isCached = true;
@@ -461,7 +462,8 @@ namespace MDriveSync.Core.Services
 
                         //int endOffset = (int)offset + buffer.Length - 1;
                         int endOffset = (int)Math.Min(offset + buffer.Length - 1, (int)f.Size - 1);
-                        partialContent = DownloadFile(url, (int)offset, endOffset).GetAwaiter().GetResult();
+                        partialContent = DownloadFile(url, (int)offset, endOffset)
+                            .ConfigureAwait(false).GetAwaiter().GetResult();
                     }
 
                     //if (fileName.Contains("jpg"))
@@ -740,7 +742,8 @@ namespace MDriveSync.Core.Services
                             if (item.PartNumber < ps.Count && item.CurrentSize >= _uploadPartSize)
                             {
                                 // 非最后一个分块
-                                AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl).GetAwaiter().GetResult();
+                                AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl)
+                                    .ConfigureAwait(false).GetAwaiter().GetResult();
                                 item.IsUploaded = true;
                             }
                             else if (item.PartNumber == ps.Count)
@@ -756,7 +759,8 @@ namespace MDriveSync.Core.Services
                                 {
                                     // 分块上传
                                     // 最后一块上传
-                                    AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl).GetAwaiter().GetResult();
+                                    AliyunDrivePartUpload(item.LocalFilePath, item.UploadUrl)
+                                        .ConfigureAwait(false).GetAwaiter().GetResult();
                                     item.IsUploaded = true;
                                 }
                             }
@@ -923,7 +927,8 @@ namespace MDriveSync.Core.Services
                         if (currentPart.CurrentSize >= _uploadPartSize && !currentPart.IsUploaded)
                         {
                             // 分块上传
-                            AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl).GetAwaiter().GetResult();
+                            AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl)
+                                .ConfigureAwait(false).GetAwaiter().GetResult();
                             currentPart.IsUploaded = true;
                         }
 
@@ -940,7 +945,8 @@ namespace MDriveSync.Core.Services
                             {
                                 // 分块上传
                                 // 最后一块上传
-                                AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl).GetAwaiter().GetResult();
+                                AliyunDrivePartUpload(currentPart.LocalFilePath, currentPart.UploadUrl)
+                                    .ConfigureAwait(false).GetAwaiter().GetResult();
                                 currentPart.IsUploaded = true;
                             }
                         }
