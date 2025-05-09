@@ -5,6 +5,8 @@ namespace MDriveSync.Security
 {
     /// <summary>
     /// 压缩解压函数
+    /// 推荐算法：LZ4/Zstd/Snappy
+    /// 支持算法：LZ4/Zstd/Snappy/LZMA/Deflate/Brotli
     /// </summary>
     public static class CompressionHelper
     {
@@ -37,6 +39,9 @@ namespace MDriveSync.Security
                 "LZ4" => LZ4Compressor.Shared.Compress(buffer),
                 "Zstd" => ZstdSharpCompressor.Shared.Compress(buffer),
                 "Snappy" => SnappierCompressor.Shared.Compress(buffer),
+                "LZMA" => LZMACompressor.Shared.Compress(buffer),
+                "Deflate" => DeflateCompressor.Shared.Compress(buffer),
+                "Brotli" => BrotliCompressor.Shared.Compress(buffer),
                 _ => buffer
             };
 
@@ -81,6 +86,9 @@ namespace MDriveSync.Security
                 "LZ4" => LZ4Compressor.Shared.Decompress(buffer),
                 "Zstd" => ZstdSharpCompressor.Shared.Decompress(buffer),
                 "Snappy" => SnappierCompressor.Shared.Decompress(buffer),
+                "LZMA" => LZMACompressor.Shared.Compress(buffer),
+                "Deflate" => DeflateCompressor.Shared.Compress(buffer),
+                "Brotli" => BrotliCompressor.Shared.Compress(buffer),
                 _ => buffer
             };
 

@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "MDriveSync.Test": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "DOTNET_SYSTEM_CONSOLE_ALLOW_ANSI_COLOR_REDIRECTION": "True"
+      }
+    }
+  }
+}
