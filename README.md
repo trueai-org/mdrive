@@ -8,11 +8,11 @@
 
 提供 Docker、Windows、Linux、macOS、Web、Cli 等多平台版本。
 
-- 加密算法：**AES256-GCM（默认）、ChaCha20-Poly1305。**
-- 压缩算法：**Zstd（默认）、LZ4、Snappy。**
-- 哈希算法：**SHA256（默认）、SHA1、SHA3、MD5、XXH3、XXH128、BLAKE3。**
-- 分块算法：**Buzhash+（默认）、FastCDC+、FastCDC**
-- 分块策略：**Balanced（默认）、Dynamic、Fixed**
+- 加密算法：**AES256-GCM（Default）、ChaCha20-Poly1305。**
+- 压缩算法：**Zstd（Default）、LZ4、Snappy。**
+- 哈希算法：**SHA256（Default）、SHA1、SHA3、MD5、XXH3、XXH128、BLAKE3。**
+- 分块算法：**Buzhash+（Default）、FastCDC+、FastCDC**
+- 分块策略：**Balanced（Default）、Dynamic、Fixed**
 
 ## 预览
 
