@@ -50,22 +50,6 @@ namespace MDriveSync.Test
 
                 foreach (var processorCount in processorCounts)
                 {
-                    // 测试GetFiles方法
-                    Console.WriteLine($"  测试GetFiles方法 (并行度: {processorCount})");
-                    for (int i = 0; i < iterations; i++)
-                    {
-                        var stopwatch = new Stopwatch();
-                        stopwatch.Start();
-                        var fileInfos = FileSearcher.GetFiles(directory, processorCount, true);
-                        stopwatch.Stop();
-                        double searchTime = stopwatch.Elapsed.TotalMilliseconds;
-
-                        Console.WriteLine($"    迭代 {i + 1}: 搜索时间 = {searchTime:F2} ms, 文件数 = {fileInfos.Count}");
-
-                        // 清理
-                        GC.Collect();
-                        Thread.Sleep(50);
-                    }
 
                     // 测试 UltraFastScanner
                     Console.WriteLine($"  测试UltraFastScanner方法 (并行度: {processorCount})");
@@ -90,6 +74,25 @@ namespace MDriveSync.Test
                         GC.Collect();
                         Thread.Sleep(50);
                     }
+
+                    // 测试GetFiles方法
+                    Console.WriteLine($"  测试GetFiles方法 (并行度: {processorCount})");
+                    for (int i = 0; i < iterations; i++)
+                    {
+                        var stopwatch = new Stopwatch();
+                        stopwatch.Start();
+                        var fileInfos = FileSearcher.GetFiles(directory, processorCount, true);
+                        stopwatch.Stop();
+                        double searchTime = stopwatch.Elapsed.TotalMilliseconds;
+
+                        Console.WriteLine($"    迭代 {i + 1}: 搜索时间 = {searchTime:F2} ms, 文件数 = {fileInfos.Count}");
+
+                        // 清理
+                        GC.Collect();
+                        Thread.Sleep(50);
+                    }
+
+                  
                 }
             }
 

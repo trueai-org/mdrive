@@ -1,5 +1,6 @@
 ﻿using MDriveSync.Core.Services;
 using MDriveSync.Security;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 
 namespace MDriveSync.Client
@@ -13,19 +14,6 @@ namespace MDriveSync.Client
             var ignorePatterns = FileIgnoreHelper.BuildIgnorePatterns("**/node_modules/*", "**/bin/*", "**/obj/*");
             Console.WriteLine($"开始扫描目录: {rootPath}");
 
-            // 示例使用方法
-
-            sw.Start();
-            var files = FileFastScanner.EnumerateFiles(
-                rootPath,
-                "*.*",
-                ignorePatterns,
-                maxDegreeOfParallelism: 4,
-                errorHandler: (path, ex) => Console.WriteLine($"Error processing {path}: {ex.Message}")
-            ).ToList();
-            sw.Stop();
-
-            Console.WriteLine($"扫描完成! 耗时: {sw.Elapsed.TotalSeconds:F2} 秒, count: {files.Count}");
 
             var cts = new CancellationTokenSource();
 
@@ -36,6 +24,25 @@ namespace MDriveSync.Client
                 cts.Cancel();
                 e.Cancel = true;
             };
+
+            var progress = new Progress<FileFastScanner.ScanProgress>(p =>
+            {
+                Console.Write($"\r文件: {p.FileCount:N0}, 目录: {p.DirectoryCount:N0}, " +
+                            $"耗时: {p.ElapsedTime.TotalSeconds}s, 速度: {(int)p.ItemsPerSecond}/s");
+            });
+
+            sw.Start();
+            var fileRes = FileFastScanner.ScanAsync(
+                rootPath,
+                "*.*",
+                ignorePatterns,
+                maxDegreeOfParallelism: 4,
+                progress: progress,
+                cancellationToken: cts.Token
+            );
+            sw.Stop();
+            Console.WriteLine($"扫描完成! 耗时: {sw.Elapsed.TotalSeconds:F2} 秒, count: {fileRes.Files.Count}");
+
 
             try
             {
@@ -59,6 +66,48 @@ namespace MDriveSync.Client
                 Console.WriteLine($"总项目数: {result.FileCount + result.DirectoryCount:N0}");
                 Console.WriteLine($"扫描耗时: {result.ElapsedTime.TotalSeconds:F2} 秒");
                 Console.WriteLine($"处理速度: {result.ItemsPerSecond:N0} 项/秒");
+
+                var f1Files = new ConcurrentDictionary<string, byte>();
+                foreach (var file in fileRes.Files)
+                {
+                    f1Files.TryAdd(file, 0);
+                }
+
+                var f2Files = new ConcurrentDictionary<string, byte>();
+                foreach (var file in result.Files)
+                {
+                    f2Files.TryAdd(file, 0);
+                }
+
+                // 比较f1 与 f2 的差异，如果 f1中有而 f2 中没有，则输出
+                var f1Only = f1Files.Keys.Except(f2Files.Keys).ToList();
+                if (f1Only.Count > 0)
+                {
+                    Console.WriteLine($"\n\nf1中有而f2中没有的文件: {f1Only.Count}");
+                    foreach (var file in f1Only)
+                    {
+                        Console.WriteLine(file);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("\nf1与f2完全一致");
+                }
+
+                // 比较f2 与 f1 的差异，如果 f2中有而 f1 中没有，则输出
+                var f2Only = f2Files.Keys.Except(f1Files.Keys).ToList();
+                if (f2Only.Count > 0)
+                {
+                    Console.WriteLine($"\n\nf2中有而f1中没有的文件: {f2Only.Count}");
+                    foreach (var file in f2Only)
+                    {
+                        Console.WriteLine(file);
+                    }
+                }
+                else
+                {
+                    Console.WriteLine("\nf2与f1完全一致");
+                }
 
                 if (result.Errors.Count > 0)
                 {
