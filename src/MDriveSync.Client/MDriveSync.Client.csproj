@@ -8,7 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\MDriveSync.Core\MDriveSync.Core.csproj" />
     <ProjectReference Include="..\MDriveSync.Security\MDriveSync.Security.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Properties\" />
   </ItemGroup>
 
 </Project>

@@ -15,7 +15,7 @@ namespace MDriveSync.Test
             new Random().NextBytes(data);
 
             // 定义要测试的哈希算法
-            string[] algorithms = { "SHA256", "SHA1", "MD5", "BLAKE3", "XXH3", "XXH128" };
+            string[] algorithms = { "SHA256", "SHA1", "MD5", "BLAKE3", "XXH3", "XXH128", "SHA3" };
 
             foreach (var algorithm in algorithms)
             {
