@@ -99,7 +99,7 @@ namespace MDriveSync.Core.Services
                 return "^$";
 
             // 逐字符处理通配符模式，避免复杂的转义问题
-            string result = "^";
+            string result = ""; // 移除 ^
 
             for (int i = 0; i < pattern.Length; i++)
             {

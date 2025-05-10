@@ -8,6 +8,15 @@ namespace MDriveSync.Core.Services
     /// </summary>
     public class FileFastScanner
     {
+        private readonly ConcurrentBag<string> _files;
+        private readonly ConcurrentBag<string> _directories;
+
+        public FileFastScanner()
+        {
+            _files = new ConcurrentBag<string>();
+            _directories = new ConcurrentBag<string>();
+        }
+
         /// <summary>
         /// 采用生产者-消费者模式遍历文件系统并返回文件路径集合
         /// </summary>
@@ -19,7 +28,7 @@ namespace MDriveSync.Core.Services
         /// <param name="progress">进度报告回调</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>文件路径的集合</returns>
-        public static IEnumerable<string> EnumerateFiles(
+        public IEnumerable<string> EnumerateFiles(
             string rootPath,
             string searchPattern = "*",
             IEnumerable<string> ignorePatterns = null,
@@ -61,6 +70,8 @@ namespace MDriveSync.Core.Services
                     if (!ignoreRules.ShouldIgnore(rootPath))
                     {
                         directoryQueue.Add(rootPath);
+                        _directories.Add(rootPath); // 添加根目录到目录集合
+
                         Interlocked.Increment(ref dirCount);
                         Interlocked.Increment(ref processedItems);
                     }
@@ -180,7 +191,7 @@ namespace MDriveSync.Core.Services
         /// <param name="progress">进度报告回调</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>扫描结果</returns>
-        public static FileScanResult ScanAsync(
+        public FileScanResult ScanAsync(
             string rootPath,
             string searchPattern = "*",
             IEnumerable<string> ignorePatterns = null,
@@ -219,9 +230,9 @@ namespace MDriveSync.Core.Services
                 {
                     RootPath = rootPath,
                     FileCount = files.Count,
-                    DirectoryCount = 0, // 我们不保留目录列表，所以这里未填充
+                    DirectoryCount = _directories.Count(), // 我们不保留目录列表，所以这里未填充
                     Files = files,
-                    Directories = null, // 我们不保留目录列表
+                    Directories = _directories.ToList(), // 我们不保留目录列表
                     Errors = errors.ToList(),
                     ElapsedTime = stopwatch.Elapsed,
                     StartTime = startTime,
@@ -238,9 +249,9 @@ namespace MDriveSync.Core.Services
                 {
                     RootPath = rootPath,
                     FileCount = files.Count,
-                    DirectoryCount = 0,
+                    DirectoryCount = _directories.Count(), // 我们不保留目录列表，所以这里未填充
                     Files = files,
-                    Directories = null,
+                    Directories = _directories.ToList(), // 我们不保留目录列表
                     Errors = errors.ToList(),
                     ElapsedTime = stopwatch.Elapsed,
                     StartTime = startTime,
@@ -253,7 +264,7 @@ namespace MDriveSync.Core.Services
         /// <summary>
         /// 处理目录（流式方式）
         /// </summary>
-        private static void ProcessDirectories(
+        private void ProcessDirectories(
             string rootPath,
             FileIgnoreRuleSet ignoreRules,
             BlockingCollection<string> directoryQueue,
@@ -294,7 +305,9 @@ namespace MDriveSync.Core.Services
                         if (!ignoreRules.ShouldIgnore(subDir) && processedDirs.Add(subDir))
                         {
                             directoryQueue.Add(subDir);
+                            _directories.Add(subDir);
                             pendingDirs.Enqueue(subDir);
+
                             Interlocked.Increment(ref dirCount);
                             Interlocked.Increment(ref processedItems);
                         }
@@ -360,6 +373,7 @@ namespace MDriveSync.Core.Services
                 // 检查取消状态
                 if (cancellationToken.IsCancellationRequested)
                     yield break;
+
 
                 // 检查文件是否应被忽略
                 if (!ignoreRules.ShouldIgnore(file))
@@ -443,7 +457,7 @@ namespace MDriveSync.Core.Services
         /// <param name="rootPath">根路径</param>
         /// <param name="cancellationToken">取消令牌</param>
         /// <returns>文件路径列表</returns>
-        public static List<string> GetFilesOnlyAsync(string rootPath, CancellationToken cancellationToken = default)
+        public List<string> GetFilesOnlyAsync(string rootPath, CancellationToken cancellationToken = default)
         {
             var result = ScanAsync(rootPath, cancellationToken: cancellationToken);
             return result.Files;

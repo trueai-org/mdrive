@@ -9,9 +9,10 @@ namespace MDriveSync.Client
     {
         private static async Task Main(string[] args)
         {
+      
             var sw = new Stopwatch();
             var rootPath = "E:\\guanpeng"; // args.Length > 0 ? args[0] : Environment.CurrentDirectory;
-            var ignorePatterns = FileIgnoreHelper.BuildIgnorePatterns("**/node_modules/*", "**/bin/*", "**/obj/*");
+            var ignorePatterns = FileIgnoreHelper.BuildIgnorePatterns("**/node_modules/*", "**/bin/*", "**/obj/*", "**/.git/*");
             Console.WriteLine($"开始扫描目录: {rootPath}");
 
 
@@ -32,9 +33,9 @@ namespace MDriveSync.Client
             });
 
             sw.Start();
-            var fileRes = FileFastScanner.ScanAsync(
+            var fileRes = new FileFastScanner().ScanAsync(
                 rootPath,
-                "*.*",
+                "*",
                 ignorePatterns,
                 maxDegreeOfParallelism: 4,
                 progress: progress,
@@ -67,47 +68,6 @@ namespace MDriveSync.Client
                 Console.WriteLine($"扫描耗时: {result.ElapsedTime.TotalSeconds:F2} 秒");
                 Console.WriteLine($"处理速度: {result.ItemsPerSecond:N0} 项/秒");
 
-                var f1Files = new ConcurrentDictionary<string, byte>();
-                foreach (var file in fileRes.Files)
-                {
-                    f1Files.TryAdd(file, 0);
-                }
-
-                var f2Files = new ConcurrentDictionary<string, byte>();
-                foreach (var file in result.Files)
-                {
-                    f2Files.TryAdd(file, 0);
-                }
-
-                // 比较f1 与 f2 的差异，如果 f1中有而 f2 中没有，则输出
-                var f1Only = f1Files.Keys.Except(f2Files.Keys).ToList();
-                if (f1Only.Count > 0)
-                {
-                    Console.WriteLine($"\n\nf1中有而f2中没有的文件: {f1Only.Count}");
-                    foreach (var file in f1Only)
-                    {
-                        Console.WriteLine(file);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("\nf1与f2完全一致");
-                }
-
-                // 比较f2 与 f1 的差异，如果 f2中有而 f1 中没有，则输出
-                var f2Only = f2Files.Keys.Except(f1Files.Keys).ToList();
-                if (f2Only.Count > 0)
-                {
-                    Console.WriteLine($"\n\nf2中有而f1中没有的文件: {f2Only.Count}");
-                    foreach (var file in f2Only)
-                    {
-                        Console.WriteLine(file);
-                    }
-                }
-                else
-                {
-                    Console.WriteLine("\nf2与f1完全一致");
-                }
 
                 if (result.Errors.Count > 0)
                 {
