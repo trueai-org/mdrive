@@ -17,6 +17,19 @@ namespace MDriveSync.Cli
                 if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
                 {
                     ShowHelp();
+
+                    // sync 参数
+                    ShowSyncHelp();
+                    Console.WriteLine();
+
+                    // config 参数
+                    ShowConfigHelp();
+                    Console.WriteLine();
+
+                    // 示例
+                    Console.WriteLine("示例:");
+                    Console.WriteLine("mdrive sync --source C:\\Source --target D:\\Targetd");
+
                     return 0;
                 }
 

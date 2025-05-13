@@ -882,7 +882,7 @@ namespace MDriveSync.Core.Services
             );
 
             var result = await scanner.ScanAsync(
-                reportProgress: false,
+                reportProgress: _options.Verbose,
                 cancellationToken: _cancellationToken
             );
 
@@ -909,7 +909,7 @@ namespace MDriveSync.Core.Services
                 "*",
                 _options.IgnorePatterns,
                 _options.MaxParallelOperations,
-                reportProgress: false,
+                reportProgress: _options.Verbose,
                 cancellationToken: _cancellationToken
             );
 
