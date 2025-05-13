@@ -1,4 +1,5 @@
 ﻿using MDriveSync.Core.Services;
+using MDriveSync.Infrastructure;
 using MDriveSync.Security.Models;
 using Serilog;
 using System.Text.Json;
@@ -183,7 +184,7 @@ namespace MDriveSync.Cli
                     Log.Information($"目录创建: {result.Statistics.DirectoriesCreated} 个");
                     Log.Information($"目录删除: {result.Statistics.DirectoriesDeleted} 个");
                     Log.Information($"错误数量: {result.Statistics.Errors} 个");
-                    Log.Information($"处理总量: {result.Statistics.BytesProcessed} 字节");
+                    Log.Information($"处理总量: {result.Statistics.BytesProcessed.FormatSize()}");
                 }
 
                 return result.Status == SyncStatus.Completed ? 0 : 1;
