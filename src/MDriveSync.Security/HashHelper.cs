@@ -1,12 +1,12 @@
-﻿using System.Buffers.Binary;
+﻿using Blake3;
+using System.Buffers.Binary;
 using System.IO.Hashing;
 using System.Security.Cryptography;
-using Blake3;
 
 namespace MDriveSync.Security
 {
     /// <summary>
-    /// 哈希算法（MD5、SHA1、SHA256、SHA3/SHA384、BLAKE3、XXH3、XXH128）
+    /// 哈希算法（MD5、SHA1、SHA256、SHA3/SHA384、SHA512、BLAKE3、XXH3、XXH128）
     /// 用于生成数据块或文件的哈希值，以验证数据的完整性和唯一性
     /// 默认：SHA256
     /// </summary>
@@ -23,30 +23,35 @@ namespace MDriveSync.Security
         {
             switch (algorithm.ToUpper())
             {
-                case "SHA256":
-                    using (SHA256 sha256 = SHA256.Create())
-                    {
-                        return sha256.ComputeHash(data);
-                    }
-                case "BLAKE3":
-                    {
-                        return Hasher.Hash(data).AsSpan().ToArray();
-                    }
                 case "SHA1":
                     using (SHA1 sha1 = SHA1.Create())
                     {
                         return sha1.ComputeHash(data);
                     }
-                case "MD5":
-                    using (MD5 md5 = MD5.Create())
+                case "SHA256":
+                    using (SHA256 sha256 = SHA256.Create())
                     {
-                        return md5.ComputeHash(data);
+                        return sha256.ComputeHash(data);
                     }
                 case "SHA3":
                 case "SHA384":
                     using (SHA384 sha3 = SHA384.Create())
                     {
                         return sha3.ComputeHash(data);
+                    }
+                case "SHA512":
+                    using (SHA512 sha512 = SHA512.Create())
+                    {
+                        return sha512.ComputeHash(data);
+                    }
+                case "BLAKE3":
+                    {
+                        return Hasher.Hash(data).AsSpan().ToArray();
+                    }
+                case "MD5":
+                    using (MD5 md5 = MD5.Create())
+                    {
+                        return md5.ComputeHash(data);
                     }
                 case "XXH3":
                     {
@@ -84,6 +89,11 @@ namespace MDriveSync.Security
                         using (SHA256 sha256 = SHA256.Create())
                         {
                             return sha256.ComputeHash(stream);
+                        }
+                    case "SHA512":
+                        using (SHA512 sha512 = SHA512.Create())
+                        {
+                            return sha512.ComputeHash(stream);
                         }
                     case "BLAKE3":
                         {
@@ -214,6 +224,18 @@ namespace MDriveSync.Security
                     using (FileStream fileStream = File.OpenRead(filePath))
                     {
                         var hashBytes = sha256.ComputeHash(fileStream);
+                        return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
+                    }
+                }
+            }
+            // SHA512
+            else if (algorithm == "SHA512")
+            {
+                using (SHA512 sha512 = SHA512.Create())
+                {
+                    using (FileStream fileStream = File.OpenRead(filePath))
+                    {
+                        var hashBytes = sha512.ComputeHash(fileStream);
                         return BitConverter.ToString(hashBytes).Replace("-", "").ToLower();
                     }
                 }

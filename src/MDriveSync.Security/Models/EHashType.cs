@@ -1,7 +1,7 @@
 ﻿namespace MDriveSync.Security.Models
 {
     /// <summary>
-    /// MD5、SHA1、SHA256、SHA3/SHA384、BLAKE3、XXH3、XXH128
+    /// MD5、SHA1、SHA256、SHA3/SHA384、SHA512、BLAKE3、XXH3、XXH128
     /// </summary>
     public enum EHashType
     {
@@ -19,6 +19,11 @@
         /// SHA256
         /// </summary>
         SHA256,
+
+        /// <summary>
+        /// SHA512
+        /// </summary>
+        SHA512,
 
         /// <summary>
         /// SHA3/SHA384

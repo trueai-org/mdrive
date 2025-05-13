@@ -4,17 +4,20 @@
 		<OutputType>Exe</OutputType>
 		<TargetFramework>net8.0</TargetFramework>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
 		<IsPackable>true</IsPackable>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		
+		<!-- 全局工具相关配置 -->
 		<PackAsTool>true</PackAsTool>
-		<Authors>trueai-org</Authors>
-		<Company>trueai-org</Company>
-		<Product>mdrive</Product>
-		<Description>使用 mdrive 快速同步/备份，安装：dotnet tool install -g mdrive</Description>
+		<ToolCommandName>mdrive</ToolCommandName>
+		<PackageId>mdrive</PackageId>
+		<Version>1.0.4</Version>
+		<Authors>TrueAI.ORG</Authors>
+		<Description>多平台文件同步命令行工具</Description>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
 		<PackageProjectUrl>https://github.com/trueai-org/mdrive</PackageProjectUrl>
 		<RepositoryUrl>https://github.com/trueai-org/mdrive</RepositoryUrl>
-		<PackageTags>mdrive</PackageTags>
-		<Version>1.0.1</Version>
+		<PackageTags>sync;file;backup;aliyun;cli</PackageTags>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 	</PropertyGroup>
 

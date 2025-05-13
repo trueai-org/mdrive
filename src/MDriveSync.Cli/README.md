@@ -42,7 +42,6 @@ dotnet nuget push bin/Release/mdrive.1.1.0.nupkg --api-key YOUR_API_KEY --source
 # 下载最新版本
 # 解压后使用命令行运行
 dotnet MDriveSync.Cli.dll [命令] [选项]
-
 ```
 
 ## 基本命令
@@ -51,10 +50,10 @@ MDriveSync CLI 提供了以下主要命令：
 
 
 ```
-MDriveSync - 多平台文件同步工具
+多平台文件同步工具
 
 用法:
-  MDriveSync.Cli [命令] [选项]
+  mdrive [命令] [选项]
 
 命令:
   sync      执行文件同步操作
@@ -75,7 +74,7 @@ MDriveSync - 多平台文件同步工具
 sync - 执行文件同步操作
 
 用法:
-  MDriveSync.Cli sync [选项]
+  mdrive sync [选项]
 
 选项:
   -s, --source <SOURCE>            源目录路径 (必需)
@@ -100,22 +99,22 @@ sync - 执行文件同步操作
 
 ```shell
 # 基本单向同步
-MDriveSync.Cli sync --source "D:\Documents" --target "E:\Backup\Documents"
+mdrive sync --source "D:\Documents" --target "E:\Backup\Documents"
 
 # 使用镜像模式和SHA1哈希算法
-MDriveSync.Cli sync --source "D:\Projects" --target "E:\Backup\Projects" --mode Mirror --hash SHA1
+mdrive sync --source "D:\Projects" --target "E:\Backup\Projects" --mode Mirror --hash SHA1
 
 # 排除特定文件和目录
-MDriveSync.Cli sync --source "D:\Photos" --target "E:\Backup\Photos" --exclude "*.tmp" --exclude "**/Thumbs.db"
+mdrive sync --source "D:\Photos" --target "E:\Backup\Photos" --exclude "*.tmp" --exclude "**/Thumbs.db"
 
 # 使用预览模式
-MDriveSync.Cli sync --source "D:\Music" --target "E:\Backup\Music" --preview
+mdrive sync --source "D:\Music" --target "E:\Backup\Music" --preview
 
 # 从配置文件加载同步选项
-MDriveSync.Cli sync --source "D:\Videos" --target "E:\Backup\Videos" --config "sync.config.json"
+mdrive sync --source "D:\Videos" --target "E:\Backup\Videos" --config "sync.config.json"
 
 # 使用高级选项
-MDriveSync.Cli sync --source "D:\Work" --target "E:\Backup\Work" --mode TwoWay --compare Hash --threads 4 --verbose
+mdrive sync --source "D:\Work" --target "E:\Backup\Work" --mode TwoWay --compare Hash --threads 4 --verbose
 
 ```
 
@@ -128,7 +127,7 @@ MDriveSync.Cli sync --source "D:\Work" --target "E:\Backup\Work" --mode TwoWay -
 config - 管理同步配置文件
 
 用法:
-  MDriveSync.Cli config [子命令] [选项]
+  mdrive config [子命令] [选项]
 
 子命令:
   create    创建新的配置文件
@@ -146,7 +145,7 @@ config - 管理同步配置文件
 create - 创建新的配置文件
 
 用法:
-  MDriveSync.Cli config create [选项]
+  mdrive config create [选项]
 
 选项:
   -o, --output <OUTPUT>    输出文件路径 (必需)
@@ -164,7 +163,7 @@ create - 创建新的配置文件
 view - 查看现有配置文件内容
 
 用法:
-  MDriveSync.Cli config view [选项]
+  mdrive config view [选项]
 
 选项:
   -f, --file <FILE>    配置文件路径 (必需)
@@ -177,11 +176,10 @@ view - 查看现有配置文件内容
 
 ```shell
 # 创建新的配置文件
-MDriveSync.Cli config create --output "sync.config.json" --source "D:\Documents" --target "E:\Backup\Documents" --mode Mirror
+mdrive config create --output "sync.config.json" --source "D:\Documents" --target "E:\Backup\Documents" --mode Mirror
 
 # 查看配置文件内容
-MDriveSync.Cli config view --file "sync.config.json"
-
+mdrive config view --file "sync.config.json"
 ```
 
 ## 版本命令 (version)
@@ -190,7 +188,7 @@ MDriveSync.Cli config view --file "sync.config.json"
 
 
 ```shell
-MDriveSync.Cli version
+mdrive version
 
 ```
 
@@ -218,9 +216,8 @@ MDriveSync 支持以下同步模式：
 
 - **MD5**
 - **SHA1**
-- **SHA256** (默认)
+- **SHA256**
 - **SHA384**
-- **SHA512**
 
 ## 配置文件格式
 

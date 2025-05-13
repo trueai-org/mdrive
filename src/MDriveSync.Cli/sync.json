@@ -1,6 +1,6 @@
 ﻿{
-  "SourcePath": "E:\\downs\\fdm\\__同步测试\\source1",
-  "TargetPath": "E:\\downs\\fdm\\__同步测试\\target1",
+  "SourcePath": "E:\\downs",
+  "TargetPath": "E:\\_temp\\____synctest",
   "SyncMode": "Mirror",
   "CompareMethod": "DateTimeAndSize",
   "HashAlgorithm": "SHA256",

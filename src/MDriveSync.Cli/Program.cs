@@ -35,8 +35,22 @@ namespace MDriveSync.Cli
                         return 0;
 
                     default:
-                        Log.Error($"未知命令: {command}");
-                        ShowHelp();
+                        {
+                            Log.Error($"未知命令: {command}");
+                            ShowHelp();
+
+                            // sync 参数
+                            ShowSyncHelp();
+                            Console.WriteLine();
+
+                            // config 参数
+                            ShowConfigHelp();
+                            Console.WriteLine();
+
+                            // 示例
+                            Console.WriteLine("示例:");
+                            Console.WriteLine("mdrive sync --source C:\\Source --target D:\\Targetd");
+                        }
                         return 1;
                 }
             }
@@ -70,20 +84,23 @@ namespace MDriveSync.Cli
         /// </summary>
         private static void ShowHelp()
         {
-            Console.WriteLine("MDriveSync - 多平台文件同步工具");
+            var version = "v" + string.Join(".", typeof(Program).Assembly.GetName().Version.ToString().Split('.').Where((a, b) => b <= 2));
+
+            Console.WriteLine($"mdrive - 多平台文件同步工具 {version}");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine("  mdrive [命令] [选项]");
+            Console.WriteLine("mdrive [命令] [选项]");
             Console.WriteLine();
             Console.WriteLine("命令:");
-            Console.WriteLine("  sync     执行文件同步操作");
-            Console.WriteLine("  config   管理同步配置文件");
-            Console.WriteLine("  version  显示程序版本信息");
+            Console.WriteLine(" sync     执行文件同步操作");
+            Console.WriteLine(" config   管理同步配置文件");
+            Console.WriteLine(" version  显示程序版本信息");
             Console.WriteLine();
             Console.WriteLine("选项:");
-            Console.WriteLine("  --help, -h     显示帮助信息");
+            Console.WriteLine(" --help, -h     显示帮助信息");
             Console.WriteLine();
             Console.WriteLine("使用 'mdrive [命令] --help' 查看特定命令的帮助信息");
+            Console.WriteLine();
         }
 
         /// <summary>
@@ -95,6 +112,10 @@ namespace MDriveSync.Cli
             {
                 ShowSyncHelp();
                 return 0;
+            }
+            else
+            {
+                ShowHelp();
             }
 
             var options = ParseSyncOptions(args);
@@ -169,7 +190,7 @@ namespace MDriveSync.Cli
             Console.WriteLine("执行文件同步操作");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine("  mdrivesync sync [选项]");
+            Console.WriteLine("  mdrive sync [选项]");
             Console.WriteLine();
             Console.WriteLine("选项:");
             Console.WriteLine("  --source, -s           源目录路径 (必需)");
@@ -584,7 +605,7 @@ namespace MDriveSync.Cli
                     TargetPath = target.FullName,
                     SyncMode = mode,
                     CompareMethod = CompareMethod.DateTimeAndSize,
-        
+
                     MaxParallelOperations = Math.Max(1, Environment.ProcessorCount),
                     PreviewOnly = false,
                     UseRecycleBin = true,
