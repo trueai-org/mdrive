@@ -1323,7 +1323,7 @@ namespace MDriveSync.Client.App.Controllers
             return Result.Ok(new
             {
                 Speed = speed,
-                SpeedString = speed.ToFileSizeString() + "/s"
+                SpeedString = speed.ToFileSize() + "/s"
             });
         }
 

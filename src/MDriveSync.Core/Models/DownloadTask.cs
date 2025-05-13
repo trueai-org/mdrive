@@ -76,7 +76,7 @@ namespace MDriveSync.Core.Models
         /// <summary>
         /// 文件大小
         /// </summary>
-        public string FileSize => ((double)TotalBytes).ToFileSizeString();
+        public string FileSize => ((double)TotalBytes).ToFileSize();
 
         /// <summary>
         /// 获取或设置文件的总字节数。

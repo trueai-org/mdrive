@@ -141,17 +141,13 @@ namespace MDriveSync.Infrastructure
         /// </summary>
         /// <param name="size"></param>
         /// <returns></returns>
-        public static string ToFileSizeString(this double size)
+        public static string ToFileSize(this double size)
         {
-            //size switch
-            //{
-            //    var s when s >= 1024 * 1024 * 1024 => $"{s / 1024 / 1024 / 1024:F2} GB/s",
-            //    var s when s >= 1024 * 1024 => $"{s / 1024 / 1024:F2} MB/s",
-            //    var s when s >= 1024 => $"{s / 1024:F2} KB/s",
-            //    var s => $"{s:F2} B/s"
-            //};
-
-            if (size >= 1024 * 1024 * 1024)
+            if (size >= 1024 * 1024 * 1024 * 1024L)
+            {
+                return $"{size / 1024 / 1024 / 1024 / 1024:F2} TB";
+            }
+            else if (size >= 1024 * 1024 * 1024)
             {
                 return $"{size / 1024 / 1024 / 1024:F2} GB";
             }
@@ -169,6 +165,45 @@ namespace MDriveSync.Infrastructure
             }
         }
 
+        /// <summary>
+        /// 格式化文件大小
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <returns></returns>
+        public static string FormatSize(this long bytes)
+        {
+            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
+            int order = 0;
+            double size = bytes;
+
+            while (size >= 1024 && order < suffixes.Length - 1)
+            {
+                order++;
+                size = size / 1024;
+            }
+
+            return $"{size:F2} {suffixes[order]}";
+        }
+
+        /// <summary>
+        /// 格式化文件大小
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <returns></returns>
+        public static string FormatSize(this int bytes)
+        {
+            return FormatSize((long)bytes);
+        }
+
+        /// <summary>
+        /// 格式化文件大小
+        /// </summary>
+        /// <param name="bytes"></param>
+        /// <returns></returns>
+        public static string FormatSize(this double bytes)
+        {
+            return FormatSize((long)bytes);
+        }
 
         /// <summary>
         /// 查询条件扩展

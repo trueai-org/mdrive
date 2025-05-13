@@ -11,7 +11,7 @@ namespace MDriveSync.Client
         {
       
             var sw = new Stopwatch();
-            var rootPath = "E:\\guanpeng"; // args.Length > 0 ? args[0] : Environment.CurrentDirectory;
+            var rootPath = "E:\\program_files"; // args.Length > 0 ? args[0] : Environment.CurrentDirectory;
             var ignorePatterns = FileIgnoreHelper.BuildIgnorePatterns("**/node_modules/*", "**/bin/*", "**/obj/*", "**/.git/*");
             Console.WriteLine($"开始扫描目录: {rootPath}");
 
