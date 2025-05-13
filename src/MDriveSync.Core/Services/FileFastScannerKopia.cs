@@ -8,7 +8,7 @@ namespace MDriveSync.Core.Services
     /// <summary>
     /// 高性能文件扫描器，基于 Kopia 风格设计，针对 .NET Core 优化
     /// </summary>
-    public class FastFileScanner1
+    public class FileFastScannerKopia
     {
         private readonly int _maxParallelism;
         private readonly int _queueCapacity;
@@ -24,7 +24,7 @@ namespace MDriveSync.Core.Services
         /// <param name="maxParallelism">最大并行度，默认为处理器核心数的两倍</param>
         /// <param name="queueCapacity">队列容量，默认为 100,000</param>
         /// <param name="progress">进度报告回调</param>
-        public FastFileScanner1(
+        public FileFastScannerKopia(
             ScanOptions options = null,
             int? maxParallelism = null,
             int queueCapacity = 100_000,

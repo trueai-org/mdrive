@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "MDriveSync.Cli": {
+      "commandName": "Project",
+      "commandLineArgs": "sync -f sync.json"
+    }
+  }
+}

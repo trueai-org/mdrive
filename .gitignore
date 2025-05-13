@@ -368,3 +368,4 @@ FodyWeavers.xsd
 *.d
 *.cache
 .vscode/
+/src/MDriveSync.Cli/push.bat

@@ -1,0 +1,37 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+	<PropertyGroup>
+		<OutputType>Exe</OutputType>
+		<TargetFramework>net8.0</TargetFramework>
+		<ImplicitUsings>enable</ImplicitUsings>
+		<GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+		<IsPackable>true</IsPackable>
+		<PackAsTool>true</PackAsTool>
+		<Authors>trueai-org</Authors>
+		<Company>trueai-org</Company>
+		<Product>mdrive</Product>
+		<Description>使用 mdrive 快速同步/备份，安装：dotnet tool install -g mdrive</Description>
+		<PackageProjectUrl>https://github.com/trueai-org/mdrive</PackageProjectUrl>
+		<RepositoryUrl>https://github.com/trueai-org/mdrive</RepositoryUrl>
+		<PackageTags>mdrive</PackageTags>
+		<Version>1.0.1</Version>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+	</PropertyGroup>
+
+	<ItemGroup>
+		<None Include="./README.md" Pack="true" PackagePath="\" />
+		<None Include="./logo.png" Pack="true" PackagePath="\" />
+	</ItemGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\MDriveSync.Core\MDriveSync.Core.csproj" />
+		<ProjectReference Include="..\MDriveSync.Security\MDriveSync.Security.csproj" />
+	</ItemGroup>
+
+	<ItemGroup>
+	  <None Update="sync.json">
+	    <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+	  </None>
+	</ItemGroup>
+
+</Project>

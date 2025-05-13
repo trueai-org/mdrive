@@ -38,6 +38,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Test", "src\MDri
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Client", "src\MDriveSync.Client\MDriveSync.Client.csproj", "{6D137DB3-41A2-4B3A-AB4F-67D5DA851F7D}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MDriveSync.Cli", "src\MDriveSync.Cli\MDriveSync.Cli.csproj", "{04233EB5-6D45-4A8C-B586-E209CD8FC810}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -80,6 +82,10 @@ Global
 		{6D137DB3-41A2-4B3A-AB4F-67D5DA851F7D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{6D137DB3-41A2-4B3A-AB4F-67D5DA851F7D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{6D137DB3-41A2-4B3A-AB4F-67D5DA851F7D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04233EB5-6D45-4A8C-B586-E209CD8FC810}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04233EB5-6D45-4A8C-B586-E209CD8FC810}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04233EB5-6D45-4A8C-B586-E209CD8FC810}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04233EB5-6D45-4A8C-B586-E209CD8FC810}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

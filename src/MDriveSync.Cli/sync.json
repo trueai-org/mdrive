@@ -1,0 +1,26 @@
+﻿{
+  "SourcePath": "E:\\downs\\fdm\\__同步测试\\source1",
+  "TargetPath": "E:\\downs\\fdm\\__同步测试\\target1",
+  "SyncMode": "Mirror",
+  "CompareMethod": "DateTimeAndSize",
+  "HashAlgorithm": "SHA256",
+  "SamplingRate": 0.1,
+  "MaxParallelOperations": 4,
+  "EnableParallelFileOperations": true,
+  "DateTimeThresholdSeconds": 2,
+  "PreserveFileTime": true,
+  "UseRecycleBin": true,
+  "ConflictResolution": "Newer",
+  "FollowSymlinks": false,
+  "PreviewOnly": false,
+  "ContinueOnError": true,
+  "MaxRetries": 3,
+  "IgnorePatterns": [
+    "**/System Volume Information/**",
+    "**/$RECYCLE.BIN/**",
+    "**/Thumbs.db",
+    "**/*.tmp",
+    "**/*.temp",
+    "**/*.bak"
+  ]
+}
