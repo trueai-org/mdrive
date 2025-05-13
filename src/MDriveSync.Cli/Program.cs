@@ -163,7 +163,14 @@ namespace MDriveSync.Cli
                 {
                     if (options.Verbose || progress.ProgressPercentage == 100 || progress.ProgressPercentage % 10 == 0)
                     {
-                        Log.Information($"{progress.Message} - {progress.ProgressPercentage}% - {progress.FormattedSpeed} - 剩余时间: {progress.FormattedTimeRemaining}");
+                        if (progress.ProgressPercentage < 0)
+                        {
+                            Log.Information($"{progress.Message}");
+                        }
+                        else
+                        {
+                            Log.Information($"{progress.Message} - {progress.ProgressPercentage}% - {progress.FormattedSpeed} - 剩余时间: {progress.FormattedTimeRemaining}");
+                        }
                     }
                 });
 
@@ -187,7 +194,7 @@ namespace MDriveSync.Cli
                     Log.Information($"处理总量: {result.Statistics.BytesProcessed.FormatSize()}");
                 }
 
-                return result.Status == SyncStatus.Completed ? 0 : 1;
+                return result.Status == ESyncStatus.Completed ? 0 : 1;
             }
             catch (Exception ex)
             {
@@ -229,8 +236,8 @@ namespace MDriveSync.Cli
         {
             var options = new SyncOptions
             {
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.DateTimeAndSize,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.DateTimeAndSize,
                 MaxParallelOperations = Math.Max(1, Environment.ProcessorCount),
                 PreviewOnly = false,
                 UseRecycleBin = true,
@@ -270,13 +277,13 @@ namespace MDriveSync.Cli
 
                     case "--mode":
                     case "-m":
-                        if (value != null && Enum.TryParse<SyncMode>(value, true, out var mode))
+                        if (value != null && Enum.TryParse<ESyncMode>(value, true, out var mode))
                             options.SyncMode = mode;
                         break;
 
                     case "--compare":
                     case "-c":
-                        if (value != null && Enum.TryParse<CompareMethod>(value, true, out var compare))
+                        if (value != null && Enum.TryParse<ESyncCompareMethod>(value, true, out var compare))
                             options.CompareMethod = compare;
                         break;
 
@@ -437,7 +444,7 @@ namespace MDriveSync.Cli
             string outputPath = null;
             string sourcePath = null;
             string targetPath = null;
-            SyncMode mode = SyncMode.OneWay;
+            ESyncMode mode = ESyncMode.OneWay;
 
             for (int i = 0; i < args.Length; i++)
             {
@@ -472,7 +479,7 @@ namespace MDriveSync.Cli
 
                     case "--mode":
                     case "-m":
-                        if (value != null && Enum.TryParse<SyncMode>(value, true, out var syncMode))
+                        if (value != null && Enum.TryParse<ESyncMode>(value, true, out var syncMode))
                             mode = syncMode;
                         break;
                 }
@@ -608,7 +615,7 @@ namespace MDriveSync.Cli
         /// <summary>
         /// 创建配置文件
         /// </summary>
-        private static void CreateConfigFile(FileInfo output, DirectoryInfo source, DirectoryInfo target, SyncMode mode)
+        private static void CreateConfigFile(FileInfo output, DirectoryInfo source, DirectoryInfo target, ESyncMode mode)
         {
             try
             {
@@ -618,7 +625,7 @@ namespace MDriveSync.Cli
                     SourcePath = source.FullName,
                     TargetPath = target.FullName,
                     SyncMode = mode,
-                    CompareMethod = CompareMethod.DateTimeAndSize,
+                    CompareMethod = ESyncCompareMethod.DateTimeAndSize,
 
                     MaxParallelOperations = Math.Max(1, Environment.ProcessorCount),
                     PreviewOnly = false,

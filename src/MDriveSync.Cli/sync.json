@@ -1,6 +1,6 @@
 ﻿{
-  "SourcePath": "E:\\guanpeng",
-  "TargetPath": "E:\\_temp\\____synctest",
+  "SourcePath": "E:\\_temp\\____synctest0",
+  "TargetPath": "E:\\_temp\\____synctest1",
   "SyncMode": "Mirror",
   "CompareMethod": "DateTimeAndSize",
   "HashAlgorithm": null,

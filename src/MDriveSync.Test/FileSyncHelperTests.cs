@@ -188,8 +188,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 MaxParallelOperations = 2
             };
 
@@ -198,7 +198,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
             Assert.Equal(3, result.Statistics.FilesCopied); // 应该复制了3个文件
             Assert.True(result.Statistics.DirectoriesCreated >= 2); // 应该创建了至少2个目录
@@ -240,8 +240,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 MaxParallelOperations = 2
             };
 
@@ -250,7 +250,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
             Assert.Equal(1, result.Statistics.FilesUpdated); // file1.txt 应该被更新
             Assert.Equal(1, result.Statistics.FilesCopied);  // newfile.txt 应该被复制
@@ -302,8 +302,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.Mirror,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.Mirror,
+                CompareMethod = ESyncCompareMethod.Content,
                 MaxParallelOperations = 2,
                 // 使用普通删除，不使用回收站（方便测试）
                 UseRecycleBin = false
@@ -314,7 +314,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
             Assert.Equal(0, result.Statistics.FilesUpdated); // 没有文件需要更新
             Assert.Equal(0, result.Statistics.FilesCopied);  // 没有文件需要复制
@@ -368,9 +368,9 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.TwoWay,
-                CompareMethod = CompareMethod.DateTimeAndSize,
-                ConflictResolution = ConflictResolution.Newer,
+                SyncMode = ESyncMode.TwoWay,
+                CompareMethod = ESyncCompareMethod.DateTimeAndSize,
+                ConflictResolution = ESyncConflictResolution.Newer,
                 MaxParallelOperations = 2
             };
 
@@ -379,7 +379,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
 
             // 验证冲突解决：common.txt 应该使用源版本（较新）
@@ -419,9 +419,9 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.TwoWay,
-                CompareMethod = CompareMethod.Content,
-                ConflictResolution = ConflictResolution.KeepBoth,
+                SyncMode = ESyncMode.TwoWay,
+                CompareMethod = ESyncCompareMethod.Content,
+                ConflictResolution = ESyncConflictResolution.KeepBoth,
                 MaxParallelOperations = 1
             };
 
@@ -430,7 +430,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
 
             // 验证保留了两个版本
@@ -480,8 +480,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Hash,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Hash,
                 HashAlgorithm = EHashType.SHA256,
                 SamplingRate = 0.1, // 10% 抽样率
                 MaxParallelOperations = 1
@@ -492,7 +492,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
             Assert.Equal(1, result.Statistics.FilesUpdated); // 只有 largefile.bin 应该被更新
             Assert.Equal(0, result.Statistics.FilesCopied);
@@ -535,8 +535,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 PreviewOnly = true,
                 MaxParallelOperations = 1
             };
@@ -546,12 +546,12 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
 
             // 验证操作计划
-            Assert.Equal(1, result.Actions.Count(a => a.ActionType == SyncActionType.UpdateFile)); // file1.txt 应该被更新
-            Assert.Equal(1, result.Actions.Count(a => a.ActionType == SyncActionType.CopyFile));  // file2.txt 应该被复制
+            Assert.Equal(1, result.Actions.Count(a => a.ActionType == ESyncActionType.UpdateFile)); // file1.txt 应该被更新
+            Assert.Equal(1, result.Actions.Count(a => a.ActionType == ESyncActionType.CopyFile));  // file2.txt 应该被复制
 
             // 但由于是预览模式，实际文件应该没有变化
             var currentTargetContent = File.ReadAllText(Path.Combine(_testTargetDir, "file1.txt"));
@@ -584,8 +584,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 IgnorePatterns = new List<string>
                 {
                     "*.tmp",
@@ -600,7 +600,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
 
             // 验证非忽略文件已复制
@@ -623,8 +623,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Hash,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Hash,
                 HashAlgorithm = EHashType.SHA256,
                 SamplingRate = 0.2,
                 MaxParallelOperations = 2,
@@ -650,7 +650,7 @@ namespace MDriveSync.Test
             var result = await syncHelper.SyncAsync();
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
 
             // 验证是否正确应用了忽略规则
@@ -684,8 +684,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 ContinueOnError = true,
                 MaxParallelOperations = 1
             };
@@ -698,7 +698,7 @@ namespace MDriveSync.Test
             File.SetAttributes(readOnlyFile, FileAttributes.Normal);
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status); // 应该完成，尽管有错误
+            Assert.Equal(ESyncStatus.Completed, result.Status); // 应该完成，尽管有错误
             Assert.True(result.IsSuccessful);
             Assert.True(result.Statistics.Errors > 0); // 应该有错误记录
 
@@ -727,8 +727,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 MaxParallelOperations = 1
             };
 
@@ -743,7 +743,7 @@ namespace MDriveSync.Test
             _output.WriteLine($"同步速度: {result.BytesPerSecond / (1024 * 1024):F2} MB/s");
 
             // 验证结果
-            Assert.Equal(SyncStatus.Completed, result.Status);
+            Assert.Equal(ESyncStatus.Completed, result.Status);
             Assert.True(result.IsSuccessful);
             Assert.Equal(1, result.Statistics.FilesCopied);
 
@@ -772,8 +772,8 @@ namespace MDriveSync.Test
             {
                 SourcePath = _testSourceDir,
                 TargetPath = _testTargetDir,
-                SyncMode = SyncMode.OneWay,
-                CompareMethod = CompareMethod.Content,
+                SyncMode = ESyncMode.OneWay,
+                CompareMethod = ESyncCompareMethod.Content,
                 MaxParallelOperations = 1
             };
 
