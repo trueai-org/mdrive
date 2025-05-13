@@ -6,7 +6,7 @@ using System.Security.Cryptography;
 namespace MDriveSync.Security
 {
     /// <summary>
-    /// 哈希算法（MD5、SHA1、SHA256、SHA3/SHA384、SHA512、BLAKE3、XXH3、XXH128）
+    /// 哈希算法（MD5、SHA1、SHA256、SHA3、SHA384、SHA512、BLAKE3、XXH3、XXH128）
     /// 用于生成数据块或文件的哈希值，以验证数据的完整性和唯一性
     /// 默认：SHA256
     /// </summary>

@@ -24,6 +24,28 @@
 ![挂载](/docs/screenshots/mount.png)
 ![macOS](/docs/screenshots/macOS.png)
 
+## 同步助手
+
+MDriveSync CLI 是一个功能强大的命令行工具，用于执行多平台文件同步操作。该工具提供了灵活的配置选项，支持多种同步模式、文件比较方法和哈希算法，适用于各种文件同步和备份场景。
+
+更多详情参考 [README.md](src/MDriveSync.Cli/README.md)
+
+### 使用 .NET Global Tool（推荐）
+
+```bash
+# 安装
+dotnet tool install -g mdrive
+
+# 升级
+dotnet tool update -g mdrive
+
+# 同步
+mdrive sync -s /a -t /b
+
+# 帮助
+mdirve -h
+```
+
 ## 安装与使用
 
 ### 快速启动

@@ -211,8 +211,8 @@ namespace MDriveSync.Cli
             Console.WriteLine("  --target, -t           目标目录路径 (必需)");
             Console.WriteLine("  --mode, -m             同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
             Console.WriteLine("  --compare, -c          比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
-            Console.WriteLine("  --hash, -h             哈希算法: MD5, SHA1, SHA256, SHA384, SHA512 (默认: SHA256)");
-            Console.WriteLine("  --config, -f           配置文件路径");
+            Console.WriteLine("  --hash, -h             哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
+            Console.WriteLine("  --config, -f           配置文件路径, 示例: -f sync.json");
             Console.WriteLine("  --exclude, -e          排除的文件或目录模式 (支持通配符，可多次指定)");
             Console.WriteLine("  --preview, -p          预览模式，不实际执行操作 (默认: false)");
             Console.WriteLine("  --verbose, -v          显示详细日志信息 (默认: false)");
