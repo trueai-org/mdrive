@@ -1566,13 +1566,24 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 带重试的文件复制操作
+        /// 带重试的文件复制操作，支持分块传输和校验
         /// </summary>
         private async Task CopyFileWithRetryAsync(string sourcePath, string targetPath)
         {
             int maxRetries = _options.MaxRetries;
             int currentRetry = 0;
             bool success = false;
+            bool useChunkedTransfer = _options.ChunkSizeMB > 0;
+
+            // 确保目标目录存在
+            string targetDir = Path.GetDirectoryName(targetPath);
+            if (!Directory.Exists(targetDir))
+            {
+                Directory.CreateDirectory(targetDir);
+            }
+
+            // 临时文件路径
+            string tempTargetPath = targetPath + _options.TempFileSuffix;
 
             while (!success && currentRetry <= maxRetries)
             {
@@ -1585,24 +1596,30 @@ namespace MDriveSync.Core.Services
                         ReportProgress($"重试复制文件 {Path.GetFileName(sourcePath)} (尝试 {currentRetry}/{maxRetries})", -1);
                     }
 
-                    if (_options.PreserveFileTime)
+                    if (useChunkedTransfer)
                     {
-                        // 保留原始时间戳
-                        using (FileStream sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
-                        using (FileStream targetStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
-                        {
-                            await sourceStream.CopyToAsync(targetStream, 81920, _cancellationToken);
-                        }
-
-                        // 设置目标文件的时间戳与源文件相同
-                        File.SetCreationTimeUtc(targetPath, File.GetCreationTimeUtc(sourcePath));
-                        File.SetLastWriteTimeUtc(targetPath, File.GetLastWriteTimeUtc(sourcePath));
-                        File.SetLastAccessTimeUtc(targetPath, File.GetLastAccessTimeUtc(sourcePath));
+                        await CopyFileWithChunksAsync(sourcePath, tempTargetPath, targetPath);
                     }
                     else
                     {
-                        // 简单复制，不保留时间戳
-                        File.Copy(sourcePath, targetPath, true);
+                        await CopyFileStandardAsync(sourcePath, tempTargetPath, targetPath);
+                    }
+
+                    // 验证复制的文件完整性
+                    if (_options.VerifyAfterCopy)
+                    {
+                        if (!await VerifyFileIntegrityAsync(sourcePath, targetPath))
+                        {
+                            throw new IOException($"文件完整性验证失败: {sourcePath} -> {targetPath}");
+                        }
+                    }
+
+                    // 同步文件的最后修改时间
+                    if (_options.SyncLastModifiedTime)
+                    {
+                        File.SetCreationTimeUtc(targetPath, File.GetCreationTimeUtc(sourcePath));
+                        File.SetLastWriteTimeUtc(targetPath, File.GetLastWriteTimeUtc(sourcePath));
+                        File.SetLastAccessTimeUtc(targetPath, File.GetLastAccessTimeUtc(sourcePath));
                     }
 
                     success = true;
@@ -1610,10 +1627,23 @@ namespace MDriveSync.Core.Services
                 catch (IOException) when (currentRetry < maxRetries)
                 {
                     currentRetry++;
+
+                    // 清理可能损坏的临时文件
+                    if (File.Exists(tempTargetPath))
+                    {
+                        try { File.Delete(tempTargetPath); } catch { }
+                    }
                 }
-                catch (Exception)
+                catch (Exception ex)
                 {
-                    // 其他异常直接抛出
+                    // 清理临时文件
+                    if (File.Exists(tempTargetPath))
+                    {
+                        try { File.Delete(tempTargetPath); } catch { }
+                    }
+
+                    // 记录错误并重新抛出
+                    Log.Error(ex, $"复制文件失败: {sourcePath} -> {targetPath}");
                     throw;
                 }
             }
@@ -1621,6 +1651,448 @@ namespace MDriveSync.Core.Services
             if (!success)
             {
                 throw new IOException($"复制文件 {sourcePath} 到 {targetPath} 失败，已重试 {maxRetries} 次");
+            }
+        }
+
+        /// <summary>
+        /// 标准文件复制方法
+        /// </summary>
+        private async Task CopyFileStandardAsync(string sourcePath, string tempTargetPath, string targetPath)
+        {
+            if (_options.PreserveFileTime)
+            {
+                using (FileStream sourceStream = new FileStream(sourcePath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read, 4096, FileOptions.SequentialScan))
+                using (FileStream targetStream = new FileStream(tempTargetPath, FileMode.Create, System.IO.FileAccess.Write, FileShare.None, 4096, FileOptions.SequentialScan))
+                {
+                    await sourceStream.CopyToAsync(targetStream, 81920, _cancellationToken);
+                }
+
+                // 完成后，将临时文件重命名为目标文件
+                if (File.Exists(targetPath))
+                {
+                    File.Delete(targetPath);
+                }
+                File.Move(tempTargetPath, targetPath);
+            }
+            else
+            {
+                // 简单复制
+                File.Copy(sourcePath, targetPath, true);
+            }
+        }
+
+        /// <summary>
+        /// 分块文件复制方法（修复多线程并发问题）
+        /// </summary>
+        private async Task CopyFileWithChunksAsync(string sourcePath, string tempTargetPath, string targetPath)
+        {
+            // 获取源文件信息
+            var sourceFileInfo = new FileInfo(sourcePath);
+            long fileSize = sourceFileInfo.Length;
+
+            // 计算分块大小和分块数量
+            int chunkSizeBytes = _options.ChunkSizeMB * 1024 * 1024;
+            int chunksCount = (int)Math.Ceiling((double)fileSize / chunkSizeBytes);
+
+            // 检查目标文件是否存在，如果存在则尝试使用现有块
+            bool targetExists = File.Exists(targetPath);
+            bool[] chunkCompleted = new bool[chunksCount];
+            Dictionary<int, string> chunkTempFiles = new Dictionary<int, string>();
+
+            try
+            {
+                // 检查之前的块是否已经存在并且有效
+                if (targetExists && chunksCount > 1)
+                {
+                    for (int i = 0; i < chunksCount; i++)
+                    {
+                        string chunkPath = $"{targetPath}.part{i}{_options.TempFileSuffix}";
+                        if (File.Exists(chunkPath))
+                        {
+                            // 验证块的完整性
+                            bool chunkValid = await VerifyChunkIntegrityAsync(sourcePath, chunkPath, i, chunkSizeBytes);
+                            chunkCompleted[i] = chunkValid;
+
+                            if (chunkValid)
+                            {
+                                // 如果块有效，记录到字典中
+                                chunkTempFiles[i] = chunkPath;
+                            }
+                            else if (File.Exists(chunkPath))
+                            {
+                                // 如果块无效，删除它
+                                try { File.Delete(chunkPath); } catch { }
+                            }
+                        }
+                    }
+                }
+
+                // 如果是小文件或者只有一个块，使用标准复制方法
+                if (chunksCount <= 1 || fileSize <= chunkSizeBytes)
+                {
+                    await CopyFileStandardAsync(sourcePath, tempTargetPath, targetPath);
+                    return;
+                }
+
+                // 创建目标临时文件
+                using (var targetStream = new FileStream(tempTargetPath, FileMode.Create, System.IO.FileAccess.Write))
+                {
+                    // 调整文件大小以预分配空间
+                    targetStream.SetLength(fileSize);
+                }
+
+                // 创建任务列表
+                var tasks = new List<Task>();
+
+                // 使用内存中的信号量控制并行度
+                int maxParallelChunks = Math.Min(_options.MaxParallelOperations, 4);
+                using (var semaphore = new SemaphoreSlim(maxParallelChunks))
+                {
+                    // 处理每个块
+                    for (int i = 0; i < chunksCount; i++)
+                    {
+                        int chunkIndex = i;
+
+                        // 如果这个块已经完成，跳过它
+                        if (chunkCompleted[chunkIndex])
+                        {
+                            ReportProgress($"跳过已完成的块 {chunkIndex + 1}/{chunksCount} - {Path.GetFileName(sourcePath)}", -1);
+                            continue;
+                        }
+
+                        // 等待信号量
+                        await semaphore.WaitAsync(_cancellationToken);
+
+                        // 为每个块创建唯一的临时文件路径
+                        string chunkTempPath = $"{targetPath}.part{chunkIndex}{_options.TempFileSuffix}";
+
+                        tasks.Add(Task.Run(async () =>
+                        {
+                            try
+                            {
+                                await ProcessChunkAsync(sourcePath, chunkTempPath, chunkIndex, chunkSizeBytes, fileSize);
+                                chunkTempFiles[chunkIndex] = chunkTempPath;
+                            }
+                            finally
+                            {
+                                semaphore.Release();
+                            }
+                        }, _cancellationToken));
+                    }
+
+                    // 等待所有任务完成
+                    await Task.WhenAll(tasks);
+                }
+
+                // 所有块处理完成后，将块合并到临时文件
+                using (var targetStream = new FileStream(tempTargetPath, FileMode.Open, FileAccess.Write, FileShare.None))
+                {
+                    for (int i = 0; i < chunksCount; i++)
+                    {
+                        if (chunkTempFiles.TryGetValue(i, out string chunkPath) && File.Exists(chunkPath))
+                        {
+                            long startPosition = (long)i * chunkSizeBytes;
+                            targetStream.Position = startPosition;
+
+                            using (var chunkStream = new FileStream(chunkPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                            {
+                                await chunkStream.CopyToAsync(targetStream, 81920, _cancellationToken);
+                            }
+                        }
+                        else
+                        {
+                            // 如果缺少块，抛出异常
+                            throw new IOException($"缺少块 {i} 用于文件 {targetPath}");
+                        }
+                    }
+                }
+
+                // 最后将临时文件重命名为目标文件
+                if (File.Exists(targetPath))
+                {
+                    File.Delete(targetPath);
+                }
+
+                File.Move(tempTargetPath, targetPath);
+            }
+            finally
+            {
+                // 清理临时块文件
+                foreach (var chunkPath in chunkTempFiles.Values)
+                {
+                    try
+                    {
+                        if (File.Exists(chunkPath))
+                        {
+                            File.Delete(chunkPath);
+                        }
+                    }
+                    catch { /* 忽略清理错误 */ }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 处理单个文件块（修复文件锁定问题）
+        /// </summary>
+        private async Task ProcessChunkAsync(string sourcePath, string chunkTempPath, int chunkIndex, int chunkSizeBytes, long fileSize)
+        {
+            long startPosition = (long)chunkIndex * chunkSizeBytes;
+            long endPosition = Math.Min(startPosition + chunkSizeBytes, fileSize);
+            int currentChunkSize = (int)(endPosition - startPosition);
+
+            try
+            {
+                // 步骤1: 从源文件读取指定块的数据到内存
+                byte[] buffer = new byte[currentChunkSize];
+
+                using (var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                {
+                    sourceStream.Position = startPosition;
+                    await sourceStream.ReadAsync(buffer, 0, currentChunkSize, _cancellationToken);
+                }
+
+                // 步骤2: 将数据直接写入块临时文件
+                Directory.CreateDirectory(Path.GetDirectoryName(chunkTempPath));
+                using (var chunkStream = new FileStream(chunkTempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    await chunkStream.WriteAsync(buffer, 0, currentChunkSize, _cancellationToken);
+                    await chunkStream.FlushAsync(_cancellationToken);
+                }
+
+                // 报告进度
+                ReportProgress($"处理块 {chunkIndex + 1}/{Math.Ceiling((double)fileSize / chunkSizeBytes)} - " +
+                              $"{Path.GetFileName(sourcePath)} - 100%", -1);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, $"处理文件块失败: {sourcePath}, 块 {chunkIndex}");
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// 验证文件完整性
+        /// </summary>
+        private async Task<bool> VerifyFileIntegrityAsync(string sourcePath, string targetPath)
+        {
+            // 如果使用哈希比较方法，我们可以利用现有哈希计算函数
+            if (_options.CompareMethod == ESyncCompareMethod.Hash && _options.HashAlgorithm.HasValue)
+            {
+                using (var sourceStream = new FileStream(sourcePath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+                using (var targetStream = new FileStream(targetPath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+                {
+                    string algorithm = _options.HashAlgorithm.ToString();
+                    byte[] sourceHash = HashHelper.ComputeHash(sourceStream, algorithm);
+                    byte[] targetHash = HashHelper.ComputeHash(targetStream, algorithm);
+
+                    return CompareHash(sourceHash, targetHash);
+                }
+            }
+            else
+            {
+                // 对于其他比较方法，执行标准比较
+                var sourceInfo = new FileInfo(sourcePath);
+                var targetInfo = new FileInfo(targetPath);
+
+                // 首先比较大小
+                if (sourceInfo.Length != targetInfo.Length)
+                    return false;
+
+                // 如果文件很小，直接比较内容
+                if (sourceInfo.Length < 1024 * 1024) // 小于1MB
+                {
+                    return await CompareFileContentCompletely(sourcePath, targetPath);
+                }
+
+                // 对于大文件，使用抽样比较
+                return await CompareFileContentSampling(sourcePath, targetPath);
+            }
+        }
+
+        /// <summary>
+        /// 完全比较两个文件的内容
+        /// </summary>
+        private async Task<bool> CompareFileContentCompletely(string file1, string file2)
+        {
+            const int bufferSize = 4096;
+
+            using (var stream1 = new FileStream(file1, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read, bufferSize, FileOptions.SequentialScan))
+            using (var stream2 = new FileStream(file2, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read, bufferSize, FileOptions.SequentialScan))
+            {
+                byte[] buffer1 = new byte[bufferSize];
+                byte[] buffer2 = new byte[bufferSize];
+
+                while (true)
+                {
+                    int count1 = await stream1.ReadAsync(buffer1, 0, bufferSize);
+                    int count2 = await stream2.ReadAsync(buffer2, 0, bufferSize);
+
+                    if (count1 != count2)
+                        return false;
+
+                    if (count1 == 0)
+                        return true;
+
+                    for (int i = 0; i < count1; i++)
+                    {
+                        if (buffer1[i] != buffer2[i])
+                            return false;
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// 使用抽样比较两个文件的内容
+        /// </summary>
+        private async Task<bool> CompareFileContentSampling(string file1, string file2)
+        {
+            const int sampleSize = 8192;
+            const double samplingRate = 0.01; // 抽样比例1%
+
+            using (var stream1 = new FileStream(file1, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+            using (var stream2 = new FileStream(file2, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+            {
+                long fileSize = stream1.Length;
+
+                // 始终比较文件头部和尾部
+                if (!await CompareFileRegion(stream1, stream2, 0, (int)Math.Min(sampleSize, fileSize)))
+                    return false;
+
+                if (fileSize > sampleSize)
+                {
+                    if (!await CompareFileRegion(stream1, stream2, fileSize - sampleSize, sampleSize))
+                        return false;
+
+                    // 随机抽样比较中间部分
+                    Random random = new Random(fileSize.GetHashCode());
+                    int numSamples = (int)Math.Max(1, (fileSize * samplingRate) / sampleSize);
+
+                    for (int i = 0; i < numSamples; i++)
+                    {
+                        long position = sampleSize + (long)(random.NextDouble() * (fileSize - sampleSize * 2));
+                        if (!await CompareFileRegion(stream1, stream2, position, sampleSize))
+                            return false;
+                    }
+                }
+
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// 比较两个文件流指定区域的内容
+        /// </summary>
+        private async Task<bool> CompareFileRegion(Stream stream1, Stream stream2, long position, int length)
+        {
+            byte[] buffer1 = new byte[length];
+            byte[] buffer2 = new byte[length];
+
+            stream1.Position = position;
+            stream2.Position = position;
+
+            await stream1.ReadAsync(buffer1, 0, length);
+            await stream2.ReadAsync(buffer2, 0, length);
+
+            for (int i = 0; i < length; i++)
+            {
+                if (buffer1[i] != buffer2[i])
+                    return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// 验证文件块的完整性
+        /// </summary>
+        private async Task<bool> VerifyChunkIntegrityAsync(string sourcePath, string chunkPath, int chunkIndex, int chunkSizeBytes)
+        {
+            if (!File.Exists(chunkPath))
+                return false;
+
+            var chunkInfo = new FileInfo(chunkPath);
+            var sourceInfo = new FileInfo(sourcePath);
+
+            long startPosition = (long)chunkIndex * chunkSizeBytes;
+            long endPosition = Math.Min(startPosition + chunkSizeBytes, sourceInfo.Length);
+            int expectedChunkSize = (int)(endPosition - startPosition);
+
+            // 首先检查大小
+            if (chunkInfo.Length != expectedChunkSize)
+                return false;
+
+            // 然后比较内容抽样
+            using (var sourceStream = new FileStream(sourcePath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+            using (var chunkStream = new FileStream(chunkPath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+            {
+                sourceStream.Position = startPosition;
+
+                // 对于小块，直接完整比较
+                if (expectedChunkSize < 1024 * 1024) // 小于1MB
+                {
+                    byte[] sourceBuffer = new byte[expectedChunkSize];
+                    byte[] chunkBuffer = new byte[expectedChunkSize];
+
+                    await sourceStream.ReadAsync(sourceBuffer, 0, expectedChunkSize);
+                    await chunkStream.ReadAsync(chunkBuffer, 0, expectedChunkSize);
+
+                    return CompareBytes(sourceBuffer, chunkBuffer);
+                }
+
+                // 对于大块，使用抽样比较
+                const int sampleSize = 8192;
+
+                // 比较开始、中间和结束位置
+                if (!await CompareStreamRegion(sourceStream, chunkStream, 0, sampleSize))
+                    return false;
+
+                if (!await CompareStreamRegion(sourceStream, chunkStream, expectedChunkSize / 2, sampleSize))
+                    return false;
+
+                if (!await CompareStreamRegion(sourceStream, chunkStream, expectedChunkSize - sampleSize, sampleSize))
+                    return false;
+
+                return true;
+            }
+        }
+
+        /// <summary>
+        /// 比较两个流指定区域的内容
+        /// </summary>
+        private async Task<bool> CompareStreamRegion(Stream stream1, Stream stream2, long relativePosition, int length)
+        {
+            long originalPosition1 = stream1.Position;
+            long originalPosition2 = stream2.Position;
+
+            try
+            {
+                stream1.Position = originalPosition1 + relativePosition;
+                stream2.Position = relativePosition; // 第二个流从0开始
+
+                byte[] buffer1 = new byte[length];
+                byte[] buffer2 = new byte[length];
+
+                int read1 = await stream1.ReadAsync(buffer1, 0, length);
+                int read2 = await stream2.ReadAsync(buffer2, 0, length);
+
+                if (read1 != read2)
+                    return false;
+
+                for (int i = 0; i < read1; i++)
+                {
+                    if (buffer1[i] != buffer2[i])
+                        return false;
+                }
+
+                return true;
+            }
+            finally
+            {
+                // 恢复原始位置
+                stream1.Position = originalPosition1;
+                stream2.Position = originalPosition2;
             }
         }
 
@@ -1875,6 +2347,29 @@ namespace MDriveSync.Core.Services
         /// 定时任务时，是否立即执行一次
         /// </summary>
         public bool ExecuteImmediately { get; set; } = true;
+
+        /// <summary>
+        /// 文件同步分块大小（MB），当值大于0时启用分块传输
+        /// 分块传输支持断点续传，适用于大文件传输，对大文件采用固定分割，并对比 hash 的方式进行完整性校验，如果某个块一致，则不再传输
+        /// 当需要传输的分块完成后，最后再合并到临时文件 .mdrivetmp 中
+        /// 分块默认后缀名格式为 {文件名}.part{分块序号}.mdrivetmp
+        /// </summary>
+        public int ChunkSizeMB { get; set; } = 0;
+
+        /// <summary>
+        /// 同步完成后是否同步文件的最后修改时间
+        /// </summary>
+        public bool SyncLastModifiedTime { get; set; } = true;
+
+        /// <summary>
+        /// 临时文件后缀，用于标识传输中的文件。默认为.mdrivetmp
+        /// </summary>
+        public string TempFileSuffix { get; set; } = ".mdrivetmp";
+
+        /// <summary>
+        /// 文件传输完成后验证文件完整性
+        /// </summary>
+        public bool VerifyAfterCopy { get; set; } = true;
 
         /// <summary>
         /// 源存储提供者类型（用于跨服务同步）

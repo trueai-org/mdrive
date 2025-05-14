@@ -195,25 +195,29 @@ namespace MDriveSync.Cli
             Console.WriteLine("执行文件同步操作");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine("  mdrive sync [选项]");
+            Console.WriteLine(" mdrive sync [选项]");
             Console.WriteLine();
             Console.WriteLine("选项:");
-            Console.WriteLine("  --source, -s                源目录路径 (必需)");
-            Console.WriteLine("  --target, -t                目标目录路径 (必需)");
-            Console.WriteLine("  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
-            Console.WriteLine("  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
-            Console.WriteLine("  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
-            Console.WriteLine("  --config, -f                配置文件路径, 示例: -f sync.json");
-            Console.WriteLine("  --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)");
-            Console.WriteLine("  --preview, -p               预览模式，不实际执行操作 (默认: false)");
-            Console.WriteLine("  --verbose, -v               显示详细日志信息 (默认: false)");
-            Console.WriteLine("  --threads, -j               并行操作的最大线程数 (默认: CPU核心数)");
-            Console.WriteLine("  --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)");
-            Console.WriteLine("  --preserve-time             保留原始文件时间 (默认: true)");
-            Console.WriteLine("  --interval, -i              同步间隔, 单位秒");
-            Console.WriteLine("  --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度");
-            Console.WriteLine("  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)");
-            Console.WriteLine("  --help                      显示帮助信息");
+            Console.WriteLine(" --source, -s                源目录路径 (必需)");
+            Console.WriteLine(" --target, -t                目标目录路径 (必需)");
+            Console.WriteLine(" --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
+            Console.WriteLine(" --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
+            Console.WriteLine(" --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
+            Console.WriteLine(" --config, -f                配置文件路径, 示例: -f sync.json");
+            Console.WriteLine(" --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)");
+            Console.WriteLine(" --preview, -p               预览模式，不实际执行操作 (默认: false)");
+            Console.WriteLine(" --verbose, -v               显示详细日志信息 (默认: false)");
+            Console.WriteLine(" --threads, -j               并行操作的最大线程数 (默认: CPU核心数)");
+            Console.WriteLine(" --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)");
+            Console.WriteLine(" --preserve-time             保留原始文件时间 (默认: true)");
+            Console.WriteLine(" --interval, -i              同步间隔, 单位秒");
+            Console.WriteLine(" --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度");
+            Console.WriteLine(" --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)");
+            Console.WriteLine(" --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输");
+            Console.WriteLine(" --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)");
+            Console.WriteLine(" --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)");
+            Console.WriteLine(" --verify-after-copy         文件传输完成后验证文件完整性 (默认: true)");
+            Console.WriteLine(" --help                      显示帮助信息");
         }
 
         /// <summary>
@@ -374,6 +378,31 @@ namespace MDriveSync.Cli
                             options.ExecuteImmediately = executeImmediately;
                         else
                             options.ExecuteImmediately = true;
+                        break;
+
+                    case "--chunk-size":
+                    case "--chunk":
+                        if (value != null && int.TryParse(value, out int chunkSize) && chunkSize > 0)
+                            options.ChunkSizeMB = chunkSize;
+                        break;
+
+                    case "--sync-last-modified-time":
+                        if (value != null && bool.TryParse(value, out bool syncTime))
+                            options.SyncLastModifiedTime = syncTime;
+                        else
+                            options.SyncLastModifiedTime = true;
+                        break;
+
+                    case "--temp-file-suffix":
+                        if (value != null)
+                            options.TempFileSuffix = value;
+                        break;
+
+                    case "--verify-after-copy":
+                        if (value != null && bool.TryParse(value, out bool verify))
+                            options.VerifyAfterCopy = verify;
+                        else
+                            options.VerifyAfterCopy = true;
                         break;
                 }
             }
