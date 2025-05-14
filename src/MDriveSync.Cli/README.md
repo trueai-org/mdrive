@@ -56,13 +56,15 @@ MDriveSync CLI 提供了以下主要命令：
   mdrive [命令] [选项]
 
 命令:
-  sync      执行文件同步操作
-  config    管理同步配置文件
-  version   显示程序版本信息
+  sync     执行文件同步操作
+  config   管理同步配置文件
+  version  显示程序版本信息
+  exit     退出程序 (仅在开发模式下有效)
+  quit     退出程序 (仅在开发模式下有效)
 
 选项:
-  --help    显示帮助信息
-
+  --help, -h     显示帮助信息
+  --dev          开发模式，交互式运行程序
 ```
 
 ## 同步命令 (sync)
@@ -77,20 +79,26 @@ sync - 执行文件同步操作
   mdrive sync [选项]
 
 选项:
-  -s, --source <SOURCE>            源目录路径 (必需)
-  -t, --target <TARGET>            目标目录路径 (必需)
-  -m, --mode <MODE>                同步模式：OneWay(单向)、Mirror(镜像)、TwoWay(双向) [默认: OneWay]
-  -c, --compare <COMPARE>          文件比较方法：Size(大小)、DateTime(修改时间)、DateTimeAndSize(时间和大小)、
-                                   Content(内容)、Hash(哈希) [默认: DateTimeAndSize]
-  -h, --hash <HASH>                哈希算法：MD5、SHA1、SHA256、SHA384、SHA512 [默认: SHA256]
-  -f, --config <CONFIG>            配置文件路径
-  -e, --exclude <EXCLUDE>          排除的文件或目录模式（支持通配符，可多次指定）
-  -p, --preview                    预览模式，不实际执行操作
-  -v, --verbose                    显示详细日志信息
-  -j, --threads <THREADS>          并行操作的最大线程数 [默认: 系统处理器数量]
-  -r, --recycle-bin                使用回收站代替直接删除文件 [默认: true]
-  --preserve-time                  保留原始文件时间 [默认: true]
-  --help                           显示帮助信息
+  --source, -s                源目录路径 (必需)
+  --target, -t                目标目录路径 (必需)
+  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)
+  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)
+  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128
+  --config, -f                配置文件路径, 示例: -f sync.json
+  --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)
+  --preview, -p               预览模式，不实际执行操作 (默认: false)
+  --verbose, -v               显示详细日志信息 (默认: false)
+  --threads, -j               并行操作的最大线程数 (默认: CPU核心数)
+  --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)
+  --preserve-time             保留原始文件时间 (默认: true)
+  --interval, -i              同步间隔, 单位秒
+  --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度
+  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)
+  --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输
+  --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)
+  --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)
+  --verify-after-copy         文件传输完成后验证文件完整性 (默认: true)
+  --help                      显示帮助信息
 
 ```
 
