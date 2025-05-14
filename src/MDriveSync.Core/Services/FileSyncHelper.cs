@@ -1619,13 +1619,17 @@ namespace MDriveSync.Core.Services
                     {
                         File.SetCreationTimeUtc(targetPath, File.GetCreationTimeUtc(sourcePath));
                         File.SetLastWriteTimeUtc(targetPath, File.GetLastWriteTimeUtc(sourcePath));
-                        File.SetLastAccessTimeUtc(targetPath, File.GetLastAccessTimeUtc(sourcePath));
+
+                        // 不同步访问时间
+                        //File.SetLastAccessTimeUtc(targetPath, File.GetLastAccessTimeUtc(sourcePath));
                     }
 
                     success = true;
                 }
-                catch (IOException) when (currentRetry < maxRetries)
+                catch (IOException iex) when (currentRetry < maxRetries)
                 {
+                    Log.Warning(iex, "复制文件时出现IO异常: {Message}, 将重试操作", iex.Message);
+
                     currentRetry++;
 
                     // 清理可能损坏的临时文件
@@ -1682,7 +1686,7 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 分块文件复制方法（修复多线程并发问题）
+        /// 分块文件复制方法（支持断点续传和分块校验）
         /// </summary>
         private async Task CopyFileWithChunksAsync(string sourcePath, string tempTargetPath, string targetPath)
         {
@@ -1694,36 +1698,59 @@ namespace MDriveSync.Core.Services
             int chunkSizeBytes = _options.ChunkSizeMB * 1024 * 1024;
             int chunksCount = (int)Math.Ceiling((double)fileSize / chunkSizeBytes);
 
-            // 检查目标文件是否存在，如果存在则尝试使用现有块
-            bool targetExists = File.Exists(targetPath);
+            // 设置使用的哈希算法 - 优先使用用户配置的算法，否则默认使用SHA256
+            string hashAlgorithm = _options.HashAlgorithm?.ToString() ?? "SHA256";
+            Log.Debug($"使用 {hashAlgorithm} 算法进行分块校验");
+
+            // 记录分块状态
             bool[] chunkCompleted = new bool[chunksCount];
-            Dictionary<int, string> chunkTempFiles = new Dictionary<int, string>();
+           var chunkTempFiles = new ConcurrentDictionary<int, string>();
 
             try
             {
                 // 检查之前的块是否已经存在并且有效
-                if (targetExists && chunksCount > 1)
+                if (chunksCount > 1)
                 {
+                    Log.Debug($"检查分块文件是否可复用，共 {chunksCount} 个分块");
+
+                    int reusedChunks = 0;
+
                     for (int i = 0; i < chunksCount; i++)
                     {
                         string chunkPath = $"{targetPath}.part{i}{_options.TempFileSuffix}";
                         if (File.Exists(chunkPath))
                         {
                             // 验证块的完整性
-                            bool chunkValid = await VerifyChunkIntegrityAsync(sourcePath, chunkPath, i, chunkSizeBytes);
+                            ReportProgress($"验证分块 {i + 1}/{chunksCount} 的完整性", -1);
+                            bool chunkValid = await VerifyChunkIntegrityAsync(sourcePath, chunkPath, i, chunkSizeBytes, hashAlgorithm);
                             chunkCompleted[i] = chunkValid;
 
                             if (chunkValid)
                             {
                                 // 如果块有效，记录到字典中
                                 chunkTempFiles[i] = chunkPath;
+                                reusedChunks++;
+                                ReportProgress($"分块 {i + 1}/{chunksCount} 校验通过，可复用", -1);
                             }
                             else if (File.Exists(chunkPath))
                             {
                                 // 如果块无效，删除它
-                                try { File.Delete(chunkPath); } catch { }
+                                try
+                                {
+                                    File.Delete(chunkPath);
+                                    ReportProgress($"分块 {i + 1}/{chunksCount} 校验失败，已删除", -1);
+                                }
+                                catch (Exception ex)
+                                {
+                                    Log.Warning(ex, $"删除无效分块文件失败: {chunkPath}");
+                                }
                             }
                         }
+                    }
+
+                    if (reusedChunks > 0)
+                    {
+                        Log.Information($"成功复用 {reusedChunks}/{chunksCount} 个分块文件，断点续传");
                     }
                 }
 
@@ -1785,6 +1812,8 @@ namespace MDriveSync.Core.Services
                 }
 
                 // 所有块处理完成后，将块合并到临时文件
+                ReportProgress($"所有分块处理完成，开始合并文件", -1);
+
                 using (var targetStream = new FileStream(tempTargetPath, FileMode.Open, FileAccess.Write, FileShare.None))
                 {
                     for (int i = 0; i < chunksCount; i++)
@@ -1802,8 +1831,18 @@ namespace MDriveSync.Core.Services
                         else
                         {
                             // 如果缺少块，抛出异常
-                            throw new IOException($"缺少块 {i} 用于文件 {targetPath}");
+                            throw new IOException($"缺少块 {i}/{chunksCount} 用于文件 {targetPath}");
                         }
+                    }
+                }
+
+                // 最后进行完整性验证
+                if (_options.VerifyAfterCopy)
+                {
+                    ReportProgress($"正在验证合并后的文件完整性: {Path.GetFileName(targetPath)}", -1);
+                    if (!await VerifyFileIntegrityAsync(sourcePath, tempTargetPath))
+                    {
+                        throw new IOException($"文件完整性验证失败: {sourcePath} -> {tempTargetPath}");
                     }
                 }
 
@@ -1814,26 +1853,86 @@ namespace MDriveSync.Core.Services
                 }
 
                 File.Move(tempTargetPath, targetPath);
+                ReportProgress($"文件 {Path.GetFileName(targetPath)} 传输完成", -1);
             }
             finally
             {
-                // 清理临时块文件
-                foreach (var chunkPath in chunkTempFiles.Values)
+                // 清理临时块文件 - 如成功则清理，否则保留以便下次续传
+                if (File.Exists(targetPath))
                 {
-                    try
+                    foreach (var chunkPath in chunkTempFiles.Values)
                     {
-                        if (File.Exists(chunkPath))
+                        try
                         {
-                            File.Delete(chunkPath);
+                            if (File.Exists(chunkPath))
+                            {
+                                File.Delete(chunkPath);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log.Warning(ex, $"删除临时分块文件失败: {chunkPath}");
                         }
                     }
-                    catch { /* 忽略清理错误 */ }
                 }
             }
         }
 
         /// <summary>
-        /// 处理单个文件块（修复文件锁定问题）
+        /// 验证文件块的完整性 - 支持自定义哈希算法
+        /// </summary>
+        private async Task<bool> VerifyChunkIntegrityAsync(string sourcePath, string chunkPath, int chunkIndex, int chunkSizeBytes, string hashAlgorithm = "SHA256")
+        {
+            if (!File.Exists(chunkPath))
+                return false;
+
+            var chunkInfo = new FileInfo(chunkPath);
+            var sourceInfo = new FileInfo(sourcePath);
+
+            long startPosition = (long)chunkIndex * chunkSizeBytes;
+            long endPosition = Math.Min(startPosition + chunkSizeBytes, sourceInfo.Length);
+            int expectedChunkSize = (int)(endPosition - startPosition);
+
+            // 首先检查大小
+            if (chunkInfo.Length != expectedChunkSize)
+            {
+                Log.Debug($"分块大小不匹配: 预期 {expectedChunkSize} 字节, 实际 {chunkInfo.Length} 字节");
+                return false;
+            }
+
+            try
+            {
+                // 使用指定的哈希算法计算源文件分块的哈希值
+                byte[] sourceChunkHash;
+                using (var sourceStream = new FileStream(sourcePath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+                {
+                    sourceStream.Position = startPosition;
+                    byte[] buffer = new byte[expectedChunkSize];
+                    await sourceStream.ReadAsync(buffer, 0, expectedChunkSize, _cancellationToken);
+                    sourceChunkHash = HashHelper.ComputeHash(buffer, hashAlgorithm);
+                }
+
+                // 计算目标分块文件的哈希值
+                byte[] targetChunkHash;
+                using (var chunkStream = new FileStream(chunkPath, FileMode.Open, System.IO.FileAccess.Read, FileShare.Read))
+                {
+                    byte[] buffer = new byte[expectedChunkSize];
+                    await chunkStream.ReadAsync(buffer, 0, expectedChunkSize, _cancellationToken);
+                    targetChunkHash = HashHelper.ComputeHash(buffer, hashAlgorithm);
+                }
+
+                // 比较哈希值
+                return CompareHash(sourceChunkHash, targetChunkHash);
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, $"验证分块时发生错误: {chunkPath}");
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// 处理单个文件块
         /// </summary>
         private async Task ProcessChunkAsync(string sourcePath, string chunkTempPath, int chunkIndex, int chunkSizeBytes, long fileSize)
         {
@@ -1843,7 +1942,7 @@ namespace MDriveSync.Core.Services
 
             try
             {
-                // 步骤1: 从源文件读取指定块的数据到内存
+                // 从源文件读取指定块的数据到内存
                 byte[] buffer = new byte[currentChunkSize];
 
                 using (var sourceStream = new FileStream(sourcePath, FileMode.Open, FileAccess.Read, FileShare.Read))
@@ -1852,8 +1951,10 @@ namespace MDriveSync.Core.Services
                     await sourceStream.ReadAsync(buffer, 0, currentChunkSize, _cancellationToken);
                 }
 
-                // 步骤2: 将数据直接写入块临时文件
+                // 确保目录存在
                 Directory.CreateDirectory(Path.GetDirectoryName(chunkTempPath));
+
+                // 将数据直接写入块临时文件
                 using (var chunkStream = new FileStream(chunkTempPath, FileMode.Create, FileAccess.Write, FileShare.None))
                 {
                     await chunkStream.WriteAsync(buffer, 0, currentChunkSize, _cancellationToken);

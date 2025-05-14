@@ -1,7 +1,7 @@
 ﻿{
   "SourcePath": "E:\\_temp\\____synctest3",
   "TargetPath": "E:\\_temp\\____synctest4",
-  "SyncMode": "TwoWay",
+  "SyncMode": "OneWay",
   "CompareMethod": "DateTimeAndSize",
   "HashAlgorithm": null,
   "SamplingRate": 0.1,
