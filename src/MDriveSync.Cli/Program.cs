@@ -1,6 +1,6 @@
 ﻿using MDriveSync.Core.Services;
-using MDriveSync.Infrastructure;
 using MDriveSync.Security.Models;
+using Quartz;
 using Serilog;
 using System.Text.Json;
 
@@ -147,12 +147,6 @@ namespace MDriveSync.Cli
                     return 1;
                 }
 
-                Log.Information($"开始同步操作...");
-                Log.Information($"源目录: {options.SourcePath}");
-                Log.Information($"目标目录: {options.TargetPath}");
-                Log.Information($"同步模式: {options.SyncMode}");
-                Log.Information($"比较方法: {options.CompareMethod}");
-
                 if (options.PreviewOnly)
                 {
                     Log.Information("预览模式：不会执行实际文件操作");
@@ -178,20 +172,10 @@ namespace MDriveSync.Cli
                 var syncHelper = new FileSyncHelper(options, progress);
                 var result = await syncHelper.SyncAsync();
 
-                // 显示结果
-                Log.Information($"同步操作完成，状态: {result.Status}");
-                Log.Information($"总耗时: {result.ElapsedTime.TotalSeconds:F2} 秒");
-
-                if (result.Statistics != null)
+                // 如果配置了定时任务，则一直执行
+                if (!string.IsNullOrEmpty(options.CronExpression) || options.Interval > 0)
                 {
-                    Log.Information($"文件复制: {result.Statistics.FilesCopied} 个");
-                    Log.Information($"文件更新: {result.Statistics.FilesUpdated} 个");
-                    Log.Information($"文件删除: {result.Statistics.FilesDeleted} 个");
-                    Log.Information($"文件跳过: {result.Statistics.FilesSkipped} 个");
-                    Log.Information($"目录创建: {result.Statistics.DirectoriesCreated} 个");
-                    Log.Information($"目录删除: {result.Statistics.DirectoriesDeleted} 个");
-                    Log.Information($"错误数量: {result.Statistics.Errors} 个");
-                    Log.Information($"处理总量: {result.Statistics.BytesProcessed.FormatSize()}");
+                    Console.ReadKey();
                 }
 
                 return result.Status == ESyncStatus.Completed ? 0 : 1;
@@ -214,19 +198,22 @@ namespace MDriveSync.Cli
             Console.WriteLine("  mdrive sync [选项]");
             Console.WriteLine();
             Console.WriteLine("选项:");
-            Console.WriteLine("  --source, -s           源目录路径 (必需)");
-            Console.WriteLine("  --target, -t           目标目录路径 (必需)");
-            Console.WriteLine("  --mode, -m             同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
-            Console.WriteLine("  --compare, -c          比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
-            Console.WriteLine("  --hash, -h             哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
-            Console.WriteLine("  --config, -f           配置文件路径, 示例: -f sync.json");
-            Console.WriteLine("  --exclude, -e          排除的文件或目录模式 (支持通配符，可多次指定)");
-            Console.WriteLine("  --preview, -p          预览模式，不实际执行操作 (默认: false)");
-            Console.WriteLine("  --verbose, -v          显示详细日志信息 (默认: false)");
-            Console.WriteLine("  --threads, -j          并行操作的最大线程数 (默认: CPU核心数)");
-            Console.WriteLine("  --recycle-bin, -r      使用回收站代替直接删除文件 (默认: true)");
-            Console.WriteLine("  --preserve-time        保留原始文件时间 (默认: true)");
-            Console.WriteLine("  --help                 显示帮助信息");
+            Console.WriteLine("  --source, -s                源目录路径 (必需)");
+            Console.WriteLine("  --target, -t                目标目录路径 (必需)");
+            Console.WriteLine("  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
+            Console.WriteLine("  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
+            Console.WriteLine("  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
+            Console.WriteLine("  --config, -f                配置文件路径, 示例: -f sync.json");
+            Console.WriteLine("  --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)");
+            Console.WriteLine("  --preview, -p               预览模式，不实际执行操作 (默认: false)");
+            Console.WriteLine("  --verbose, -v               显示详细日志信息 (默认: false)");
+            Console.WriteLine("  --threads, -j               并行操作的最大线程数 (默认: CPU核心数)");
+            Console.WriteLine("  --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)");
+            Console.WriteLine("  --preserve-time             保留原始文件时间 (默认: true)");
+            Console.WriteLine("  --interval, -i              同步间隔, 单位秒");
+            Console.WriteLine("  --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度");
+            Console.WriteLine("  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)");
+            Console.WriteLine("  --help                      显示帮助信息");
         }
 
         /// <summary>
@@ -357,6 +344,36 @@ namespace MDriveSync.Cli
                             options.PreserveFileTime = preserveTime;
                         else
                             options.PreserveFileTime = true;
+                        break;
+
+                    case "--interval":
+                    case "-i":
+                        if (value != null && int.TryParse(value, out int interval) && interval > 0)
+                            options.Interval = interval;
+                        break;
+
+                    case "--cron":
+                        {
+                            if (value != null)
+                            {
+                                // 验证 Cron 表达式
+                                if (!CronExpression.IsValidExpression(value))
+                                {
+                                    Log.Error($"无效的 Cron 表达式: {value}");
+                                    return null;
+                                }
+
+                                options.CronExpression = value;
+                            }
+                        }
+                        break;
+
+                    case "--execute-immediately":
+                    case "-ei":
+                        if (value != null && bool.TryParse(value, out bool executeImmediately))
+                            options.ExecuteImmediately = executeImmediately;
+                        else
+                            options.ExecuteImmediately = true;
                         break;
                 }
             }

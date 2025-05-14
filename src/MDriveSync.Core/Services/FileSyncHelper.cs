@@ -1,5 +1,6 @@
 ﻿using MDriveSync.Security;
 using MDriveSync.Security.Models;
+using Microsoft.Extensions.Options;
 using Serilog;
 using System.Diagnostics;
 using System.Text;
@@ -13,6 +14,9 @@ namespace MDriveSync.Core.Services
     /// </summary>
     public class FileSyncHelper
     {
+        private readonly object _lockObject = new object();
+        private bool _isRunning;
+
         private readonly SyncOptions _options;
         private readonly IProgress<SyncProgress> _progress;
         private readonly CancellationToken _cancellationToken;
@@ -22,6 +26,16 @@ namespace MDriveSync.Core.Services
         private int _processedItems = 0;
         private int _totalItems = 0;
         private SyncStatistics _statistics = new SyncStatistics();
+
+        /// <summary>
+        /// Cron 调度器
+        /// </summary>
+        private readonly QuartzCronScheduler _quartzCronScheduler;
+
+        /// <summary>
+        /// 定时器调度器
+        /// </summary>
+        private readonly IntervalScheduler _intervalScheduler;
 
         /// <summary>
         /// 初始化文件同步助手
@@ -34,6 +48,27 @@ namespace MDriveSync.Core.Services
             _options = options ?? throw new ArgumentNullException(nameof(options));
             _progress = progress;
             _cancellationToken = cancellationToken;
+
+            // 如果配置了 cron
+            if (!string.IsNullOrEmpty(_options.CronExpression))
+            {
+                // 创建计划
+                _quartzCronScheduler = new QuartzCronScheduler(_options.CronExpression, async () =>
+                {
+                    await SyncAsync();
+                });
+                _quartzCronScheduler.Start();
+            }
+            // 如果配置了定时器
+            else if (_options.Interval > 0)
+            {
+                // 启动定时器
+                _intervalScheduler = new IntervalScheduler(_options.Interval, async () =>
+                {
+                    await SyncAsync();
+                });
+                _intervalScheduler.Start();
+            }
         }
 
         /// <summary>
@@ -42,8 +77,6 @@ namespace MDriveSync.Core.Services
         /// <returns>同步结果</returns>
         public async Task<SyncResult> SyncAsync()
         {
-            _stopwatch.Restart();
-            _statistics = new SyncStatistics();
             var result = new SyncResult
             {
                 StartTime = DateTime.Now,
@@ -53,8 +86,40 @@ namespace MDriveSync.Core.Services
                 Status = ESyncStatus.Started
             };
 
+            // 如果配置了定时
+            if (!string.IsNullOrWhiteSpace(_options.CronExpression) || _options.Interval > 0)
+            {
+                // 未开启立即执行
+                if (!_options.ExecuteImmediately)
+                {
+                    // 直接返回
+                    result.Status = ESyncStatus.NotStarted;
+                    return result;
+                }
+            }
+
+            lock (_lockObject)
+            {
+                if (_isRunning)
+                {
+                    Log.Warning("同步操作正在进行中，请稍后再试。");
+                    result.Status = ESyncStatus.Running;
+                    return result;
+                }
+
+                _isRunning = true;
+                _stopwatch.Restart();
+                _statistics = new SyncStatistics();
+            }
+
             try
             {
+                Log.Information($"开始同步操作...");
+                Log.Information($"源目录: {_options.SourcePath}");
+                Log.Information($"目标目录: {_options.TargetPath}");
+                Log.Information($"同步模式: {_options.SyncMode}");
+                Log.Information($"比较方法: {_options.CompareMethod}");
+
                 // 初始化源目录和目标目录
                 ValidatePaths();
                 ReportProgress("正在初始化同步操作...", 0);
@@ -96,8 +161,42 @@ namespace MDriveSync.Core.Services
             }
             finally
             {
-                _stopwatch.Stop();
-                result.EndTime = DateTime.Now;
+                lock (_lockObject)
+                {
+                    _stopwatch.Stop();
+                    result.EndTime = DateTime.Now;
+
+                    _isRunning = false;
+
+                    // 显示结果
+                    Log.Information($"同步操作完成，状态: {result.Status}");
+                    Log.Information($"总耗时: {result.ElapsedTime.TotalSeconds:F2} 秒");
+
+                    if (result.Statistics != null)
+                    {
+                        Log.Information($"文件复制: {result.Statistics.FilesCopied} 个");
+                        Log.Information($"文件更新: {result.Statistics.FilesUpdated} 个");
+                        Log.Information($"文件删除: {result.Statistics.FilesDeleted} 个");
+                        Log.Information($"文件跳过: {result.Statistics.FilesSkipped} 个");
+                        Log.Information($"目录创建: {result.Statistics.DirectoriesCreated} 个");
+                        Log.Information($"目录删除: {result.Statistics.DirectoriesDeleted} 个");
+                        Log.Information($"错误数量: {result.Statistics.Errors} 个");
+                        Log.Information($"处理总量: {result.Statistics.BytesProcessed.FormatSize()}");
+                    }
+
+                    // 如果配置了 cron 或定时器，则不停止，并显示下次执行时间
+                    if (_quartzCronScheduler != null)
+                    {
+                        Log.Information($"下次执行时间: {_quartzCronScheduler.GetNextRunTime()}");
+                    }
+                    else if (_intervalScheduler != null)
+                    {
+                        Log.Information($"下次执行时间: {_intervalScheduler.GetNextRunTime()}");
+                    }
+
+                    // 任务结束了，显示终止分割信息
+                    Log.Information(new string('-', 50));
+                }
             }
         }
 
@@ -2082,6 +2181,21 @@ namespace MDriveSync.Core.Services
             "**/.svn/**",
             "**/node_modules/**"
         };
+
+        /// <summary>
+        /// 定时同步周期，单位秒
+        /// </summary>
+        public int Interval { get; set; }
+
+        /// <summary>
+        /// Cron 表达式，设置后将优先使用 Cron 表达式进行调度
+        /// </summary>
+        public string CronExpression { get; set; }
+
+        /// <summary>
+        /// 定时任务时，是否立即执行一次
+        /// </summary>
+        public bool ExecuteImmediately { get; set; } = true;
 
         /// <summary>
         /// 源存储提供者类型（用于跨服务同步）

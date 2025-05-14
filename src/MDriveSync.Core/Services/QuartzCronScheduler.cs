@@ -72,6 +72,13 @@ namespace MDriveSync.Core
             _timer.Change(dueTime, Timeout.InfiniteTimeSpan); // 重设Timer，只执行一次
         }
 
+        public DateTime GetNextRunTime()
+        {
+            var schedule = new CronExpression(_cronExpression);  // 解析Cron表达式
+            var nextRun = schedule.GetNextValidTimeAfter(DateTimeOffset.Now).GetValueOrDefault();  // 计算下一次执行时间
+            return nextRun.DateTime;  // 返回下一次执行时间
+        }
+
         // 停止调度器
         public void Stop()
         {

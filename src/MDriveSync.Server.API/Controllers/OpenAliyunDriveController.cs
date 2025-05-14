@@ -1,5 +1,4 @@
-﻿using MDriveSync.Core;
-using MDriveSync.Core.Services;
+﻿using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
@@ -7,6 +6,8 @@ using Microsoft.Extensions.Options;
 using RestSharp;
 using System.Net;
 using System.Text.Json;
+
+using AliyunDriveProviderOptions = MDriveSync.Core.AliyunDriveProviderOptions;
 
 namespace MDriveSync.Server.API.Controllers
 {
