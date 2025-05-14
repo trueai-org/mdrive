@@ -49,6 +49,13 @@ namespace MDriveSync.Core.Services
             _progress = progress;
             _cancellationToken = cancellationToken;
 
+            // 默认忽略临时文件
+            if (!string.IsNullOrWhiteSpace(_options.TempFileSuffix) &&
+                !_options.IgnorePatterns.Contains(_options.TempFileSuffix))
+            {
+                _options.IgnorePatterns.Add(_options.TempFileSuffix);
+            }
+
             // 如果配置了 cron
             if (!string.IsNullOrEmpty(_options.CronExpression))
             {
@@ -1704,7 +1711,7 @@ namespace MDriveSync.Core.Services
 
             // 记录分块状态
             bool[] chunkCompleted = new bool[chunksCount];
-           var chunkTempFiles = new ConcurrentDictionary<int, string>();
+            var chunkTempFiles = new ConcurrentDictionary<int, string>();
 
             try
             {
@@ -2416,7 +2423,7 @@ namespace MDriveSync.Core.Services
         /// <summary>
         /// 要忽略的文件/目录模式
         /// </summary>
-        public IEnumerable<string> IgnorePatterns { get; set; } = new List<string>
+        public List<string> IgnorePatterns { get; set; } = new List<string>
         {
             "**/System Volume Information/**",
             "**/$RECYCLE.BIN/**",

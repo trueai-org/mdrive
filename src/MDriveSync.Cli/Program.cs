@@ -410,7 +410,7 @@ namespace MDriveSync.Cli
             // 如果有排除模式，则设置到选项中
             if (excludePatterns.Count > 0)
             {
-                options.IgnorePatterns = excludePatterns.ToArray();
+                options.IgnorePatterns = excludePatterns.ToList();
             }
 
             // 验证必需参数
@@ -685,7 +685,7 @@ namespace MDriveSync.Cli
                         "**/*.tmp",
                         "**/*.temp",
                         "**/*.bak"
-                    }
+                    }.ToList()
                 };
 
                 // 确保目录存在
