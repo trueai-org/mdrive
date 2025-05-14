@@ -842,7 +842,8 @@ namespace MDriveSync.Core.Services
 
                         // 报告每个批次的进度
                         int progress = 70 + (int)(30 * (batchIndex + 1) / unprocessedBatchCount);
-                        ReportProgress($"处理目标->源文件 批次 {batchIndex + 1}/{unprocessedBatchCount}, 剩余: {unprocessedTargetFiles.Count - (batchIndex + 1) * batchSize}个文件", progress);
+                        int remainingFiles = Math.Max(0, unprocessedTargetFiles.Count - (batchIndex + 1) * batchSize);
+                        ReportProgress($"处理目标->源文件 批次 {batchIndex + 1}/{unprocessedBatchCount}, 剩余: {remainingFiles}个文件", progress);
                     }
                 }
             }
@@ -1027,14 +1028,20 @@ namespace MDriveSync.Core.Services
             {
                 _cancellationToken.ThrowIfCancellationRequested();
 
-                // 确定源和目标路径（考虑同步方向）
-                string actualSource = action.Direction == ESyncDirection.SourceToTarget
-                    ? action.SourcePath
-                    : action.TargetPath;
+                //// 确定源和目标路径（考虑同步方向）
+                //string actualSource = action.Direction == ESyncDirection.SourceToTarget
+                //    ? action.SourcePath
+                //    : action.TargetPath;
 
-                string actualTarget = action.Direction == ESyncDirection.SourceToTarget
-                    ? action.TargetPath
-                    : action.SourcePath;
+                //string actualTarget = action.Direction == ESyncDirection.SourceToTarget
+                //    ? action.TargetPath
+                //    : action.SourcePath;
+
+
+                // 确定源和目标路径（考虑同步方向）
+                string actualSource = action.SourcePath;
+
+                string actualTarget = action.TargetPath;
 
                 switch (action.ActionType)
                 {
