@@ -1,7 +1,7 @@
 ﻿using MDriveSync.Security;
 using MDriveSync.Security.Models;
-using Microsoft.Extensions.Options;
 using Serilog;
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
@@ -245,50 +245,45 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 执行同步操作
+        /// 优化的单向同步创建方法，使用并行处理提高性能
         /// </summary>
-        private async Task ExecuteSyncActionsAsync(List<SyncAction> actions)
-        {
-            // 按操作类型排序：先创建目录，然后复制/更新文件，最后删除文件和目录
-            var orderedActions = actions
-                .OrderBy(a => GetActionPriority(a.ActionType))
-                .ToList();
-
-            _totalItems = orderedActions.Count;
-            _processedItems = 0;
-
-            ReportProgress($"开始执行同步操作，共 {_totalItems} 个任务", 0);
-
-            if (_options.MaxParallelOperations > 1 && _options.EnableParallelFileOperations)
-            {
-                // 并行处理
-                await ProcessActionsInParallelAsync(orderedActions);
-            }
-            else
-            {
-                // 串行处理
-                await ProcessActionsSequentiallyAsync(orderedActions);
-            }
-        }
-
-        /// <summary>
-        /// 创建单向同步操作列表（源 -> 目标）
-        /// </summary>
-        private List<SyncAction> CreateOneWaySyncActionsAsync(
+        private List<SyncAction> CreateOneWaySyncActionsOptimized(
             Dictionary<string, FileInfo> sourceFiles,
             HashSet<string> sourceDirs,
             Dictionary<string, FileInfo> targetFiles,
             HashSet<string> targetDirs)
         {
-            var actions = new List<SyncAction>();
+            // 预估总共需要处理的项目数
+            var totalItems = sourceDirs.Count + sourceFiles.Count;
+            var processedItems = 0;
+            var lastProgressReport = DateTime.MinValue;
 
-            // 确保目标目录结构完整
+            ReportProgress($"正在分析同步计划：共 {sourceDirs.Count} 个目录及 {sourceFiles.Count} 个文件需要处理", 0);
+
+            // 使用ConcurrentBag来安全地收集并行处理的结果
+            var actions = new ConcurrentBag<SyncAction>();
+
+            // 使用线程安全的计数器跟踪统计信息
+            int filesToCopy = 0;
+            int filesToUpdate = 0;
+            int filesSkipped = 0;
+            long bytesToProcess = 0;
+
+            // 使用读写锁保护进度更新
+            var progressLock = new ReaderWriterLockSlim();
+
+            // 1. 批量处理目录创建 - 可以并行执行但通常不是瓶颈
+            ReportProgress("正在分析目录结构...", 0);
+            var dirStartTime = DateTime.Now;
+            var targetDirSet = new HashSet<string>(targetDirs, StringComparer.OrdinalIgnoreCase);
+
+            // 处理目录创建（目录操作通常比较少，可以顺序处理）
             foreach (var sourceDir in sourceDirs)
             {
                 var relativePath = GetRelativePath(sourceDir, _options.SourcePath);
                 var targetDirPath = Path.Combine(_options.TargetPath, relativePath);
 
-                if (!targetDirs.Contains(targetDirPath))
+                if (!targetDirSet.Contains(targetDirPath))
                 {
                     actions.Add(new SyncAction
                     {
@@ -298,246 +293,64 @@ namespace MDriveSync.Core.Services
                         RelativePath = relativePath
                     });
                 }
-            }
 
-            // 比较文件
-            foreach (var sourceEntry in sourceFiles)
-            {
-                var sourceFilePath = sourceEntry.Key;
-                var sourceFile = sourceEntry.Value;
-                var relativePath = GetRelativePath(sourceFilePath, _options.SourcePath);
-                var targetFilePath = Path.Combine(_options.TargetPath, relativePath);
-
-                if (!targetFiles.TryGetValue(targetFilePath, out var targetFile))
+                // 更新进度
+                processedItems++;
+                if (ShouldReportProgress(processedItems, totalItems, ref lastProgressReport))
                 {
-                    // 目标不存在文件，需要复制
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CopyFile,
-                        SourcePath = sourceFilePath,
-                        TargetPath = targetFilePath,
-                        RelativePath = relativePath,
-                        Size = sourceFile.Length
-                    });
-                    _statistics.FilesToCopy++;
-                    _statistics.BytesToProcess += sourceFile.Length;
-                }
-                else if (NeedsUpdate(sourceFile, targetFile))
-                {
-                    // 文件需要更新
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.UpdateFile,
-                        SourcePath = sourceFilePath,
-                        TargetPath = targetFilePath,
-                        RelativePath = relativePath,
-                        Size = sourceFile.Length
-                    });
-                    _statistics.FilesToUpdate++;
-                    _statistics.BytesToProcess += sourceFile.Length;
-                }
-                else
-                {
-                    _statistics.FilesSkipped++;
+                    double progressPercent = (double)processedItems / totalItems * 100;
+                    ReportProgress($"正在分析目录结构: {processedItems}/{totalItems} ({progressPercent:F1}%)", (int)progressPercent);
                 }
             }
 
-            return actions;
-        }
+            var dirTime = DateTime.Now - dirStartTime;
+            ReportProgress($"目录分析完成，用时: {dirTime.TotalSeconds:F2}秒", (int)((double)processedItems / totalItems * 100));
 
-        /// <summary>
-        /// 创建镜像同步操作列表（源 -> 目标，删除目标中多余内容）
-        /// </summary>
-        private List<SyncAction> CreateMirrorSyncActionsAsync(
-            Dictionary<string, FileInfo> sourceFiles,
-            HashSet<string> sourceDirs,
-            Dictionary<string, FileInfo> targetFiles,
-            HashSet<string> targetDirs)
-        {
-            // 首先创建单向同步的操作
-            var actions = CreateOneWaySyncActionsOptimized(sourceFiles, sourceDirs, targetFiles, targetDirs);
+            // 2. 批量处理文件 - 使用并行处理提高性能
+            ReportProgress($"正在分析文件: 共 {sourceFiles.Count} 个", (int)((double)processedItems / totalItems * 100));
+            var fileStartTime = DateTime.Now;
 
-            // 查找目标中需要删除的文件和目录
-            var sourceRelativePaths = sourceFiles.Keys
-                .Select(path => GetRelativePath(path, _options.SourcePath))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            // 准备目标文件查找表
+            var targetPathLookup = PrepareTargetFileLookup(targetFiles);
 
-            var targetRelativePaths = targetFiles.Keys
-                .Select(path => GetRelativePath(path, _options.TargetPath));
+            // 并行处理的参数配置
+            int parallelism = _options.EnableParallelFileOperations
+                ? Math.Min(_options.MaxParallelOperations, Environment.ProcessorCount)
+                : 1;
 
-            foreach (var targetRelativePath in targetRelativePaths)
+            // 每批处理的文件数 - 大文件集合时使用分批处理避免内存压力
+            const int batchSize = 1000;
+            var sourceFilesList = sourceFiles.ToList();
+            int batchCount = (int)Math.Ceiling(sourceFilesList.Count / (double)batchSize);
+
+            // 跟踪已处理的文件计数
+            int currentFileIndex = 0;
+            object lockObject = new object();
+
+            // 批量处理文件
+            for (int batchIndex = 0; batchIndex < batchCount; batchIndex++)
             {
-                if (!sourceRelativePaths.Contains(targetRelativePath))
-                {
-                    var targetFilePath = Path.Combine(_options.TargetPath, targetRelativePath);
-                    // 目标文件在源中不存在，需要删除
-                    actions.Add(new SyncAction
+                var currentBatch = sourceFilesList
+                    .Skip(batchIndex * batchSize)
+                    .Take(batchSize)
+                    .ToList();
+
+                // 并行处理当前批次
+                Parallel.ForEach(
+                    currentBatch,
+                    new ParallelOptions { MaxDegreeOfParallelism = parallelism },
+                    sourceEntry =>
                     {
-                        ActionType = ESyncActionType.DeleteFile,
-                        TargetPath = targetFilePath,
-                        RelativePath = targetRelativePath,
-                        Size = targetFiles[targetFilePath].Length
-                    });
-                    _statistics.FilesToDelete++;
-                }
-            }
+                        var sourceFilePath = sourceEntry.Key;
+                        var sourceFile = sourceEntry.Value;
+                        var relativePath = GetRelativePath(sourceFilePath, _options.SourcePath);
+                        var targetFilePath = Path.Combine(_options.TargetPath, relativePath);
+                        bool needsAction = false;
 
-            // 查找目标中需要删除的目录（倒序处理，先删除子目录）
-            var sourceRelativeDirs = sourceDirs
-                .Select(path => GetRelativePath(path, _options.SourcePath))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var targetRelativeDirs = targetDirs
-                .Where(d => d != _options.TargetPath) // 排除根目录
-                .Select(path => GetRelativePath(path, _options.TargetPath))
-                .OrderByDescending(p => p.Length); // 倒序排列，先删除深层目录
-
-            foreach (var targetRelativeDir in targetRelativeDirs)
-            {
-                if (!sourceRelativeDirs.Contains(targetRelativeDir))
-                {
-                    var targetDirPath = Path.Combine(_options.TargetPath, targetRelativeDir);
-                    // 目标目录在源中不存在，需要删除
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.DeleteDirectory,
-                        TargetPath = targetDirPath,
-                        RelativePath = targetRelativeDir
-                    });
-                    _statistics.DirectoriesToDelete++;
-                }
-            }
-
-            return actions;
-        }
-
-        /// <summary>
-        /// 创建双向同步操作列表（源 <-> 目标，解决冲突）
-        /// </summary>
-        private List<SyncAction> CreateTwoWaySyncActionsAsync(
-            Dictionary<string, FileInfo> sourceFiles,
-            HashSet<string> sourceDirs,
-            Dictionary<string, FileInfo> targetFiles,
-            HashSet<string> targetDirs)
-        {
-            var actions = new List<SyncAction>();
-            var processedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            // 第1步：同步目录结构
-            var allSourceRelativeDirs = sourceDirs
-                .Select(path => GetRelativePath(path, _options.SourcePath))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            var allTargetRelativeDirs = targetDirs
-                .Where(d => d != _options.TargetPath)
-                .Select(path => GetRelativePath(path, _options.TargetPath))
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            // 在目标中创建源中存在的目录
-            foreach (var sourceRelativeDir in allSourceRelativeDirs)
-            {
-                var targetDirPath = Path.Combine(_options.TargetPath, sourceRelativeDir);
-                if (!targetDirs.Contains(targetDirPath))
-                {
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CreateDirectory,
-                        SourcePath = Path.Combine(_options.SourcePath, sourceRelativeDir),
-                        TargetPath = targetDirPath,
-                        RelativePath = sourceRelativeDir
-                    });
-                }
-            }
-
-            // 在源中创建目标中存在的目录
-            foreach (var targetRelativeDir in allTargetRelativeDirs)
-            {
-                var sourceDirPath = Path.Combine(_options.SourcePath, targetRelativeDir);
-                if (!sourceDirs.Contains(sourceDirPath))
-                {
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CreateDirectory,
-                        SourcePath = targetRelativeDir,
-                        TargetPath = sourceDirPath,
-                        RelativePath = targetRelativeDir,
-                        Direction = ESyncDirection.TargetToSource
-                    });
-                }
-            }
-
-            // 第2步：处理文件
-            // 从源处理到目标
-            foreach (var sourceEntry in sourceFiles)
-            {
-                var sourceFilePath = sourceEntry.Key;
-                var sourceFile = sourceEntry.Value;
-                var relativePath = GetRelativePath(sourceFilePath, _options.SourcePath);
-                var targetFilePath = Path.Combine(_options.TargetPath, relativePath);
-
-                processedPaths.Add(relativePath);
-
-                if (!targetFiles.TryGetValue(targetFilePath, out var targetFile))
-                {
-                    // 目标不存在，复制到目标
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CopyFile,
-                        SourcePath = sourceFilePath,
-                        TargetPath = targetFilePath,
-                        RelativePath = relativePath,
-                        Size = sourceFile.Length
-                    });
-                    _statistics.FilesToCopy++;
-                    _statistics.BytesToProcess += sourceFile.Length;
-                }
-                else
-                {
-                    // 两边都存在，需要解决冲突
-                    var conflictResult = ResolveConflict(sourceFile, targetFile);
-                    switch (conflictResult)
-                    {
-                        case ESyncConflictResolution.SourceWins:
-                            actions.Add(new SyncAction
-                            {
-                                ActionType = ESyncActionType.UpdateFile,
-                                SourcePath = sourceFilePath,
-                                TargetPath = targetFilePath,
-                                RelativePath = relativePath,
-                                Size = sourceFile.Length,
-                                ConflictResolution = conflictResult
-                            });
-                            _statistics.FilesToUpdate++;
-                            _statistics.BytesToProcess += sourceFile.Length;
-                            break;
-
-                        case ESyncConflictResolution.TargetWins:
-                            actions.Add(new SyncAction
-                            {
-                                ActionType = ESyncActionType.UpdateFile,
-                                SourcePath = targetFilePath,
-                                TargetPath = sourceFilePath,
-                                RelativePath = relativePath,
-                                Size = targetFile.Length,
-                                Direction = ESyncDirection.TargetToSource,
-                                ConflictResolution = conflictResult
-                            });
-                            _statistics.FilesToUpdate++;
-                            _statistics.BytesToProcess += targetFile.Length;
-                            break;
-
-                        case ESyncConflictResolution.KeepBoth:
-                            // 保留两个版本，重命名目标文件
-                            string targetNewName = GetConflictFileName(targetFilePath);
-                            actions.Add(new SyncAction
-                            {
-                                ActionType = ESyncActionType.RenameFile,
-                                SourcePath = targetFilePath,
-                                TargetPath = targetNewName,
-                                RelativePath = GetRelativePath(targetNewName, _options.TargetPath),
-                                ConflictResolution = conflictResult
-                            });
-                            // 然后复制源文件到目标
+                        // 检查目标文件是否存在
+                        if (!targetPathLookup.TryGetValue(targetFilePath, out var targetFile))
+                        {
+                            // 目标不存在文件，需要复制
                             actions.Add(new SyncAction
                             {
                                 ActionType = ESyncActionType.CopyFile,
@@ -546,49 +359,78 @@ namespace MDriveSync.Core.Services
                                 RelativePath = relativePath,
                                 Size = sourceFile.Length
                             });
-                            _statistics.FilesToCopy++;
-                            _statistics.BytesToProcess += sourceFile.Length;
-                            break;
+                            Interlocked.Increment(ref filesToCopy);
+                            Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                            needsAction = true;
+                        }
+                        else if (NeedsUpdate(sourceFile, targetFile))
+                        {
+                            // 文件需要更新
+                            actions.Add(new SyncAction
+                            {
+                                ActionType = ESyncActionType.UpdateFile,
+                                SourcePath = sourceFilePath,
+                                TargetPath = targetFilePath,
+                                RelativePath = relativePath,
+                                Size = sourceFile.Length
+                            });
+                            Interlocked.Increment(ref filesToUpdate);
+                            Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                            needsAction = true;
+                        }
+                        else
+                        {
+                            Interlocked.Increment(ref filesSkipped);
+                        }
 
-                        case ESyncConflictResolution.Skip:
-                            _statistics.FilesSkipped++;
-                            break;
-                    }
-                }
+                        // 更新处理进度 (使用锁以避免并发更新冲突)
+                        lock (lockObject)
+                        {
+                            processedItems++;
+                            currentFileIndex++;
+
+                            if (ShouldReportProgress(processedItems, totalItems, ref lastProgressReport))
+                            {
+                                double progressPercent = (double)processedItems / totalItems * 100;
+
+                                // 计算处理速度 (文件/秒)
+                                var elapsed = DateTime.Now - fileStartTime;
+                                double filesPerSecond = elapsed.TotalSeconds > 0
+                                    ? currentFileIndex / elapsed.TotalSeconds
+                                    : 0;
+
+                                // 预估剩余时间
+                                var remainingFiles = sourceFiles.Count - currentFileIndex;
+                                string remainingTime = filesPerSecond > 0
+                                    ? $", 剩余时间: {TimeSpan.FromSeconds(remainingFiles / filesPerSecond):mm\\:ss}"
+                                    : "";
+
+                                ReportProgress($"正在分析文件: {processedItems}/{totalItems} " +
+                                              $"[复制:{filesToCopy}, 更新:{filesToUpdate}, 跳过:{filesSkipped}], " +
+                                              $"速度: {filesPerSecond:F1}文件/秒{remainingTime}",
+                                              (int)progressPercent);
+                            }
+                        }
+                    });
             }
 
-            // 从目标处理到源
-            foreach (var targetEntry in targetFiles)
-            {
-                var targetFilePath = targetEntry.Key;
-                var targetFile = targetEntry.Value;
-                var relativePath = GetRelativePath(targetFilePath, _options.TargetPath);
+            var fileTime = DateTime.Now - fileStartTime;
 
-                // 跳过已处理的文件
-                if (processedPaths.Contains(relativePath))
-                    continue;
+            // 更新同步统计信息
+            _statistics.FilesToCopy = filesToCopy;
+            _statistics.FilesToUpdate = filesToUpdate;
+            _statistics.FilesSkipped = filesSkipped;
+            _statistics.BytesToProcess = bytesToProcess;
 
-                var sourceFilePath = Path.Combine(_options.SourcePath, relativePath);
+            ReportProgress($"文件分析完成，用时: {fileTime.TotalSeconds:F2}秒。需要复制: {filesToCopy}个, " +
+                          $"需要更新: {filesToUpdate}个, 可跳过: {filesSkipped}个, 总数据量: {bytesToProcess.FormatSize()}", 100);
 
-                // 源不存在，复制到源
-                actions.Add(new SyncAction
-                {
-                    ActionType = ESyncActionType.CopyFile,
-                    SourcePath = targetFilePath,
-                    TargetPath = sourceFilePath,
-                    RelativePath = relativePath,
-                    Size = targetFile.Length,
-                    Direction = ESyncDirection.TargetToSource
-                });
-                _statistics.FilesToCopy++;
-                _statistics.BytesToProcess += targetFile.Length;
-            }
-
-            return actions;
+            // 将ConcurrentBag转换为List并按照操作类型排序返回
+            return actions.OrderBy(a => GetActionPriority(a.ActionType)).ToList();
         }
 
         /// <summary>
-        /// 优化的镜像同步创建方法
+        /// 优化的镜像同步创建方法，使用并行处理提高性能
         /// </summary>
         private List<SyncAction> CreateMirrorSyncActionsOptimized(
             Dictionary<string, FileInfo> sourceFiles,
@@ -596,48 +438,56 @@ namespace MDriveSync.Core.Services
             Dictionary<string, FileInfo> targetFiles,
             HashSet<string> targetDirs)
         {
-            // 优先创建一次性足够大小的列表，减少扩容
-            var estimatedSize = sourceFiles.Count + sourceDirs.Count + targetFiles.Count + targetDirs.Count;
-            var actions = new List<SyncAction>(estimatedSize);
+            // 预估操作数并报告进度
+            ReportProgress($"正在分析镜像同步计划：{sourceFiles.Count}个源文件，{targetFiles.Count}个目标文件", 0);
+            var startTime = DateTime.Now;
 
-            // 创建单向同步操作（优化版本）
-            actions.AddRange(CreateOneWaySyncActionsOptimized(sourceFiles, sourceDirs, targetFiles, targetDirs));
+            // 使用ConcurrentBag收集所有的操作，线程安全
+            var actions = new ConcurrentBag<SyncAction>();
 
-            // 使用高效的 HashSet 存储相对路径，提高查找效率
-            var sourceRelativePaths = new HashSet<string>(
-                sourceFiles.Keys.Select(p => GetRelativePath(p, _options.SourcePath)),
-                StringComparer.OrdinalIgnoreCase);
-
-            var sourceRelativeDirs = new HashSet<string>(
-                sourceDirs.Select(p => GetRelativePath(p, _options.SourcePath)),
-                StringComparer.OrdinalIgnoreCase);
-
-            // 查找并删除目标中需要删除的文件（并行处理较多文件时）
-            if (targetFiles.Count > 1000 && _options.EnableParallelFileOperations)
+            // 创建单向同步操作（已经并行优化）
+            var oneWayActions = CreateOneWaySyncActionsOptimized(sourceFiles, sourceDirs, targetFiles, targetDirs);
+            foreach (var action in oneWayActions)
             {
-                var deleteFileActions = targetFiles
-                    .AsParallel()
-                    .Where(tf => !sourceRelativePaths.Contains(GetRelativePath(tf.Key, _options.TargetPath)))
-                    .Select(tf => new SyncAction
-                    {
-                        ActionType = ESyncActionType.DeleteFile,
-                        TargetPath = tf.Key,
-                        RelativePath = GetRelativePath(tf.Key, _options.TargetPath),
-                        Size = tf.Value.Length
-                    })
-                    .ToList();
-
-                actions.AddRange(deleteFileActions);
-                _statistics.FilesToDelete += deleteFileActions.Count;
+                actions.Add(action);
             }
-            else
-            {
-                // 少量文件时直接顺序处理
-                foreach (var targetFile in targetFiles)
+
+            // 使用线程安全的计数器记录统计信息
+            int filesToDelete = 0;
+            int dirsToDelete = 0;
+
+            // 预计算所有的相对路径并使用高效的HashSet存储，提高查找效率
+            var sourceRelativePaths = new ConcurrentDictionary<string, byte>();
+            var sourceRelativeDirs = new ConcurrentDictionary<string, byte>();
+
+            // 并行填充源路径HashSet
+            Parallel.ForEach(sourceFiles.Keys,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                sourcePath =>
+                {
+                    var relativePath = GetRelativePath(sourcePath, _options.SourcePath);
+                    sourceRelativePaths[relativePath] = 0;
+                });
+
+            Parallel.ForEach(sourceDirs,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                sourceDir =>
+                {
+                    var relativePath = GetRelativePath(sourceDir, _options.SourcePath);
+                    sourceRelativeDirs[relativePath] = 0;
+                });
+
+            ReportProgress("预处理完成，开始查找需要删除的文件...", 20);
+
+            // 查找需要删除的文件（并行处理）
+            Parallel.ForEach(targetFiles,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                targetFile =>
                 {
                     var relativePath = GetRelativePath(targetFile.Key, _options.TargetPath);
-                    if (!sourceRelativePaths.Contains(relativePath))
+                    if (!sourceRelativePaths.ContainsKey(relativePath))
                     {
+                        // 目标文件在源中不存在，需要删除
                         actions.Add(new SyncAction
                         {
                             ActionType = ESyncActionType.DeleteFile,
@@ -645,20 +495,36 @@ namespace MDriveSync.Core.Services
                             RelativePath = relativePath,
                             Size = targetFile.Value.Length
                         });
-                        _statistics.FilesToDelete++;
+                        Interlocked.Increment(ref filesToDelete);
                     }
-                }
-            }
+                });
 
-            // 删除目录（排序处理，确保先删除子目录）
-            var dirsToDelete = targetDirs
-                .Where(d => d != _options.TargetPath)
-                .Select(d => new { Path = d, RelativePath = GetRelativePath(d, _options.TargetPath) })
-                .Where(d => !sourceRelativeDirs.Contains(d.RelativePath))
-                .OrderByDescending(d => d.Path.Length) // 确保先删除子目录
+            // 为了保证删除目录的顺序正确（子目录先删除），这部分不能完全并行化
+            // 但可以先并行筛选出需要删除的目录，然后按顺序添加到操作列表
+            var dirsToDeleteList = new ConcurrentBag<(string Path, string RelativePath, int Depth)>();
+
+            Parallel.ForEach(targetDirs.Where(d => d != _options.TargetPath),
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                targetDir =>
+                {
+                    var relativePath = GetRelativePath(targetDir, _options.TargetPath);
+                    if (!sourceRelativeDirs.ContainsKey(relativePath))
+                    {
+                        // 计算目录深度，用于后续排序
+                        int depth = relativePath.Count(c => c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar);
+                        dirsToDeleteList.Add((targetDir, relativePath, depth));
+                        Interlocked.Increment(ref dirsToDelete);
+                    }
+                });
+
+            // 按目录深度降序排序（确保先删除深层目录）
+            var orderedDirsToDelete = dirsToDeleteList
+                .ToList()
+                .OrderByDescending(d => d.Depth)
                 .ToList();
 
-            foreach (var dir in dirsToDelete)
+            // 添加目录删除操作
+            foreach (var dir in orderedDirsToDelete)
             {
                 actions.Add(new SyncAction
                 {
@@ -666,10 +532,325 @@ namespace MDriveSync.Core.Services
                     TargetPath = dir.Path,
                     RelativePath = dir.RelativePath
                 });
-                _statistics.DirectoriesToDelete++;
             }
 
-            return actions;
+            _statistics.FilesToDelete = filesToDelete;
+            _statistics.DirectoriesToDelete = dirsToDelete;
+
+            var timeElapsed = DateTime.Now - startTime;
+            ReportProgress($"镜像同步分析完成，耗时: {timeElapsed.TotalSeconds:F2}秒，需要删除: {filesToDelete}个文件, {dirsToDelete}个目录", 100);
+
+            // 将ConcurrentBag转换为List并按操作优先级排序
+            return actions.OrderBy(a => GetActionPriority(a.ActionType)).ToList();
+        }
+
+        /// <summary>
+        /// 创建优化的双向同步操作列表（源 <-> 目标，高效解决冲突），使用并行处理提高性能
+        /// </summary>
+        private List<SyncAction> CreateTwoWaySyncActionsOptimized(
+            Dictionary<string, FileInfo> sourceFiles,
+            HashSet<string> sourceDirs,
+            Dictionary<string, FileInfo> targetFiles,
+            HashSet<string> targetDirs)
+        {
+            var startTime = DateTime.Now;
+            ReportProgress($"正在分析双向同步计划：{sourceFiles.Count}个源文件，{targetFiles.Count}个目标文件", 0);
+
+            // 使用线程安全集合
+            var actions = new ConcurrentBag<SyncAction>();
+            var processedPaths = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
+            // 线程安全的统计计数器
+            int filesToCopy = 0;
+            int filesToUpdate = 0;
+            int filesSkipped = 0;
+            long bytesToProcess = 0;
+
+            // 并行预计算所有目录的相对路径
+            var allSourceRelativeDirs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+            var allTargetRelativeDirs = new ConcurrentDictionary<string, byte>(StringComparer.OrdinalIgnoreCase);
+
+            Parallel.ForEach(sourceDirs,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                sourceDir =>
+                {
+                    var relativePath = GetRelativePath(sourceDir, _options.SourcePath);
+                    allSourceRelativeDirs.TryAdd(relativePath, 0);
+                });
+
+            Parallel.ForEach(targetDirs.Where(d => d != _options.TargetPath),
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                targetDir =>
+                {
+                    var relativePath = GetRelativePath(targetDir, _options.TargetPath);
+                    allTargetRelativeDirs.TryAdd(relativePath, 0);
+                });
+
+            Log.Information($"准备双向同步: 源目录 {allSourceRelativeDirs.Count} 个, 目标目录 {allTargetRelativeDirs.Count} 个");
+            Log.Information($"源文件 {sourceFiles.Count} 个, 目标文件 {targetFiles.Count} 个");
+
+            ReportProgress("开始处理目录创建操作...", 10);
+
+            // 1. 目录创建操作（虽然目录数量通常不多，但仍使用并行可提高性能）
+
+            // 1.1 在目标中创建源中存在的目录
+            Parallel.ForEach(allSourceRelativeDirs.Keys,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations / 2 : 1 },
+                sourceRelativeDir =>
+                {
+                    var targetDirPath = Path.Combine(_options.TargetPath, sourceRelativeDir);
+                    if (!targetDirs.Contains(targetDirPath))
+                    {
+                        actions.Add(new SyncAction
+                        {
+                            ActionType = ESyncActionType.CreateDirectory,
+                            SourcePath = Path.Combine(_options.SourcePath, sourceRelativeDir),
+                            TargetPath = targetDirPath,
+                            RelativePath = sourceRelativeDir
+                        });
+                    }
+                });
+
+            // 1.2 在源中创建目标中存在的目录
+            Parallel.ForEach(allTargetRelativeDirs.Keys,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations / 2 : 1 },
+                targetRelativeDir =>
+                {
+                    var sourceDirPath = Path.Combine(_options.SourcePath, targetRelativeDir);
+                    if (!sourceDirs.Contains(sourceDirPath))
+                    {
+                        actions.Add(new SyncAction
+                        {
+                            ActionType = ESyncActionType.CreateDirectory,
+                            SourcePath = Path.Combine(_options.TargetPath, targetRelativeDir),
+                            TargetPath = sourceDirPath,
+                            RelativePath = targetRelativeDir,
+                            Direction = ESyncDirection.TargetToSource
+                        });
+                    }
+                });
+
+            ReportProgress("目录创建操作分析完成，开始预处理文件...", 20);
+
+            // 预计算并缓存所有相对路径，使用线程安全的字典
+            var sourceRelativePathMap = new ConcurrentDictionary<string, (string FullPath, FileInfo Info)>(StringComparer.OrdinalIgnoreCase);
+            var targetRelativePathMap = new ConcurrentDictionary<string, (string FullPath, FileInfo Info)>(StringComparer.OrdinalIgnoreCase);
+
+            // 并行填充源路径映射
+            Parallel.ForEach(sourceFiles,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                sourceEntry =>
+                {
+                    var relativePath = GetRelativePath(sourceEntry.Key, _options.SourcePath);
+                    sourceRelativePathMap.TryAdd(relativePath, (sourceEntry.Key, sourceEntry.Value));
+                });
+
+            // 并行填充目标路径映射
+            Parallel.ForEach(targetFiles,
+                new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                targetEntry =>
+                {
+                    var relativePath = GetRelativePath(targetEntry.Key, _options.TargetPath);
+                    targetRelativePathMap.TryAdd(relativePath, (targetEntry.Key, targetEntry.Value));
+                });
+
+            ReportProgress("文件路径映射完成，开始分析源->目标文件...", 30);
+
+            // 2.1 处理源到目标的文件（将所有源文件分成多个批次并行处理）
+            const int batchSize = 1000;
+            var sourceRelativePathsList = sourceRelativePathMap.ToList();
+            int batchCount = (int)Math.Ceiling(sourceRelativePathsList.Count / (double)batchSize);
+
+            for (int batchIndex = 0; batchIndex < batchCount; batchIndex++)
+            {
+                var currentBatch = sourceRelativePathsList
+                    .Skip(batchIndex * batchSize)
+                    .Take(batchSize)
+                    .ToList();
+
+                Parallel.ForEach(currentBatch,
+                    new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                    sourceEntry =>
+                    {
+                        var relativePath = sourceEntry.Key;
+                        var sourceFilePath = sourceEntry.Value.FullPath;
+                        var sourceFile = sourceEntry.Value.Info;
+                        var targetFilePath = Path.Combine(_options.TargetPath, relativePath);
+
+                        // 标记路径已处理
+                        processedPaths.TryAdd(relativePath, 0);
+
+                        if (!targetRelativePathMap.TryGetValue(relativePath, out var targetEntry))
+                        {
+                            // 目标不存在，复制到目标
+                            actions.Add(new SyncAction
+                            {
+                                ActionType = ESyncActionType.CopyFile,
+                                SourcePath = sourceFilePath,
+                                TargetPath = targetFilePath,
+                                RelativePath = relativePath,
+                                Size = sourceFile.Length
+                            });
+                            Interlocked.Increment(ref filesToCopy);
+                            Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                        }
+                        else
+                        {
+                            var targetFile = targetEntry.Info;
+
+                            // 两边都存在，需要解决冲突
+                            var conflictResult = ResolveConflict(sourceFile, targetFile);
+
+                            switch (conflictResult)
+                            {
+                                case ESyncConflictResolution.SourceWins:
+                                    // 只有当文件实际需要更新时才添加操作
+                                    if (NeedsUpdate(sourceFile, targetFile))
+                                    {
+                                        actions.Add(new SyncAction
+                                        {
+                                            ActionType = ESyncActionType.UpdateFile,
+                                            SourcePath = sourceFilePath,
+                                            TargetPath = targetFilePath,
+                                            RelativePath = relativePath,
+                                            Size = sourceFile.Length,
+                                            ConflictResolution = conflictResult
+                                        });
+                                        Interlocked.Increment(ref filesToUpdate);
+                                        Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                    }
+                                    else
+                                    {
+                                        Interlocked.Increment(ref filesSkipped);
+                                    }
+                                    break;
+
+                                case ESyncConflictResolution.TargetWins:
+                                    // 只有当文件实际需要更新时才添加操作
+                                    if (NeedsUpdate(targetFile, sourceFile))
+                                    {
+                                        actions.Add(new SyncAction
+                                        {
+                                            ActionType = ESyncActionType.UpdateFile,
+                                            SourcePath = targetFilePath,
+                                            TargetPath = sourceFilePath,
+                                            RelativePath = relativePath,
+                                            Size = targetFile.Length,
+                                            Direction = ESyncDirection.TargetToSource,
+                                            ConflictResolution = conflictResult
+                                        });
+                                        Interlocked.Increment(ref filesToUpdate);
+                                        Interlocked.Add(ref bytesToProcess, targetFile.Length);
+                                    }
+                                    else
+                                    {
+                                        Interlocked.Increment(ref filesSkipped);
+                                    }
+                                    break;
+
+                                case ESyncConflictResolution.KeepBoth:
+                                    // 生成冲突文件名是线程安全的
+                                    string targetNewName = GetConflictFileName(targetFilePath);
+
+                                    // 首先重命名目标文件
+                                    actions.Add(new SyncAction
+                                    {
+                                        ActionType = ESyncActionType.RenameFile,
+                                        SourcePath = targetFilePath,
+                                        TargetPath = targetNewName,
+                                        RelativePath = GetRelativePath(targetNewName, _options.TargetPath),
+                                        ConflictResolution = conflictResult
+                                    });
+
+                                    // 然后复制源文件到目标
+                                    actions.Add(new SyncAction
+                                    {
+                                        ActionType = ESyncActionType.CopyFile,
+                                        SourcePath = sourceFilePath,
+                                        TargetPath = targetFilePath,
+                                        RelativePath = relativePath,
+                                        Size = sourceFile.Length
+                                    });
+
+                                    Interlocked.Increment(ref filesToCopy);
+                                    Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                    break;
+
+                                case ESyncConflictResolution.Skip:
+                                    Interlocked.Increment(ref filesSkipped);
+                                    break;
+                            }
+                        }
+                    });
+
+                // 报告每个批次的进度
+                int progress = 30 + (int)(40 * (batchIndex + 1) / batchCount);
+                ReportProgress($"处理源->目标文件 批次 {batchIndex + 1}/{batchCount}, 已处理: {filesToCopy + filesToUpdate + filesSkipped}个文件", progress);
+            }
+
+            // 2.2 处理目标到源的文件（只处理尚未处理的文件）
+            if (targetRelativePathMap.Count > 0)
+            {
+                ReportProgress("开始分析目标->源文件...", 70);
+
+                // 筛选未处理的目标文件
+                var unprocessedTargetFiles = targetRelativePathMap
+                    .Where(entry => !processedPaths.ContainsKey(entry.Key))
+                    .ToList();
+
+                // 对于大量文件使用并行处理
+                if (unprocessedTargetFiles.Count > 0)
+                {
+                    int unprocessedBatchCount = (int)Math.Ceiling(unprocessedTargetFiles.Count / (double)batchSize);
+
+                    for (int batchIndex = 0; batchIndex < unprocessedBatchCount; batchIndex++)
+                    {
+                        var currentBatch = unprocessedTargetFiles
+                            .Skip(batchIndex * batchSize)
+                            .Take(batchSize)
+                            .ToList();
+
+                        Parallel.ForEach(currentBatch,
+                            new ParallelOptions { MaxDegreeOfParallelism = _options.EnableParallelFileOperations ? _options.MaxParallelOperations : 1 },
+                            entry =>
+                            {
+                                var relativePath = entry.Key;
+                                var targetFilePath = entry.Value.FullPath;
+                                var targetFile = entry.Value.Info;
+                                var sourceFilePath = Path.Combine(_options.SourcePath, relativePath);
+
+                                actions.Add(new SyncAction
+                                {
+                                    ActionType = ESyncActionType.CopyFile,
+                                    SourcePath = targetFilePath,
+                                    TargetPath = sourceFilePath,
+                                    RelativePath = relativePath,
+                                    Size = targetFile.Length,
+                                    Direction = ESyncDirection.TargetToSource
+                                });
+
+                                Interlocked.Increment(ref filesToCopy);
+                                Interlocked.Add(ref bytesToProcess, targetFile.Length);
+                            });
+
+                        // 报告每个批次的进度
+                        int progress = 70 + (int)(30 * (batchIndex + 1) / unprocessedBatchCount);
+                        ReportProgress($"处理目标->源文件 批次 {batchIndex + 1}/{unprocessedBatchCount}, 剩余: {unprocessedTargetFiles.Count - (batchIndex + 1) * batchSize}个文件", progress);
+                    }
+                }
+            }
+
+            // 更新统计信息
+            _statistics.FilesToCopy = filesToCopy;
+            _statistics.FilesToUpdate = filesToUpdate;
+            _statistics.FilesSkipped = filesSkipped;
+            _statistics.BytesToProcess = bytesToProcess;
+
+            var timeElapsed = DateTime.Now - startTime;
+            ReportProgress($"双向同步分析完成，耗时: {timeElapsed.TotalSeconds:F2}秒，需要复制: {filesToCopy}个, 更新: {filesToUpdate}个, 跳过: {filesSkipped}个, 总数据量: {bytesToProcess.FormatSize()}", 100);
+
+            // 将ConcurrentBag转换为List并按操作优先级排序，确保目录先创建
+            return actions.OrderBy(a => GetActionPriority(a.ActionType)).ToList();
         }
 
         /// <summary>
@@ -795,420 +976,6 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 创建优化的双向同步操作列表（源 <-> 目标，高效解决冲突）
-        /// </summary>
-        private List<SyncAction> CreateTwoWaySyncActionsOptimized(
-            Dictionary<string, FileInfo> sourceFiles,
-            HashSet<string> sourceDirs,
-            Dictionary<string, FileInfo> targetFiles,
-            HashSet<string> targetDirs)
-        {
-            // 预分配充足的容量来避免列表扩容
-            var actions = new List<SyncAction>(sourceFiles.Count + targetFiles.Count + sourceDirs.Count + targetDirs.Count);
-
-            // 使用高效的 HashSet 跟踪已处理的路径
-            var processedPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            // 预计算所有目录的相对路径并缓存（避免重复计算）
-            var allSourceRelativeDirs = new HashSet<string>(
-                sourceDirs.Select(path => GetRelativePath(path, _options.SourcePath)),
-                StringComparer.OrdinalIgnoreCase);
-
-            var allTargetRelativeDirs = new HashSet<string>(
-                targetDirs.Where(d => d != _options.TargetPath)
-                       .Select(path => GetRelativePath(path, _options.TargetPath)),
-                StringComparer.OrdinalIgnoreCase);
-
-            Log.Information($"准备双向同步: 源目录 {allSourceRelativeDirs.Count} 个, 目标目录 {allTargetRelativeDirs.Count} 个");
-            Log.Information($"源文件 {sourceFiles.Count} 个, 目标文件 {targetFiles.Count} 个");
-
-            // 第1步：同步目录结构（批量处理目录创建操作）
-
-            // 1.1: 在目标中创建源中存在的目录
-            foreach (var sourceRelativeDir in allSourceRelativeDirs)
-            {
-                var targetDirPath = Path.Combine(_options.TargetPath, sourceRelativeDir);
-                if (!targetDirs.Contains(targetDirPath))
-                {
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CreateDirectory,
-                        SourcePath = Path.Combine(_options.SourcePath, sourceRelativeDir),
-                        TargetPath = targetDirPath,
-                        RelativePath = sourceRelativeDir
-                    });
-                }
-            }
-
-            // 1.2: 在源中创建目标中存在的目录
-            foreach (var targetRelativeDir in allTargetRelativeDirs)
-            {
-                var sourceDirPath = Path.Combine(_options.SourcePath, targetRelativeDir);
-                if (!sourceDirs.Contains(sourceDirPath))
-                {
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CreateDirectory,
-                        SourcePath = Path.Combine(_options.TargetPath, targetRelativeDir),
-                        TargetPath = sourceDirPath,
-                        RelativePath = targetRelativeDir,
-                        Direction = ESyncDirection.TargetToSource
-                    });
-                }
-            }
-
-            // 第2步：处理文件（先缓存所有相对路径，避免重复计算）
-            var sourceRelativePathMap = new Dictionary<string, (string FullPath, FileInfo Info)>(sourceFiles.Count, StringComparer.OrdinalIgnoreCase);
-            var targetRelativePathMap = new Dictionary<string, (string FullPath, FileInfo Info)>(targetFiles.Count, StringComparer.OrdinalIgnoreCase);
-
-            // 预计算并缓存所有相对路径，提高处理效率
-            foreach (var sourceEntry in sourceFiles)
-            {
-                var relativePath = GetRelativePath(sourceEntry.Key, _options.SourcePath);
-                sourceRelativePathMap[relativePath] = (sourceEntry.Key, sourceEntry.Value);
-            }
-
-            foreach (var targetEntry in targetFiles)
-            {
-                var relativePath = GetRelativePath(targetEntry.Key, _options.TargetPath);
-                targetRelativePathMap[relativePath] = (targetEntry.Key, targetEntry.Value);
-            }
-
-            // 2.1: 从源处理到目标
-            foreach (var sourceEntry in sourceRelativePathMap)
-            {
-                var relativePath = sourceEntry.Key;
-                var sourceFilePath = sourceEntry.Value.FullPath;
-                var sourceFile = sourceEntry.Value.Info;
-                var targetFilePath = Path.Combine(_options.TargetPath, relativePath);
-
-                processedPaths.Add(relativePath);
-
-                if (!targetRelativePathMap.TryGetValue(relativePath, out var targetEntry))
-                {
-                    // 目标不存在，复制到目标
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CopyFile,
-                        SourcePath = sourceFilePath,
-                        TargetPath = targetFilePath,
-                        RelativePath = relativePath,
-                        Size = sourceFile.Length
-                    });
-                    _statistics.FilesToCopy++;
-                    _statistics.BytesToProcess += sourceFile.Length;
-                }
-                else
-                {
-                    var targetFile = targetEntry.Info;
-
-                    // 两边都存在，需要解决冲突
-                    var conflictResult = ResolveConflict(sourceFile, targetFile);
-
-                    switch (conflictResult)
-                    {
-                        case ESyncConflictResolution.SourceWins:
-                            // 只有当文件实际需要更新时才添加操作
-                            if (NeedsUpdate(sourceFile, targetFile))
-                            {
-                                actions.Add(new SyncAction
-                                {
-                                    ActionType = ESyncActionType.UpdateFile,
-                                    SourcePath = sourceFilePath,
-                                    TargetPath = targetFilePath,
-                                    RelativePath = relativePath,
-                                    Size = sourceFile.Length,
-                                    ConflictResolution = conflictResult
-                                });
-                                _statistics.FilesToUpdate++;
-                                _statistics.BytesToProcess += sourceFile.Length;
-                            }
-                            else
-                            {
-                                _statistics.FilesSkipped++;
-                            }
-                            break;
-
-                        case ESyncConflictResolution.TargetWins:
-                            // 只有当文件实际需要更新时才添加操作
-                            if (NeedsUpdate(targetFile, sourceFile))
-                            {
-                                actions.Add(new SyncAction
-                                {
-                                    ActionType = ESyncActionType.UpdateFile,
-                                    SourcePath = targetFilePath,
-                                    TargetPath = sourceFilePath,
-                                    RelativePath = relativePath,
-                                    Size = targetFile.Length,
-                                    Direction = ESyncDirection.TargetToSource,
-                                    ConflictResolution = conflictResult
-                                });
-                                _statistics.FilesToUpdate++;
-                                _statistics.BytesToProcess += targetFile.Length;
-                            }
-                            else
-                            {
-                                _statistics.FilesSkipped++;
-                            }
-                            break;
-
-                        case ESyncConflictResolution.KeepBoth:
-                            // 保留两个版本，使用时间戳创建唯一的重命名文件名
-                            string targetNewName = GetConflictFileName(targetFilePath);
-
-                            // 首先重命名目标文件
-                            actions.Add(new SyncAction
-                            {
-                                ActionType = ESyncActionType.RenameFile,
-                                SourcePath = targetFilePath,
-                                TargetPath = targetNewName,
-                                RelativePath = GetRelativePath(targetNewName, _options.TargetPath),
-                                ConflictResolution = conflictResult
-                            });
-
-                            // 然后复制源文件到目标
-                            actions.Add(new SyncAction
-                            {
-                                ActionType = ESyncActionType.CopyFile,
-                                SourcePath = sourceFilePath,
-                                TargetPath = targetFilePath,
-                                RelativePath = relativePath,
-                                Size = sourceFile.Length
-                            });
-
-                            _statistics.FilesToCopy++;
-                            _statistics.BytesToProcess += sourceFile.Length;
-                            break;
-
-                        case ESyncConflictResolution.Skip:
-                            _statistics.FilesSkipped++;
-                            break;
-                    }
-                }
-            }
-
-            // 2.2: 从目标处理到源（只处理源中不存在的文件）
-            if (targetRelativePathMap.Count > 0)
-            {
-                // 只处理那些尚未处理过的目标文件
-                var unprocessedTargetFiles = targetRelativePathMap
-                    .Where(entry => !processedPaths.Contains(entry.Key))
-                    .ToList();
-
-                // 并行处理大量文件时更高效
-                if (unprocessedTargetFiles.Count > 1000 && _options.EnableParallelFileOperations)
-                {
-                    var additionalActions = unprocessedTargetFiles
-                        .AsParallel()
-                        .Select(entry =>
-                        {
-                            var relativePath = entry.Key;
-                            var targetFilePath = entry.Value.FullPath;
-                            var targetFile = entry.Value.Info;
-                            var sourceFilePath = Path.Combine(_options.SourcePath, relativePath);
-
-                            _statistics.FilesToCopy++;
-                            _statistics.BytesToProcess += targetFile.Length;
-
-                            return new SyncAction
-                            {
-                                ActionType = ESyncActionType.CopyFile,
-                                SourcePath = targetFilePath,
-                                TargetPath = sourceFilePath,
-                                RelativePath = relativePath,
-                                Size = targetFile.Length,
-                                Direction = ESyncDirection.TargetToSource
-                            };
-                        })
-                        .ToList();
-
-                    actions.AddRange(additionalActions);
-                }
-                else
-                {
-                    // 对于少量文件，顺序处理更有效
-                    foreach (var entry in unprocessedTargetFiles)
-                    {
-                        var relativePath = entry.Key;
-                        var targetFilePath = entry.Value.FullPath;
-                        var targetFile = entry.Value.Info;
-                        var sourceFilePath = Path.Combine(_options.SourcePath, relativePath);
-
-                        actions.Add(new SyncAction
-                        {
-                            ActionType = ESyncActionType.CopyFile,
-                            SourcePath = targetFilePath,
-                            TargetPath = sourceFilePath,
-                            RelativePath = relativePath,
-                            Size = targetFile.Length,
-                            Direction = ESyncDirection.TargetToSource
-                        });
-
-                        _statistics.FilesToCopy++;
-                        _statistics.BytesToProcess += targetFile.Length;
-                    }
-                }
-            }
-
-            // 按优先级排序操作，这样可以确保目录先创建
-            return actions.OrderBy(a => GetActionPriority(a.ActionType)).ToList();
-        }
-
-        /// <summary>
-        /// 优化的单向同步创建方法，减少冗余计算
-        /// </summary>
-        private List<SyncAction> CreateOneWaySyncActionsOptimized(
-            Dictionary<string, FileInfo> sourceFiles,
-            HashSet<string> sourceDirs,
-            Dictionary<string, FileInfo> targetFiles,
-            HashSet<string> targetDirs)
-        {
-            // 预估总共需要处理的项目数
-            var totalItems = sourceDirs.Count + sourceFiles.Count;
-            var processedItems = 0;
-            var lastProgressReport = DateTime.MinValue;
-
-            ReportProgress($"正在分析同步计划：共 {sourceDirs.Count} 个目录及 {sourceFiles.Count} 个文件需要处理", 0);
-
-            var actions = new List<SyncAction>(sourceFiles.Count + sourceDirs.Count);
-            var targetDirSet = new HashSet<string>(targetDirs, StringComparer.OrdinalIgnoreCase);
-
-            // 1. 批量处理目录创建 - 预先分配好容量
-            ReportProgress("正在分析目录结构...", 0);
-            var dirStartTime = DateTime.Now;
-
-            // 1. 批量处理目录创建 - 预先分配好容量
-            foreach (var sourceDir in sourceDirs)
-            {
-                var relativePath = GetRelativePath(sourceDir, _options.SourcePath);
-                var targetDirPath = Path.Combine(_options.TargetPath, relativePath);
-
-                if (!targetDirSet.Contains(targetDirPath))
-                {
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CreateDirectory,
-                        SourcePath = sourceDir,
-                        TargetPath = targetDirPath,
-                        RelativePath = relativePath
-                    });
-                }
-
-                // 更新进度
-                processedItems++;
-                if (ShouldReportProgress(processedItems, totalItems, ref lastProgressReport))
-                {
-                    double progressPercent = (double)processedItems / totalItems * 100;
-                    ReportProgress($"正在分析目录结构: {processedItems}/{totalItems} ({progressPercent:F1}%)", (int)progressPercent);
-                }
-            }
-
-            var dirTime = DateTime.Now - dirStartTime;
-            ReportProgress($"目录分析完成，用时: {dirTime.TotalSeconds:F2}秒", (int)((double)processedItems / totalItems * 100));
-
-            // 2. 批量处理文件 - 减少字符串操作次数
-            ReportProgress($"正在分析文件: 共 {sourceFiles.Count} 个", (int)((double)processedItems / totalItems * 100));
-            var fileStartTime = DateTime.Now;
-
-            // 将目标文件路径转换为哈希集合供高效查找
-            var targetPathLookup = PrepareTargetFileLookup(targetFiles);
-
-            int filesToCopy = 0;
-            int filesToUpdate = 0;
-            int filesSkipped = 0;
-            long bytesToProcess = 0;
-
-            int currentFileIndex = 0;
-
-            // 2. 批量处理文件 - 减少字符串操作次数
-            foreach (var sourceEntry in sourceFiles)
-            {
-                var sourceFilePath = sourceEntry.Key;
-                var sourceFile = sourceEntry.Value;
-                var relativePath = GetRelativePath(sourceFilePath, _options.SourcePath);
-                var targetFilePath = Path.Combine(_options.TargetPath, relativePath);
-
-                bool needsAction = false;
-
-                // 检查目标文件是否存在
-                if (!targetPathLookup.TryGetValue(targetFilePath, out var targetFile))
-                {
-                    // 目标不存在文件，需要复制
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.CopyFile,
-                        SourcePath = sourceFilePath,
-                        TargetPath = targetFilePath,
-                        RelativePath = relativePath,
-                        Size = sourceFile.Length
-                    });
-                    filesToCopy++;
-                    bytesToProcess += sourceFile.Length;
-                    needsAction = true;
-                }
-                else if (NeedsUpdate(sourceFile, targetFile))
-                {
-                    // 文件需要更新
-                    actions.Add(new SyncAction
-                    {
-                        ActionType = ESyncActionType.UpdateFile,
-                        SourcePath = sourceFilePath,
-                        TargetPath = targetFilePath,
-                        RelativePath = relativePath,
-                        Size = sourceFile.Length
-                    });
-                    filesToUpdate++;
-                    bytesToProcess += sourceFile.Length;
-                    needsAction = true;
-                }
-                else
-                {
-                    filesSkipped++;
-                }
-
-                // 更新处理进度
-                processedItems++;
-                currentFileIndex++;
-
-                if (ShouldReportProgress(processedItems, totalItems, ref lastProgressReport))
-                {
-                    double progressPercent = (double)processedItems / totalItems * 100;
-                    string actionText = needsAction ? "需要处理" : "可以跳过";
-
-                    // 计算处理速度 (文件/秒)
-                    var elapsed = DateTime.Now - fileStartTime;
-                    double filesPerSecond = elapsed.TotalSeconds > 0
-                        ? currentFileIndex / elapsed.TotalSeconds
-                        : 0;
-
-                    // 预估剩余时间
-                    var remainingFiles = sourceFiles.Count - currentFileIndex;
-                    string remainingTime = filesPerSecond > 0
-                        ? $", 剩余时间: {TimeSpan.FromSeconds(remainingFiles / filesPerSecond):mm\\:ss}"
-                        : "";
-
-                    ReportProgress($"正在分析文件: {processedItems}/{totalItems} " +
-                                  $"[复制:{filesToCopy}, 更新:{filesToUpdate}, 跳过:{filesSkipped}], " +
-                                  $"速度: {filesPerSecond:F1}文件/秒{remainingTime}",
-                                  (int)progressPercent);
-                }
-            }
-
-            var fileTime = DateTime.Now - fileStartTime;
-
-            // 更新同步统计信息
-            _statistics.FilesToCopy = filesToCopy;
-            _statistics.FilesToUpdate = filesToUpdate;
-            _statistics.FilesSkipped = filesSkipped;
-            _statistics.BytesToProcess = bytesToProcess;
-
-            ReportProgress($"文件分析完成，用时: {fileTime.TotalSeconds:F2}秒。需要复制: {filesToCopy}个, " +
-                          $"需要更新: {filesToUpdate}个, 可跳过: {filesSkipped}个, 总数据量: {FormatBytes(bytesToProcess)}", 100);
-
-            return actions;
-        }
-
-        /// <summary>
         /// 准备目标文件路径查找表以加速查找
         /// </summary>
         private Dictionary<string, FileInfo> PrepareTargetFileLookup(Dictionary<string, FileInfo> targetFiles)
@@ -1220,24 +987,6 @@ namespace MDriveSync.Core.Services
             // 对于大规模文件集合，创建一个更高效的查找字典
             // 使用相同的字符串比较器确保查找时不区分大小写
             return new Dictionary<string, FileInfo>(targetFiles, StringComparer.OrdinalIgnoreCase);
-        }
-
-        /// <summary>
-        /// 格式化字节大小为人类可读格式
-        /// </summary>
-        private string FormatBytes(long bytes)
-        {
-            string[] suffixes = { "B", "KB", "MB", "GB", "TB" };
-            int i = 0;
-            double size = bytes;
-
-            while (size >= 1024 && i < suffixes.Length - 1)
-            {
-                size /= 1024;
-                i++;
-            }
-
-            return $"{size:F2} {suffixes[i]}";
         }
 
         /// <summary>
@@ -1260,76 +1009,6 @@ namespace MDriveSync.Core.Services
                 lastReport = now;
 
             return shouldReport;
-        }
-
-        /// <summary>
-        /// 并行处理同步操作
-        /// </summary>
-        private async Task ProcessActionsInParallelAsync(List<SyncAction> actions)
-        {
-            // 分组处理不同类型的操作
-            var actionGroups = actions
-                .GroupBy(a => GetActionPriority(a.ActionType))
-                .OrderBy(g => g.Key);
-
-            foreach (var group in actionGroups)
-            {
-                var groupActions = group.ToList();
-                var actionType = groupActions.FirstOrDefault()?.ActionType;
-
-                ReportProgress($"处理 {GetActionTypeDescription(actionType.Value)} 操作，共 {groupActions.Count} 项",
-                    CalculateProgress(_processedItems, _totalItems));
-
-                // 设置并行度，文件操作使用配置的并行度，目录操作单线程执行
-                int parallelism = IsFileOperation(actionType.Value)
-                    ? _options.MaxParallelOperations
-                    : 1;
-
-                await Parallel.ForEachAsync(
-                    groupActions,
-                    new ParallelOptions
-                    {
-                        MaxDegreeOfParallelism = parallelism,
-                        CancellationToken = _cancellationToken
-                    },
-                    async (action, ct) =>
-                    {
-                        await ExecuteSingleActionAsync(action);
-                        Interlocked.Increment(ref _processedItems);
-
-                        if (_processedItems % 10 == 0 || _processedItems == _totalItems)
-                        {
-                            ReportProgress(
-                                $"正在处理 {GetActionTypeDescription(action.ActionType)} 操作 ({_processedItems}/{_totalItems})",
-                                CalculateProgress(_processedItems, _totalItems)
-                            );
-                        }
-                    });
-            }
-        }
-
-        /// <summary>
-        /// 串行处理同步操作
-        /// </summary>
-        private async Task ProcessActionsSequentiallyAsync(List<SyncAction> actions)
-        {
-            for (int i = 0; i < actions.Count; i++)
-            {
-                _cancellationToken.ThrowIfCancellationRequested();
-
-                var action = actions[i];
-                await ExecuteSingleActionAsync(action);
-
-                _processedItems++;
-
-                if (i % 5 == 0 || i == actions.Count - 1)
-                {
-                    ReportProgress(
-                        $"正在处理 {GetActionTypeDescription(action.ActionType)} 操作 ({_processedItems}/{_totalItems})",
-                        CalculateProgress(_processedItems, _totalItems)
-                    );
-                }
-            }
         }
 
         /// <summary>
