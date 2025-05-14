@@ -11,7 +11,7 @@
 		<PackAsTool>true</PackAsTool>
 		<ToolCommandName>mdrive</ToolCommandName>
 		<PackageId>mdrive</PackageId>
-		<Version>1.0.5</Version>
+		<Version>1.1.0</Version>
 		<Authors>TrueAI.ORG</Authors>
 		<Description>多平台文件同步命令行工具</Description>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
