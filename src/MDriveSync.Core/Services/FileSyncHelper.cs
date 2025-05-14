@@ -1335,7 +1335,7 @@ namespace MDriveSync.Core.Services
                 ReportProgress($"高性能扫描器失败，切换到备用扫描器", -1);
 
                 // 退回到 FileFastScanner（备用扫描器）
-                var fastScanResult = await ScanWithFileFastScannerAsync(path);
+                var fastScanResult = ScanWithFileFastScannerAsync(path);
                 return fastScanResult;
             }
         }
@@ -1373,7 +1373,7 @@ namespace MDriveSync.Core.Services
         /// <summary>
         /// 使用 FileFastScanner 扫描目录
         /// </summary>
-        private async Task<(Dictionary<string, FileInfo>, HashSet<string>)> ScanWithFileFastScannerAsync(string path)
+        private (Dictionary<string, FileInfo>, HashSet<string>) ScanWithFileFastScannerAsync(string path)
         {
             var scanner = new FileFastScanner();
             var result = scanner.ScanAsync(

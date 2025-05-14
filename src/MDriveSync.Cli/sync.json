@@ -7,7 +7,7 @@
   "SamplingRate": 0.1,
   "MaxParallelOperations": 24,
   "EnableParallelFileOperations": true,
-  "DateTimeThresholdSeconds": 2,
+  "DateTimeThresholdSeconds": 0,
   "PreserveFileTime": true,
   "UseRecycleBin": true,
   "ConflictResolution": "Newer",
@@ -15,7 +15,7 @@
   "PreviewOnly": false,
   "ContinueOnError": true,
   "MaxRetries": 3,
-  "Verbose": true,
+  "Verbose": false,
   "IgnorePatterns": [
     "**/System Volume Information/**",
     "**/$RECYCLE.BIN/**",
@@ -29,5 +29,12 @@
     "**/obj/*",
     "**/.git/*",
     "**/.next/*"
-  ]
+  ],
+  "Interval": 0,
+  "CronExpression": null,
+  "ExecuteImmediately": true,
+  "ChunkSizeMB": 64,
+  "SyncLastModifiedTime": true,
+  "TempFileSuffix": ".mdrivetmp",
+  "VerifyAfterCopy": true
 }

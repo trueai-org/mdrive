@@ -2,6 +2,7 @@
 using MDriveSync.Security.Models;
 using Quartz;
 using Serilog;
+using System.Text;
 using System.Text.Json;
 
 namespace MDriveSync.Cli
@@ -13,60 +14,110 @@ namespace MDriveSync.Cli
             // 配置日志
             ConfigureLogging();
 
+            // 检查是否为开发模式
+            bool isDevMode = args.Contains("--dev");
+            if (isDevMode)
+            {
+                // 从参数列表中移除 --dev 参数
+                args = args.Where(arg => arg != "--dev").ToArray();
+                Log.Information("正在开发模式下运行，程序将保持运行状态等待新命令，按 Ctrl+C 退出");
+            }
+
+            int exitCode = 0;
             try
             {
-                if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
+                do
                 {
-                    ShowHelp();
+                    if (isDevMode && args.Length == 0)
+                    {
+                        // 在开发模式下，如果没有参数，显示提示符
+                        Console.Write("mdrive> ");
+                        string input = Console.ReadLine();
+                        if (string.IsNullOrWhiteSpace(input))
+                            continue;
 
-                    // sync 参数
-                    ShowSyncHelp();
-                    Console.WriteLine();
+                        // 解析输入的命令行
+                        args = ParseCommandLine(input).ToArray();
+                        if (args.Length == 0)
+                            continue;
+                    }
 
-                    // config 参数
-                    ShowConfigHelp();
-                    Console.WriteLine();
+                    // 处理参数
+                    if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
+                    {
+                        ShowHelp();
 
-                    // 示例
-                    Console.WriteLine("示例:");
-                    Console.WriteLine("mdrive sync --source C:\\Source --target D:\\Targetd");
+                        // sync 参数
+                        ShowSyncHelp();
+                        Console.WriteLine();
 
-                    return 0;
-                }
+                        // config 参数
+                        ShowConfigHelp();
+                        Console.WriteLine();
 
-                string command = args[0].ToLower();
+                        // 示例
+                        Console.WriteLine("示例:");
+                        Console.WriteLine("mdrive sync --source C:\\Source --target D:\\Targetd");
+                    }
+                    else
+                    {
+                        string command = args[0].ToLower();
 
-                switch (command)
-                {
-                    case "sync":
-                        return await HandleSyncCommand(args.Skip(1).ToArray());
-
-                    case "config":
-                        return HandleConfigCommand(args.Skip(1).ToArray());
-
-                    case "version":
-                        ShowVersion();
-                        return 0;
-
-                    default:
+                        switch (command)
                         {
-                            Log.Error($"未知命令: {command}");
-                            ShowHelp();
+                            case "sync":
+                                exitCode = await HandleSyncCommand(args.Skip(1).ToArray());
+                                break;
 
-                            // sync 参数
-                            ShowSyncHelp();
-                            Console.WriteLine();
+                            case "config":
+                                exitCode = HandleConfigCommand(args.Skip(1).ToArray());
+                                break;
 
-                            // config 参数
-                            ShowConfigHelp();
-                            Console.WriteLine();
+                            case "version":
+                                ShowVersion();
+                                exitCode = 0;
+                                break;
 
-                            // 示例
-                            Console.WriteLine("示例:");
-                            Console.WriteLine("mdrive sync --source C:\\Source --target D:\\Targetd");
+                            case "exit":
+                            case "quit":
+                                if (isDevMode)
+                                {
+                                    Log.Information("退出程序");
+                                    return 0;
+                                }
+                                goto default;
+
+                            default:
+                                {
+                                    Log.Error($"未知命令: {command}");
+                                    ShowHelp();
+
+                                    // sync 参数
+                                    ShowSyncHelp();
+                                    Console.WriteLine();
+
+                                    // config 参数
+                                    ShowConfigHelp();
+                                    Console.WriteLine();
+
+                                    // 示例
+                                    Console.WriteLine("示例:");
+                                    Console.WriteLine("mdrive sync --source C:\\Source --target D:\\Targetd");
+                                    exitCode = 1;
+                                }
+                                break;
                         }
-                        return 1;
-                }
+                    }
+
+                    // 如果不是开发模式，或者是带参数的正常调用，处理完后就退出
+                    if (!isDevMode || (isDevMode && args.Length > 0 && args != null))
+                    {
+                        args = Array.Empty<string>(); // 清空参数，准备下一次输入
+                    }
+
+                } while (isDevMode); // 在开发模式下循环执行
+
+                return exitCode;
             }
             catch (Exception ex)
             {
@@ -77,6 +128,63 @@ namespace MDriveSync.Cli
             {
                 Log.CloseAndFlush();
             }
+        }
+
+        /// <summary>
+        /// 解析命令行字符串为参数数组
+        /// </summary>
+        private static IEnumerable<string> ParseCommandLine(string commandLine)
+        {
+            bool inQuotes = false;
+            bool isEscaping = false;
+            var arguments = new List<string>();
+            var currentArgument = new StringBuilder();
+
+            // 处理空字符串
+            if (string.IsNullOrEmpty(commandLine))
+                return arguments;
+
+            foreach (char c in commandLine)
+            {
+                if (isEscaping)
+                {
+                    // 转义后的字符直接添加
+                    currentArgument.Append(c);
+                    isEscaping = false;
+                }
+                else if (c == '\\')
+                {
+                    // 开始转义
+                    isEscaping = true;
+                }
+                else if (c == '"')
+                {
+                    // 切换引号状态
+                    inQuotes = !inQuotes;
+                }
+                else if (c == ' ' && !inQuotes)
+                {
+                    // 空格且不在引号内，表示一个参数结束
+                    if (currentArgument.Length > 0)
+                    {
+                        arguments.Add(currentArgument.ToString());
+                        currentArgument.Clear();
+                    }
+                }
+                else
+                {
+                    // 普通字符，添加到当前参数
+                    currentArgument.Append(c);
+                }
+            }
+
+            // 添加最后一个参数
+            if (currentArgument.Length > 0)
+            {
+                arguments.Add(currentArgument.ToString());
+            }
+
+            return arguments;
         }
 
         /// <summary>
@@ -106,12 +214,15 @@ namespace MDriveSync.Cli
             Console.WriteLine("mdrive [命令] [选项]");
             Console.WriteLine();
             Console.WriteLine("命令:");
-            Console.WriteLine(" sync     执行文件同步操作");
-            Console.WriteLine(" config   管理同步配置文件");
-            Console.WriteLine(" version  显示程序版本信息");
+            Console.WriteLine("  sync     执行文件同步操作");
+            Console.WriteLine("  config   管理同步配置文件");
+            Console.WriteLine("  version  显示程序版本信息");
+            Console.WriteLine("  exit     退出程序 (仅在开发模式下有效)");
+            Console.WriteLine("  quit     退出程序 (仅在开发模式下有效)");
             Console.WriteLine();
             Console.WriteLine("选项:");
-            Console.WriteLine(" --help, -h     显示帮助信息");
+            Console.WriteLine("  --help, -h     显示帮助信息");
+            Console.WriteLine("  --dev          开发模式，交互式运行程序");
             Console.WriteLine();
             Console.WriteLine("使用 'mdrive [命令] --help' 查看特定命令的帮助信息");
             Console.WriteLine();
@@ -195,29 +306,29 @@ namespace MDriveSync.Cli
             Console.WriteLine("执行文件同步操作");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine(" mdrive sync [选项]");
+            Console.WriteLine("  mdrive sync [选项]");
             Console.WriteLine();
             Console.WriteLine("选项:");
-            Console.WriteLine(" --source, -s                源目录路径 (必需)");
-            Console.WriteLine(" --target, -t                目标目录路径 (必需)");
-            Console.WriteLine(" --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
-            Console.WriteLine(" --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
-            Console.WriteLine(" --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
-            Console.WriteLine(" --config, -f                配置文件路径, 示例: -f sync.json");
-            Console.WriteLine(" --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)");
-            Console.WriteLine(" --preview, -p               预览模式，不实际执行操作 (默认: false)");
-            Console.WriteLine(" --verbose, -v               显示详细日志信息 (默认: false)");
-            Console.WriteLine(" --threads, -j               并行操作的最大线程数 (默认: CPU核心数)");
-            Console.WriteLine(" --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)");
-            Console.WriteLine(" --preserve-time             保留原始文件时间 (默认: true)");
-            Console.WriteLine(" --interval, -i              同步间隔, 单位秒");
-            Console.WriteLine(" --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度");
-            Console.WriteLine(" --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)");
-            Console.WriteLine(" --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输");
-            Console.WriteLine(" --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)");
-            Console.WriteLine(" --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)");
-            Console.WriteLine(" --verify-after-copy         文件传输完成后验证文件完整性 (默认: true)");
-            Console.WriteLine(" --help                      显示帮助信息");
+            Console.WriteLine("  --source, -s                源目录路径 (必需)");
+            Console.WriteLine("  --target, -t                目标目录路径 (必需)");
+            Console.WriteLine("  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
+            Console.WriteLine("  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
+            Console.WriteLine("  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
+            Console.WriteLine("  --config, -f                配置文件路径, 示例: -f sync.json");
+            Console.WriteLine("  --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)");
+            Console.WriteLine("  --preview, -p               预览模式，不实际执行操作 (默认: false)");
+            Console.WriteLine("  --verbose, -v               显示详细日志信息 (默认: false)");
+            Console.WriteLine("  --threads, -j               并行操作的最大线程数 (默认: CPU核心数)");
+            Console.WriteLine("  --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)");
+            Console.WriteLine("  --preserve-time             保留原始文件时间 (默认: true)");
+            Console.WriteLine("  --interval, -i              同步间隔, 单位秒");
+            Console.WriteLine("  --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度");
+            Console.WriteLine("  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)");
+            Console.WriteLine("  --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输");
+            Console.WriteLine("  --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)");
+            Console.WriteLine("  --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)");
+            Console.WriteLine("  --verify-after-copy         文件传输完成后验证文件完整性 (默认: true)");
+            Console.WriteLine("  --help                      显示帮助信息");
         }
 
         /// <summary>
@@ -467,13 +578,13 @@ namespace MDriveSync.Cli
             Console.WriteLine("管理同步配置文件");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine("  mdrivesync config [子命令] [选项]");
+            Console.WriteLine("  mdrive config [子命令] [选项]");
             Console.WriteLine();
             Console.WriteLine("子命令:");
             Console.WriteLine("  create    创建新的配置文件");
             Console.WriteLine("  view      查看现有配置文件内容");
             Console.WriteLine();
-            Console.WriteLine("使用 'mdrivesync config [子命令] --help' 查看特定子命令的帮助信息");
+            Console.WriteLine("使用 'mdrive config [子命令] --help' 查看特定子命令的帮助信息");
         }
 
         /// <summary>
@@ -578,7 +689,7 @@ namespace MDriveSync.Cli
             Console.WriteLine("创建新的配置文件");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine("  mdrivesync config create [选项]");
+            Console.WriteLine("  mdrive config create [选项]");
             Console.WriteLine();
             Console.WriteLine("选项:");
             Console.WriteLine("  --output, -o    输出文件路径 (必需)");
@@ -651,7 +762,7 @@ namespace MDriveSync.Cli
             Console.WriteLine("查看现有配置文件内容");
             Console.WriteLine();
             Console.WriteLine("用法:");
-            Console.WriteLine("  mdrivesync config view [选项]");
+            Console.WriteLine("  mdrive config view [选项]");
             Console.WriteLine();
             Console.WriteLine("选项:");
             Console.WriteLine("  --file, -f      配置文件路径 (必需)");
