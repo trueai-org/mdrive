@@ -314,6 +314,10 @@ namespace MDriveSync.Cli
             Console.WriteLine("  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
             Console.WriteLine("  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
             Console.WriteLine("  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
+            Console.WriteLine("  --sampling-rate             哈希抽样率 (0.0-1.0之间的小数，默认: 0.1)");
+            Console.WriteLine("  --sampling-min-size         参与抽样的最小文件大小 (字节，默认: 1MB)");
+            Console.WriteLine("  --date-threshold            修改时间比较阈值 (秒，默认: 0)");
+            Console.WriteLine("  --parallel                  是否启用并行文件操作 (默认: true)");
             Console.WriteLine("  --config, -f                配置文件路径, 示例: -f sync.json");
             Console.WriteLine("  --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)");
             Console.WriteLine("  --preview, -p               预览模式，不实际执行操作 (默认: false)");
@@ -321,14 +325,20 @@ namespace MDriveSync.Cli
             Console.WriteLine("  --threads, -j               并行操作的最大线程数 (默认: CPU核心数)");
             Console.WriteLine("  --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)");
             Console.WriteLine("  --preserve-time             保留原始文件时间 (默认: true)");
+            Console.WriteLine("  --continue-on-error         发生错误时是否继续执行 (默认: true)");
+            Console.WriteLine("  --retry                     操作失败时的最大重试次数 (默认: 3)");
+            Console.WriteLine("  --conflict                  冲突解决策略: SourceWins, TargetWins, KeepBoth, Skip, Newer(默认), Older, Larger");
+            Console.WriteLine("  --follow-symlinks           是否跟踪符号链接 (默认: false)");
             Console.WriteLine("  --interval, -i              同步间隔, 单位秒");
-            Console.WriteLine("  --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度");
-            Console.WriteLine("  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)");
+            Console.WriteLine("  --cron                      Cron表达式，设置后将优先使用Cron表达式进行调度");
+            Console.WriteLine("  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步 (默认: true)");
             Console.WriteLine("  --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输");
             Console.WriteLine("  --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)");
             Console.WriteLine("  --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)");
             Console.WriteLine("  --verify-after-copy         文件传输完成后验证文件完整性 (默认: true)");
+            Console.WriteLine();
             Console.WriteLine("  --help                      显示帮助信息");
+            Console.WriteLine();
         }
 
         /// <summary>
@@ -367,6 +377,7 @@ namespace MDriveSync.Cli
 
                 switch (arg)
                 {
+                    // 基本路径选项
                     case "--source":
                     case "-s":
                         if (value != null) options.SourcePath = value;
@@ -377,6 +388,7 @@ namespace MDriveSync.Cli
                         if (value != null) options.TargetPath = value;
                         break;
 
+                    // 同步模式和方法
                     case "--mode":
                     case "-m":
                         if (value != null && Enum.TryParse<ESyncMode>(value, true, out var mode))
@@ -389,12 +401,7 @@ namespace MDriveSync.Cli
                             options.CompareMethod = compare;
                         break;
 
-                    case "--hash":
-                    case "-h":
-                        if (value != null && Enum.TryParse<EHashType>(value, true, out var hash))
-                            options.HashAlgorithm = hash;
-                        break;
-
+                    // 配置文件加载
                     case "--config":
                     case "-f":
                         if (value != null)
@@ -424,6 +431,44 @@ namespace MDriveSync.Cli
                         }
                         break;
 
+                    // 哈希相关选项
+                    case "--hash":
+                    case "-h":
+                        if (value != null && Enum.TryParse<EHashType>(value, true, out var hash))
+                            options.HashAlgorithm = hash;
+                        break;
+
+                    case "--sampling-rate":
+                        if (value != null && double.TryParse(value, out double samplingRate) && samplingRate >= 0.0 && samplingRate <= 1.0)
+                            options.SamplingRate = samplingRate;
+                        break;
+
+                    case "--sampling-min-size":
+                        if (value != null && int.TryParse(value, out int minSize) && minSize > 0)
+                            options.SamplingRateMinFileSize = minSize;
+                        break;
+
+                    // 时间比较选项
+                    case "--date-threshold":
+                        if (value != null && int.TryParse(value, out int threshold) && threshold >= 0)
+                            options.DateTimeThresholdSeconds = threshold;
+                        break;
+
+                    // 并行处理选项
+                    case "--parallel":
+                        if (value != null && bool.TryParse(value, out bool enableParallel))
+                            options.EnableParallelFileOperations = enableParallel;
+                        else
+                            options.EnableParallelFileOperations = true;
+                        break;
+
+                    case "--threads":
+                    case "-j":
+                        if (value != null && int.TryParse(value, out int threads) && threads > 0)
+                            options.MaxParallelOperations = threads;
+                        break;
+
+                    // 文件处理方式选项
                     case "--exclude":
                     case "-e":
                         if (value != null)
@@ -438,12 +483,6 @@ namespace MDriveSync.Cli
                     case "--verbose":
                     case "-v":
                         options.Verbose = true;
-                        break;
-
-                    case "--threads":
-                    case "-j":
-                        if (value != null && int.TryParse(value, out int threads) && threads > 0)
-                            options.MaxParallelOperations = threads;
                         break;
 
                     case "--recycle-bin":
@@ -461,6 +500,34 @@ namespace MDriveSync.Cli
                             options.PreserveFileTime = true;
                         break;
 
+                    // 错误处理选项
+                    case "--continue-on-error":
+                        if (value != null && bool.TryParse(value, out bool continueOnError))
+                            options.ContinueOnError = continueOnError;
+                        else
+                            options.ContinueOnError = true;
+                        break;
+
+                    case "--retry":
+                        if (value != null && int.TryParse(value, out int retries) && retries >= 0)
+                            options.MaxRetries = retries;
+                        break;
+
+                    // 符号链接选项
+                    case "--follow-symlinks":
+                        if (value != null && bool.TryParse(value, out bool followSymlinks))
+                            options.FollowSymlinks = followSymlinks;
+                        else
+                            options.FollowSymlinks = true;
+                        break;
+
+                    // 冲突处理选项
+                    case "--conflict":
+                        if (value != null && Enum.TryParse<ESyncConflictResolution>(value, true, out var conflict))
+                            options.ConflictResolution = conflict;
+                        break;
+
+                    // 定时任务选项
                     case "--interval":
                     case "-i":
                         if (value != null && int.TryParse(value, out int interval) && interval > 0)
@@ -468,18 +535,15 @@ namespace MDriveSync.Cli
                         break;
 
                     case "--cron":
+                        if (value != null)
                         {
-                            if (value != null)
+                            // 验证 Cron 表达式
+                            if (!CronExpression.IsValidExpression(value))
                             {
-                                // 验证 Cron 表达式
-                                if (!CronExpression.IsValidExpression(value))
-                                {
-                                    Log.Error($"无效的 Cron 表达式: {value}");
-                                    return null;
-                                }
-
-                                options.CronExpression = value;
+                                Log.Error($"无效的 Cron 表达式: {value}");
+                                return null;
                             }
+                            options.CronExpression = value;
                         }
                         break;
 
@@ -491,6 +555,7 @@ namespace MDriveSync.Cli
                             options.ExecuteImmediately = true;
                         break;
 
+                    // 文件传输选项
                     case "--chunk-size":
                     case "--chunk":
                         if (value != null && int.TryParse(value, out int chunkSize) && chunkSize > 0)

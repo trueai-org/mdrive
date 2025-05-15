@@ -84,6 +84,10 @@ sync - 执行文件同步操作
   --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)
   --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)
   --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128
+  --sampling-rate             哈希抽样率 (0.0-1.0之间的小数，默认: 0.1)
+  --sampling-min-size         参与抽样的最小文件大小 (字节，默认: 1MB)
+  --date-threshold            修改时间比较阈值 (秒，默认: 0)
+  --parallel                  是否启用并行文件操作 (默认: true)
   --config, -f                配置文件路径, 示例: -f sync.json
   --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)
   --preview, -p               预览模式，不实际执行操作 (默认: false)
@@ -91,9 +95,13 @@ sync - 执行文件同步操作
   --threads, -j               并行操作的最大线程数 (默认: CPU核心数)
   --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)
   --preserve-time             保留原始文件时间 (默认: true)
+  --continue-on-error         发生错误时是否继续执行 (默认: true)
+  --retry                     操作失败时的最大重试次数 (默认: 3)
+  --conflict                  冲突解决策略: SourceWins, TargetWins, KeepBoth, Skip, Newer(默认), Older, Larger
+  --follow-symlinks           是否跟踪符号链接 (默认: false)
   --interval, -i              同步间隔, 单位秒
-  --cron,                     Cron表达式，设置后将优先使用Cron表达式进行调度
-  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步，(默认: true)
+  --cron                      Cron表达式，设置后将优先使用Cron表达式进行调度
+  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步 (默认: true)
   --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输
   --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)
   --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)
