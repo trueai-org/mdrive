@@ -1,10 +1,10 @@
 ﻿{
-  "SourcePath": "E:\\_temp\\____synctest3",
-  "TargetPath": "E:\\_temp\\____synctest4",
+  "SourcePath": "E:\\_temp\\____synctest1",
+  "TargetPath": "E:\\_temp\\____synctest2",
   "SyncMode": "OneWay",
   "CompareMethod": "Hash",
   "HashAlgorithm": "SHA256",
-  "SamplingRate": 0.6,
+  "SamplingRate": 0.05,
   "SamplingRateMinFileSize": 1048576,
   "MaxParallelOperations": 4,
   "EnableParallelFileOperations": true,

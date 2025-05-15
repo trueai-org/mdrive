@@ -1043,7 +1043,6 @@ namespace MDriveSync.Core.Services
                 //    ? action.TargetPath
                 //    : action.SourcePath;
 
-
                 // 确定源和目标路径（考虑同步方向）
                 string actualSource = action.SourcePath;
 
@@ -1236,96 +1235,14 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
-        /// 计算最佳块大小、块数量和抽样数量
+        /// 计算采样点数量，尽可能减少采样点数量
         /// </summary>
         /// <param name="fileSize">文件大小（字节）</param>
         /// <returns>元组 (块大小, 块数量, 抽样数量)</returns>
         public static (long BlockSize, int BlockCount, int SamplesToCheck) CalculateOptimalSamplingParameters(long fileSize, double rate)
         {
-            // 常量参数定义
-            const int minBlockSizeKB = 16;     // 最小块大小 KB
-            const int maxBlockSizeMB = 128;     // 最大块大小 MB
-            const int idealBlockSizeMB = 16;    // 理想块大小 MB
-            const int minSampleBlocks = 1;     // 最少抽样块数
-            const int maxSampleBlocks = 500;    // 最多抽样块数
-
-            // 目标抽样数量, 理想抽样数量
-            int targetSampleCount = Math.Min(maxSampleBlocks, (int)Math.Max(10, 10 / rate / 10));
-
-            // 转换为字节单位
-            long minBlockSize = minBlockSizeKB * 1024L;
-            long maxBlockSize = maxBlockSizeMB * 1024L * 1024L;
-            long idealBlockSize = idealBlockSizeMB * 1024L * 1024L;
-
-            // 1. 计算块大小 - 目标是将文件分割成大约 targetSampleCount / rate 个块
-            long calculatedBlockSize = fileSize / Math.Max(1, (int)(targetSampleCount / rate));
-
-            // 2. 根据文件大小自适应调整块大小
-            long adaptiveBlockSize;
-
-            if (fileSize < 10 * 1024 * 1024) // < 10MB
-            {
-                // 对小文件使用较小的块，确保至少有minSampleBlocks个块
-                adaptiveBlockSize = Math.Min(calculatedBlockSize, fileSize / (minSampleBlocks * 2));
-            }
-            else if (fileSize < 100 * 1024 * 1024) // < 100MB
-            {
-                // 对小文件使用较小的块
-                adaptiveBlockSize = Math.Min(idealBlockSize / 2, calculatedBlockSize);
-            }
-            else if (fileSize < 1 * 1024 * 1024 * 1024L) // < 1GB
-            {
-                // 中等大小文件使用接近理想块大小
-                adaptiveBlockSize = Math.Min(idealBlockSize, calculatedBlockSize);
-            }
-            else if (fileSize < 10 * 1024 * 1024 * 1024L) // < 10GB
-            {
-                // 大文件增加块大小
-                adaptiveBlockSize = Math.Min(idealBlockSize * 2, calculatedBlockSize);
-            }
-            else // >= 10GB
-            {
-                // 超大文件使用较大块
-                adaptiveBlockSize = Math.Min(idealBlockSize * 4, calculatedBlockSize);
-            }
-
-            // 3. 确保块大小在合理范围内
-            long finalBlockSize = Math.Max(minBlockSize, Math.Min(maxBlockSize, adaptiveBlockSize));
-
-            // 4. 计算块数量（向上取整，至少有1个块）
-            int blockCount = Math.Max(1, (int)Math.Ceiling(fileSize / (double)finalBlockSize));
-
-            // 5. 根据目标抽样数量和抽样率计算最终抽样数量
-            int samplesToCheck = (int)Math.Ceiling(blockCount * rate);
-
-            // 6. 如果抽样数量接近目标值的±20%范围外，调整块大小重新计算
-            if (Math.Abs(samplesToCheck - targetSampleCount) > targetSampleCount * 0.2 && blockCount > minSampleBlocks * 2)
-            {
-                // 调整块大小以接近目标抽样数量
-                double adjustmentFactor = (double)targetSampleCount / samplesToCheck;
-                finalBlockSize = (long)(finalBlockSize / adjustmentFactor);
-
-                // 确保块大小在合理范围内
-                finalBlockSize = Math.Max(minBlockSize, Math.Min(maxBlockSize, finalBlockSize));
-
-                // 重新计算块数量
-                blockCount = Math.Max(1, (int)Math.Ceiling(fileSize / (double)finalBlockSize));
-
-                // 重新计算抽样数量
-                samplesToCheck = (int)Math.Ceiling(blockCount * rate);
-            }
-
-            // 7. 确保抽样数量在合理范围内
-            samplesToCheck = Math.Max(minSampleBlocks, Math.Min(samplesToCheck, blockCount));
-            samplesToCheck = Math.Min(samplesToCheck, maxSampleBlocks);
-
-            // 8. 对于小文件特别处理，块数量少于目标抽样数时，检查所有块
-            if (blockCount <= targetSampleCount)
-            {
-                samplesToCheck = blockCount;
-            }
-
-            return (finalBlockSize, blockCount, samplesToCheck);
+            var res = FileSamplingCalculator.CalculateSampling(fileSize, rate);
+            return (res.ChunkSize, (int)res.TotalChunks, res.SampledChunks);
         }
 
         /// <summary>
@@ -1375,7 +1292,7 @@ namespace MDriveSync.Core.Services
             // 优化抽样算法
             // 计算哪些块需要抽样计算
 
-            // 计算最佳抽样块大小和数量
+            // 计算采样点数量，尽可能减少采样点数量
             var (blockSize, blockCount, samplesToCheck) = CalculateOptimalSamplingParameters(sourceFile.Length, _options.SamplingRate);
 
             // 使用随机抽样
@@ -1421,6 +1338,8 @@ namespace MDriveSync.Core.Services
 
                     if (!CompareHash(sourceBlockHash, targetBlockHash))
                         return false;
+
+                    Log.Information($"{sourceFile.Name}, 比较块 {blockIndex + 1}/{blockCount} 完成");
                 }
 
                 // 所有抽样块都匹配，认为文件相同

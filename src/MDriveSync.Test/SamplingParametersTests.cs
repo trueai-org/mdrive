@@ -96,7 +96,28 @@ namespace MDriveSync.Test
                 50 * 1024 * 1024 * 1024L // 50GB
             };
 
-            var samplingRates = new List<double> { 0.01, 0.05, 0.1, 0.2, 0.5, 0.6, 0.8, 0.9, 1 };
+            // 随机填充 1b - 1TB
+            for (int i = 0; i < 10; i++)
+            {
+                fileSizes.Add((long)(new Random().NextDouble() * 1024 * 1024 * 1024 * 1024));
+            }
+
+            // 随机填充 1b - 1G
+            for (int i = 0; i < 10; i++)
+            {
+                fileSizes.Add((long)(new Random().NextDouble() * 1024 * 1024 * 1024));
+            }
+
+            // 排序
+            fileSizes.Sort();
+
+            var samplingRates = new List<double> { 0.01, 0.05, 0.1, 0.2, 0.5, 0.6, 0.7, 0.75, 0.8, 0.85, 0.9, 0.95, 1 };
+            // 随机填充
+            for (int i = 0; i < 10; i++)
+            {
+                samplingRates.Add(new Random().NextDouble());
+            }
+            samplingRates.Sort();
 
             var results = new List<(long FileSize, double Rate, long BlockSize, int BlockCount, int SamplesCount,
                 double ActualRate, double Coverage, double ElapsedMs)>();
@@ -141,7 +162,7 @@ namespace MDriveSync.Test
             }
 
             // 输出结果
-            var  sb = new StringBuilder();
+            var sb = new StringBuilder();
             sb.AppendLine("## 采样参数计算性能基准测试");
             sb.AppendLine("| 文件大小 | 目标采样率 | 块大小 | 块数量 | 抽样数 | 实际采样率 | 覆盖率 (%) | 计算时间 (μs) |");
             sb.AppendLine("|----------|------------|--------|--------|--------|------------|------------|--------------|");
