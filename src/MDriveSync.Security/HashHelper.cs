@@ -321,5 +321,166 @@ namespace MDriveSync.Security
 
             return true;
         }
+
+        /// <summary>
+        /// 计算流从当前位置开始指定长度的哈希值
+        /// </summary>
+        /// <param name="stream">要计算哈希的流</param>
+        /// <param name="algorithm">哈希算法名称</param>
+        /// <param name="length">要计算哈希的长度，如果为null则计算到流末尾</param>
+        /// <returns>哈希值的字节数组</returns>
+        public static byte[] ComputeStreamHash(Stream stream, string algorithm, int? length = null)
+        {
+            if (stream == null)
+                throw new ArgumentNullException(nameof(stream));
+
+            // 保存原始位置以便计算结束后恢复
+            long originalPosition = stream.Position;
+
+            try
+            {
+                // 根据不同算法计算流的指定部分的哈希值
+                switch (algorithm.ToUpper())
+                {
+                    case "SHA256":
+                        using (SHA256 sha256 = SHA256.Create())
+                        {
+                            return ComputeHashWithLength(stream, sha256, length);
+                        }
+
+                    case "SHA512":
+                        using (SHA512 sha512 = SHA512.Create())
+                        {
+                            return ComputeHashWithLength(stream, sha512, length);
+                        }
+
+                    case "BLAKE3":
+                        if (length.HasValue)
+                        {
+                            // 使用临时缓冲区计算指定长度的哈希值
+                            byte[] buffer = new byte[length.Value];
+                            int bytesRead = stream.Read(buffer, 0, length.Value);
+                            return Hasher.Hash(buffer).AsSpan().ToArray();
+                        }
+                        else
+                        {
+                            using var blake3Stream = new Blake3Stream(stream);
+                            return blake3Stream.ComputeHash().AsSpan().ToArray();
+                        }
+
+                    case "MD5":
+                        using (MD5 md5 = MD5.Create())
+                        {
+                            return ComputeHashWithLength(stream, md5, length);
+                        }
+
+                    case "SHA1":
+                        using (SHA1 sha1 = SHA1.Create())
+                        {
+                            return ComputeHashWithLength(stream, sha1, length);
+                        }
+
+                    case "SHA3":
+                    case "SHA384":
+                        using (SHA384 sha384 = SHA384.Create())
+                        {
+                            return ComputeHashWithLength(stream, sha384, length);
+                        }
+
+                    case "XXH3":
+                        {
+                            var hasher = new XxHash3();
+                            return ComputeXXHashWithLength(stream, hasher, length, 8);
+                        }
+
+                    case "XXH128":
+                        {
+                            var hasher = new XxHash128();
+                            return ComputeXXHashWithLength(stream, hasher, length, 16);
+                        }
+
+                    default:
+                        throw new ArgumentException("不支持的哈希算法", nameof(algorithm));
+                }
+            }
+            finally
+            {
+                // 恢复流的原始位置
+                stream.Position = originalPosition;
+            }
+        }
+
+        /// <summary>
+        /// 使用指定的哈希算法计算流中指定长度数据的哈希值
+        /// </summary>
+        private static byte[] ComputeHashWithLength(Stream stream, HashAlgorithm hashAlgorithm, int? length)
+        {
+            if (!length.HasValue)
+            {
+                // 如果未指定长度，计算整个流的哈希值
+                return hashAlgorithm.ComputeHash(stream);
+            }
+
+            // 计算指定长度的哈希值
+            int bytesRemaining = length.Value;
+            byte[] buffer = new byte[Math.Min(81920, bytesRemaining)]; // 使用最多80KB的缓冲区
+
+            hashAlgorithm.Initialize();
+
+            while (bytesRemaining > 0)
+            {
+                int bytesToRead = Math.Min(buffer.Length, bytesRemaining);
+                int bytesRead = stream.Read(buffer, 0, bytesToRead);
+
+                if (bytesRead == 0)
+                    break; // 流结束
+
+                hashAlgorithm.TransformBlock(buffer, 0, bytesRead, buffer, 0);
+                bytesRemaining -= bytesRead;
+            }
+
+            // 完成哈希计算
+            hashAlgorithm.TransformFinalBlock(Array.Empty<byte>(), 0, 0);
+            return hashAlgorithm.Hash;
+        }
+
+        /// <summary>
+        /// 使用XXHash算法计算流中指定长度数据的哈希值
+        /// </summary>
+        private static byte[] ComputeXXHashWithLength<T>(Stream stream, T hasher, int? length, int resultSize) where T : NonCryptographicHashAlgorithm
+        {
+            int totalBytesRead = 0;
+            int bytesToProcess = length ?? int.MaxValue;
+            byte[] buffer = new byte[81920]; // 80KB缓冲区
+
+            while (totalBytesRead < bytesToProcess)
+            {
+                int bytesToRead = Math.Min(buffer.Length, bytesToProcess - totalBytesRead);
+                int bytesRead = stream.Read(buffer, 0, bytesToRead);
+
+                if (bytesRead == 0)
+                    break; // 流结束
+
+                hasher.Append(buffer.AsSpan(0, bytesRead));
+                totalBytesRead += bytesRead;
+            }
+
+            // 根据XXHash类型生成相应的哈希值
+            byte[] result = new byte[resultSize];
+
+            if (hasher is XxHash3 xxh3)
+            {
+                ulong hashValue = xxh3.GetCurrentHashAsUInt64();
+                BinaryPrimitives.WriteUInt64BigEndian(result, hashValue);
+            }
+            else if (hasher is XxHash128 xxh128)
+            {
+                var hashValue = xxh128.GetCurrentHashAsUInt128();
+                BinaryPrimitives.WriteUInt128BigEndian(result, hashValue);
+            }
+
+            return result;
+        }
+
     }
 }

@@ -483,7 +483,6 @@ namespace MDriveSync.Test
                 SyncMode = ESyncMode.OneWay,
                 CompareMethod = ESyncCompareMethod.Hash,
                 HashAlgorithm = EHashType.SHA256,
-                SamplingRate = 0.1, // 10% ³éÑùÂÊ
                 MaxParallelOperations = 1
             };
 

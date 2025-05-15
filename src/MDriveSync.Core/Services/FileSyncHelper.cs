@@ -56,6 +56,12 @@ namespace MDriveSync.Core.Services
                 _options.IgnorePatterns.Add(_options.TempFileSuffix);
             }
 
+            // 抽样率文件最小限制，至少 16KB 的文件才参与抽样
+            if (_options.SamplingRateMinFileSize < 16 * 1024)
+            {
+                _options.SamplingRateMinFileSize = 16 * 1024;
+            }
+
             // 如果配置了 cron
             if (!string.IsNullOrEmpty(_options.CronExpression))
             {
@@ -1189,11 +1195,25 @@ namespace MDriveSync.Core.Services
         /// </summary>
         private bool CompareFileHash(FileInfo sourceFile, FileInfo targetFile)
         {
-            if (_options.SamplingRate > 0 && _options.SamplingRate < 1.0)
+            // 分块抽样 hash 计算规则
+            if (_options.SamplingRate > 0 &&
+                _options.SamplingRate < 1.0 &&
+                sourceFile.Length > _options.SamplingRateMinFileSize)
             {
                 return CompareFileHashWithSampling(sourceFile, targetFile);
             }
 
+            return CompareFileHashByInfo(sourceFile, targetFile);
+        }
+
+        /// <summary>
+        /// 使用哈希算法比较文件
+        /// </summary>
+        /// <param name="sourceFile"></param>
+        /// <param name="targetFile"></param>
+        /// <returns></returns>
+        private bool CompareFileHashByInfo(FileInfo sourceFile, FileInfo targetFile)
+        {
             // 全文件哈希比较
             var hashAlgorithm = GetHashAlgorithm().ToString();
 
@@ -1216,23 +1236,120 @@ namespace MDriveSync.Core.Services
         }
 
         /// <summary>
+        /// 计算最佳块大小、块数量和抽样数量
+        /// </summary>
+        /// <param name="fileSize">文件大小（字节）</param>
+        /// <returns>元组 (块大小, 块数量, 抽样数量)</returns>
+        public static (long BlockSize, int BlockCount, int SamplesToCheck) CalculateOptimalSamplingParameters(long fileSize, double rate)
+        {
+            // 常量参数定义
+            const int minBlockSizeKB = 16;     // 最小块大小 KB
+            const int maxBlockSizeMB = 128;     // 最大块大小 MB
+            const int idealBlockSizeMB = 16;    // 理想块大小 MB
+            const int minSampleBlocks = 1;     // 最少抽样块数
+            const int maxSampleBlocks = 500;    // 最多抽样块数
+
+            // 目标抽样数量, 理想抽样数量
+            int targetSampleCount = Math.Min(maxSampleBlocks, (int)Math.Max(10, 10 / rate / 10));
+
+            // 转换为字节单位
+            long minBlockSize = minBlockSizeKB * 1024L;
+            long maxBlockSize = maxBlockSizeMB * 1024L * 1024L;
+            long idealBlockSize = idealBlockSizeMB * 1024L * 1024L;
+
+            // 1. 计算块大小 - 目标是将文件分割成大约 targetSampleCount / rate 个块
+            long calculatedBlockSize = fileSize / Math.Max(1, (int)(targetSampleCount / rate));
+
+            // 2. 根据文件大小自适应调整块大小
+            long adaptiveBlockSize;
+
+            if (fileSize < 10 * 1024 * 1024) // < 10MB
+            {
+                // 对小文件使用较小的块，确保至少有minSampleBlocks个块
+                adaptiveBlockSize = Math.Min(calculatedBlockSize, fileSize / (minSampleBlocks * 2));
+            }
+            else if (fileSize < 100 * 1024 * 1024) // < 100MB
+            {
+                // 对小文件使用较小的块
+                adaptiveBlockSize = Math.Min(idealBlockSize / 2, calculatedBlockSize);
+            }
+            else if (fileSize < 1 * 1024 * 1024 * 1024L) // < 1GB
+            {
+                // 中等大小文件使用接近理想块大小
+                adaptiveBlockSize = Math.Min(idealBlockSize, calculatedBlockSize);
+            }
+            else if (fileSize < 10 * 1024 * 1024 * 1024L) // < 10GB
+            {
+                // 大文件增加块大小
+                adaptiveBlockSize = Math.Min(idealBlockSize * 2, calculatedBlockSize);
+            }
+            else // >= 10GB
+            {
+                // 超大文件使用较大块
+                adaptiveBlockSize = Math.Min(idealBlockSize * 4, calculatedBlockSize);
+            }
+
+            // 3. 确保块大小在合理范围内
+            long finalBlockSize = Math.Max(minBlockSize, Math.Min(maxBlockSize, adaptiveBlockSize));
+
+            // 4. 计算块数量（向上取整，至少有1个块）
+            int blockCount = Math.Max(1, (int)Math.Ceiling(fileSize / (double)finalBlockSize));
+
+            // 5. 根据目标抽样数量和抽样率计算最终抽样数量
+            int samplesToCheck = (int)Math.Ceiling(blockCount * rate);
+
+            // 6. 如果抽样数量接近目标值的±20%范围外，调整块大小重新计算
+            if (Math.Abs(samplesToCheck - targetSampleCount) > targetSampleCount * 0.2 && blockCount > minSampleBlocks * 2)
+            {
+                // 调整块大小以接近目标抽样数量
+                double adjustmentFactor = (double)targetSampleCount / samplesToCheck;
+                finalBlockSize = (long)(finalBlockSize / adjustmentFactor);
+
+                // 确保块大小在合理范围内
+                finalBlockSize = Math.Max(minBlockSize, Math.Min(maxBlockSize, finalBlockSize));
+
+                // 重新计算块数量
+                blockCount = Math.Max(1, (int)Math.Ceiling(fileSize / (double)finalBlockSize));
+
+                // 重新计算抽样数量
+                samplesToCheck = (int)Math.Ceiling(blockCount * rate);
+            }
+
+            // 7. 确保抽样数量在合理范围内
+            samplesToCheck = Math.Max(minSampleBlocks, Math.Min(samplesToCheck, blockCount));
+            samplesToCheck = Math.Min(samplesToCheck, maxSampleBlocks);
+
+            // 8. 对于小文件特别处理，块数量少于目标抽样数时，检查所有块
+            if (blockCount <= targetSampleCount)
+            {
+                samplesToCheck = blockCount;
+            }
+
+            return (finalBlockSize, blockCount, samplesToCheck);
+        }
+
+        /// <summary>
         /// 使用抽样哈希比较文件
         /// </summary>
         private bool CompareFileHashWithSampling(FileInfo sourceFile, FileInfo targetFile)
         {
-            const int headerSize = 8192; // 头部始终比较的大小
-            const int randomSampleSize = 8192; // 随机抽样的块大小
+            // 头部/尾部始终比较的大小
+            const int headerSize = 1024 * 16;
 
             // 如果文件较小，直接全文比较
-            if (sourceFile.Length < headerSize * 2)
-                return CompareFileHash(sourceFile, targetFile);
+            if (sourceFile.Length <= _options.SamplingRateMinFileSize)
+                return CompareFileHashByInfo(sourceFile, targetFile);
+
+            // 如果文件较小，直接全文比较
+            if (sourceFile.Length <= headerSize * 2)
+                return CompareFileHashByInfo(sourceFile, targetFile);
 
             var hashAlgorithm = GetHashAlgorithm().ToString();
 
             using var sourceStream = sourceFile.OpenRead();
             using var targetStream = targetFile.OpenRead();
 
-            // 比较文件头部
+            // 比较文件头部, 高效比较每个字节
             byte[] sourceHeader = new byte[headerSize];
             byte[] targetHeader = new byte[headerSize];
 
@@ -1242,7 +1359,7 @@ namespace MDriveSync.Core.Services
             if (!CompareBytes(sourceHeader, targetHeader))
                 return false;
 
-            // 比较文件尾部
+            // 比较文件尾部, 高效比较每个字节
             byte[] sourceFooter = new byte[headerSize];
             byte[] targetFooter = new byte[headerSize];
 
@@ -1255,30 +1372,68 @@ namespace MDriveSync.Core.Services
             if (!CompareBytes(sourceFooter, targetFooter))
                 return false;
 
-            // 生成随机抽样点
-            Random random = new Random(sourceFile.FullName.GetHashCode());
-            int samplesCount = (int)Math.Max(1, (sourceFile.Length - headerSize * 2) * _options.SamplingRate / randomSampleSize);
-            long range = sourceFile.Length - headerSize * 2 - randomSampleSize;
+            // 优化抽样算法
+            // 计算哪些块需要抽样计算
 
-            for (int i = 0; i < samplesCount; i++)
+            // 计算最佳抽样块大小和数量
+            var (blockSize, blockCount, samplesToCheck) = CalculateOptimalSamplingParameters(sourceFile.Length, _options.SamplingRate);
+
+            // 使用随机抽样
+            var random = new Random();
+            var blocksToCheck = new HashSet<int>();
+            while (blocksToCheck.Count < samplesToCheck && blocksToCheck.Count < blockCount)
             {
-                // 生成随机位置（避开头尾已比较的部分）
-                long position = headerSize + (long)(random.NextDouble() * range);
-
-                byte[] sourceSample = new byte[randomSampleSize];
-                byte[] targetSample = new byte[randomSampleSize];
-
-                sourceStream.Seek(position, SeekOrigin.Begin);
-                targetStream.Seek(position, SeekOrigin.Begin);
-
-                sourceStream.Read(sourceSample, 0, randomSampleSize);
-                targetStream.Read(targetSample, 0, randomSampleSize);
-
-                if (!CompareBytes(sourceSample, targetSample))
-                    return false;
+                // 避免重复抽样同一块
+                // 随机生成块索引
+                int blockIndex = random.Next(0, blockCount);
+                if (!blocksToCheck.Contains(blockIndex))
+                {
+                    blocksToCheck.Add(blockIndex);
+                }
             }
 
-            return true;
+            try
+            {
+                // 对每个选定的块计算并比较哈希值
+                foreach (int blockIndex in blocksToCheck)
+                {
+                    // 计算要比较的块的起始位置
+                    long startPosition = blockIndex * blockSize;
+
+                    // 确保不超出文件末尾
+                    long currentBlockSize = Math.Min(blockSize, sourceFile.Length - startPosition);
+
+                    // 直接从流读取并计算哈希值 - 无需将整个块加载到内存
+                    sourceStream.Position = startPosition;
+                    targetStream.Position = startPosition;
+
+                    // 使用HashHelper直接对流的指定部分计算哈希
+                    // 注意：我们需要限制读取长度为当前块大小
+                    byte[] sourceBlockHash = HashHelper.ComputeStreamHash(
+                        sourceStream,
+                        hashAlgorithm,
+                        (int)currentBlockSize);  // 将长度限制为当前块大小
+
+                    byte[] targetBlockHash = HashHelper.ComputeStreamHash(
+                        targetStream,
+                        hashAlgorithm,
+                        (int)currentBlockSize);
+
+                    if (!CompareHash(sourceBlockHash, targetBlockHash))
+                        return false;
+                }
+
+                // 所有抽样块都匹配，认为文件相同
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "进行文件抽样哈希比较时出错: {SourceFile} - {TargetFile}",
+                    sourceFile.FullName, targetFile.FullName);
+
+                // 出错时保守处理，认为文件不同
+                return false;
+            }
         }
 
         /// <summary>
@@ -2369,8 +2524,16 @@ namespace MDriveSync.Core.Services
 
         /// <summary>
         /// 哈希抽样率（0.0-1.0）
+        /// 同步模式：文件哈希抽样率（按字节大小计算抽样率）
+        /// 备份模式：分块哈希抽样率（按分块数量计算抽样率），当文件分块时才使用，未分块的文件使用（按字节大小计算抽样率）
         /// </summary>
         public double SamplingRate { get; set; } = 0.1;
+
+        /// <summary>
+        /// 抽样率文件最小限制，至少 16KB 的文件才参与抽样（默认：1MB）
+        /// 低于最小限制的文使用完整 hash 校验
+        /// </summary>
+        public int SamplingRateMinFileSize { get; set; } = 1024 * 1024;
 
         /// <summary>
         /// 最大并行操作数
