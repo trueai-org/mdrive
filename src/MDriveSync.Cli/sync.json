@@ -4,7 +4,7 @@
   "SyncMode": "OneWay",
   "CompareMethod": "Hash",
   "HashAlgorithm": "SHA256",
-  "SamplingRate": 0.05,
+  "SamplingRate": 0.1,
   "SamplingRateMinFileSize": 1048576,
   "MaxParallelOperations": 4,
   "EnableParallelFileOperations": true,

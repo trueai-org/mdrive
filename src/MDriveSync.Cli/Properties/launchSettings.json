@@ -2,7 +2,7 @@
   "profiles": {
     "MDriveSync.Cli": {
       "commandName": "Project",
-      "commandLineArgs": "sync -f sync.json --chunk 64"
+      "commandLineArgs": "sync -f sync.json --chunk 64 -v true"
       //"commandLineArgs": "--dev"
     }
   }
