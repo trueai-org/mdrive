@@ -1261,7 +1261,7 @@ namespace MDriveSync.Core.Services
             if (sourceFile.Length <= headerSize * 2)
                 return CompareFileHashByInfo(sourceFile, targetFile);
 
-            var hashAlgorithm = GetHashAlgorithm().ToString();
+            var hashAlgorithm = GetHashAlgorithm()?.ToString() ?? "SHA256";
 
             using var sourceStream = sourceFile.OpenRead();
             using var targetStream = targetFile.OpenRead();

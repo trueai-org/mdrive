@@ -37,7 +37,7 @@ namespace MDriveSync.Cli
                             continue;
 
                         // 解析输入的命令行
-                        args = ParseCommandLine(input).ToArray();
+                        args = input.Split(' ').ToArray(); // ParseCommandLine(input).ToArray();
                         if (args.Length == 0)
                             continue;
                     }
@@ -144,22 +144,33 @@ namespace MDriveSync.Cli
             if (string.IsNullOrEmpty(commandLine))
                 return arguments;
 
-            foreach (char c in commandLine)
+            // 逐字符处理命令行
+            for (int i = 0; i < commandLine.Length; i++)
             {
+                char c = commandLine[i];
+
                 if (isEscaping)
                 {
-                    // 转义后的字符直接添加
+                    // 转义字符后面的字符直接添加
                     currentArgument.Append(c);
                     isEscaping = false;
                 }
                 else if (c == '\\')
                 {
-                    // 开始转义
-                    isEscaping = true;
+                    // 检查是否是转义引号的情况
+                    if (i + 1 < commandLine.Length && commandLine[i + 1] == '"')
+                    {
+                        currentArgument.Append('"');
+                        i++; // 跳过下一个字符（引号）
+                    }
+                    else
+                    {
+                        isEscaping = true;
+                    }
                 }
                 else if (c == '"')
                 {
-                    // 切换引号状态
+                    // 切换引号状态，但不将引号加入参数
                     inQuotes = !inQuotes;
                 }
                 else if (c == ' ' && !inQuotes)
@@ -182,6 +193,12 @@ namespace MDriveSync.Cli
             if (currentArgument.Length > 0)
             {
                 arguments.Add(currentArgument.ToString());
+            }
+
+            // 检查是否有未闭合的引号
+            if (inQuotes)
+            {
+                Log.Warning("命令行中存在未闭合的引号");
             }
 
             return arguments;
@@ -313,7 +330,7 @@ namespace MDriveSync.Cli
             Console.WriteLine("  --target, -t                目标目录路径 (必需)");
             Console.WriteLine("  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)");
             Console.WriteLine("  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)");
-            Console.WriteLine("  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
+            Console.WriteLine("  --hash                      哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128");
             Console.WriteLine("  --sampling-rate             哈希抽样率 (0.0-1.0之间的小数，默认: 0.1)");
             Console.WriteLine("  --sampling-min-size         参与抽样的最小文件大小 (字节，默认: 1MB)");
             Console.WriteLine("  --date-threshold            修改时间比较阈值 (秒，默认: 0)");
@@ -433,7 +450,6 @@ namespace MDriveSync.Cli
 
                     // 哈希相关选项
                     case "--hash":
-                    case "-h":
                         if (value != null && Enum.TryParse<EHashType>(value, true, out var hash))
                             options.HashAlgorithm = hash;
                         break;

@@ -83,7 +83,7 @@ sync - 执行文件同步操作
   --target, -t                目标目录路径 (必需)
   --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)
   --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)
-  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128
+  --hash                      哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128
   --sampling-rate             哈希抽样率 (0.0-1.0之间的小数，默认: 0.1)
   --sampling-min-size         参与抽样的最小文件大小 (字节，默认: 1MB)
   --date-threshold            修改时间比较阈值 (秒，默认: 0)
