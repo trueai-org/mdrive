@@ -713,85 +713,160 @@ namespace MDriveSync.Core.Services
 
                             // 两边都存在，需要解决冲突
                             var conflictResult = ResolveConflict(sourceFile, targetFile);
-
-                            switch (conflictResult)
+                            if (conflictResult == ESyncConflictResolution.Skip)
                             {
-                                case ESyncConflictResolution.SourceWins:
-                                    // 只有当文件实际需要更新时才添加操作
-                                    if (NeedsUpdate(sourceFile, targetFile))
+                                Interlocked.Increment(ref filesSkipped);
+                            }
+                            else
+                            {
+                                // 只有当文件实际需要更新时才添加操作
+                                if (NeedsUpdate(sourceFile, targetFile))
+                                {
+                                    switch (conflictResult)
                                     {
-                                        actions.Add(new SyncAction
-                                        {
-                                            ActionType = ESyncActionType.UpdateFile,
-                                            SourcePath = sourceFilePath,
-                                            TargetPath = targetFilePath,
-                                            RelativePath = relativePath,
-                                            Size = sourceFile.Length,
-                                            ConflictResolution = conflictResult
-                                        });
-                                        Interlocked.Increment(ref filesToUpdate);
-                                        Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                        case ESyncConflictResolution.SourceWins:
+                                            {
+                                                actions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.UpdateFile,
+                                                    SourcePath = sourceFilePath,
+                                                    TargetPath = targetFilePath,
+                                                    RelativePath = relativePath,
+                                                    Size = sourceFile.Length,
+                                                    ConflictResolution = conflictResult
+                                                });
+                                                Interlocked.Increment(ref filesToUpdate);
+                                                Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                            }
+                                            break;
+
+                                        case ESyncConflictResolution.TargetWins:
+                                            {
+                                                actions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.UpdateFile,
+                                                    SourcePath = targetFilePath,
+                                                    TargetPath = sourceFilePath,
+                                                    RelativePath = relativePath,
+                                                    Size = targetFile.Length,
+                                                    Direction = ESyncDirection.TargetToSource,
+                                                    ConflictResolution = conflictResult
+                                                });
+                                                Interlocked.Increment(ref filesToUpdate);
+                                                Interlocked.Add(ref bytesToProcess, targetFile.Length);
+                                            }
+                                            break;
+
+                                        case ESyncConflictResolution.KeepBoth:
+                                            {
+                                                // 生成冲突文件名是线程安全的
+                                                var (targetNewName, sourceNewName) = GetConflictFileName(targetFilePath, sourceFilePath);
+
+                                                // 首先重命名目标文件
+                                                var pa = new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.RenameFile,
+                                                    SourcePath = targetFilePath,
+                                                    TargetPath = targetNewName,
+                                                    RelativePath = GetRelativePath(targetNewName, _options.TargetPath),
+                                                    ConflictResolution = conflictResult
+                                                };
+
+                                                // 然后复制源文件到目标
+                                                pa.SubActions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.CopyFile,
+                                                    SourcePath = sourceFilePath,
+                                                    TargetPath = targetFilePath,
+                                                    RelativePath = relativePath,
+                                                    Size = sourceFile.Length
+                                                });
+
+                                                // 最后将已经重命名的目标文件复制到源
+                                                pa.SubActions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.CopyFile,
+                                                    SourcePath = targetNewName,
+                                                    TargetPath = sourceNewName,
+                                                    RelativePath = GetRelativePath(sourceNewName, _options.SourcePath),
+                                                    Size = targetFile.Length
+                                                });
+                                                actions.Add(pa);
+
+                                                Interlocked.Increment(ref filesToCopy);
+                                                Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                            }
+                                            break;
+
+                                        case ESyncConflictResolution.Newer:
+                                            {
+                                                // 判断哪个文件较新
+                                                var newerFile = sourceFile.LastWriteTime > targetFile.LastWriteTime ? sourceFile : targetFile;
+
+                                                // 较新的文件优先
+                                                actions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.UpdateFile,
+                                                    SourcePath = newerFile == sourceFile ? sourceFilePath : targetFilePath,
+                                                    TargetPath = newerFile == sourceFile ? targetFilePath : sourceFilePath,
+                                                    RelativePath = relativePath,
+                                                    Size = newerFile.Length,
+                                                    ConflictResolution = conflictResult
+                                                });
+                                                Interlocked.Increment(ref filesToUpdate);
+                                                Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                            }
+                                            break;
+
+                                        case ESyncConflictResolution.Older:
+                                            {
+                                                // 判断哪个文件较旧
+                                                var olderFile = sourceFile.LastWriteTime < targetFile.LastWriteTime ? sourceFile : targetFile;
+                                                // 较旧的文件优先
+                                                actions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.UpdateFile,
+                                                    SourcePath = olderFile == sourceFile ? sourceFilePath : targetFilePath,
+                                                    TargetPath = olderFile == sourceFile ? targetFilePath : sourceFilePath,
+                                                    RelativePath = relativePath,
+                                                    Size = olderFile.Length,
+                                                    ConflictResolution = conflictResult
+                                                });
+                                                Interlocked.Increment(ref filesToUpdate);
+                                                Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                            }
+                                            break;
+
+                                        case ESyncConflictResolution.Larger:
+                                            {
+                                                // 判断哪个文件较大
+                                                var largerFile = sourceFile.Length > targetFile.Length ? sourceFile : targetFile;
+                                                // 较大的文件优先
+                                                actions.Add(new SyncAction
+                                                {
+                                                    ActionType = ESyncActionType.UpdateFile,
+                                                    SourcePath = largerFile == sourceFile ? sourceFilePath : targetFilePath,
+                                                    TargetPath = largerFile == sourceFile ? targetFilePath : sourceFilePath,
+                                                    RelativePath = relativePath,
+                                                    Size = largerFile.Length,
+                                                    ConflictResolution = conflictResult
+                                                });
+
+                                                Interlocked.Increment(ref filesToUpdate);
+                                                Interlocked.Add(ref bytesToProcess, sourceFile.Length);
+                                            }
+                                            break;
+
+                                        case ESyncConflictResolution.Skip:
+                                        default:
+                                            Interlocked.Increment(ref filesSkipped);
+                                            break;
                                     }
-                                    else
-                                    {
-                                        Interlocked.Increment(ref filesSkipped);
-                                    }
-                                    break;
-
-                                case ESyncConflictResolution.TargetWins:
-                                    // 只有当文件实际需要更新时才添加操作
-                                    if (NeedsUpdate(targetFile, sourceFile))
-                                    {
-                                        actions.Add(new SyncAction
-                                        {
-                                            ActionType = ESyncActionType.UpdateFile,
-                                            SourcePath = targetFilePath,
-                                            TargetPath = sourceFilePath,
-                                            RelativePath = relativePath,
-                                            Size = targetFile.Length,
-                                            Direction = ESyncDirection.TargetToSource,
-                                            ConflictResolution = conflictResult
-                                        });
-                                        Interlocked.Increment(ref filesToUpdate);
-                                        Interlocked.Add(ref bytesToProcess, targetFile.Length);
-                                    }
-                                    else
-                                    {
-                                        Interlocked.Increment(ref filesSkipped);
-                                    }
-                                    break;
-
-                                case ESyncConflictResolution.KeepBoth:
-                                    // 生成冲突文件名是线程安全的
-                                    string targetNewName = GetConflictFileName(targetFilePath);
-
-                                    // 首先重命名目标文件
-                                    actions.Add(new SyncAction
-                                    {
-                                        ActionType = ESyncActionType.RenameFile,
-                                        SourcePath = targetFilePath,
-                                        TargetPath = targetNewName,
-                                        RelativePath = GetRelativePath(targetNewName, _options.TargetPath),
-                                        ConflictResolution = conflictResult
-                                    });
-
-                                    // 然后复制源文件到目标
-                                    actions.Add(new SyncAction
-                                    {
-                                        ActionType = ESyncActionType.CopyFile,
-                                        SourcePath = sourceFilePath,
-                                        TargetPath = targetFilePath,
-                                        RelativePath = relativePath,
-                                        Size = sourceFile.Length
-                                    });
-
-                                    Interlocked.Increment(ref filesToCopy);
-                                    Interlocked.Add(ref bytesToProcess, sourceFile.Length);
-                                    break;
-
-                                case ESyncConflictResolution.Skip:
+                                }
+                                else
+                                {
                                     Interlocked.Increment(ref filesSkipped);
-                                    break;
+                                }
                             }
                         }
                     });
@@ -967,6 +1042,16 @@ namespace MDriveSync.Core.Services
                             try
                             {
                                 await ExecuteSingleActionAsync(action);
+
+                                // 子操作
+                                if (action.SubActions?.Count > 0)
+                                {
+                                    foreach (var subAction in action.SubActions)
+                                    {
+                                        await ExecuteSingleActionAsync(subAction);
+                                    }
+                                }
+
                                 Interlocked.Increment(ref _processedItems);
                             }
                             finally
@@ -1512,15 +1597,35 @@ namespace MDriveSync.Core.Services
 
         /// <summary>
         /// 获取用于解决冲突的新文件名
+        /// 同时确保源目录和目录目录都不存在重命名的文件
         /// </summary>
-        private string GetConflictFileName(string originalPath)
+        private (string targetNewName, string sourceNewName) GetConflictFileName(string targetFilePath, string sourceFilePath)
         {
-            string dir = Path.GetDirectoryName(originalPath);
-            string fileName = Path.GetFileNameWithoutExtension(originalPath);
-            string ext = Path.GetExtension(originalPath);
-            string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            var targetNewName = "";
+            var sourceNewName = "";
+            var count = 0;
+            do
+            {
+                string targetDir = Path.GetDirectoryName(targetFilePath);
 
-            return Path.Combine(dir, $"{fileName} ({timestamp}){ext}");
+                string fileName = Path.GetFileNameWithoutExtension(targetFilePath);
+                string ext = Path.GetExtension(targetFilePath);
+                string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+
+                if (count > 0)
+                {
+                    timestamp += $"_{count}";
+                }
+
+                targetNewName = Path.Combine(targetDir, $"{fileName} ({timestamp}){ext}");
+
+                string sourceDir = Path.GetDirectoryName(sourceFilePath);
+                sourceNewName = Path.Combine(sourceDir, $"{fileName} ({timestamp}){ext}");
+
+                count++;
+            } while (File.Exists(targetNewName) || File.Exists(sourceNewName));
+
+            return (targetNewName, sourceNewName);
         }
 
         /// <summary>
@@ -1661,7 +1766,9 @@ namespace MDriveSync.Core.Services
             int maxRetries = _options.MaxRetries;
             int currentRetry = 0;
             bool success = false;
-            bool useChunkedTransfer = _options.ChunkSizeMB > 0;
+
+            var sourceInfo = new FileInfo(sourcePath);
+            bool useChunkedTransfer = _options.ChunkSizeMB > 0 && sourceInfo.Length > _options.ChunkSizeMB * 1024 * 1024;
 
             // 确保目标目录存在
             string targetDir = Path.GetDirectoryName(targetPath);
@@ -3170,7 +3277,7 @@ namespace MDriveSync.Core.Services
     }
 
     /// <summary>
-    /// 文件同步冲突解决策略
+    /// 文件同步冲突解决策略（用于双向同步）
     /// </summary>
     public enum ESyncConflictResolution
     {
@@ -3305,6 +3412,11 @@ namespace MDriveSync.Core.Services
         /// 冲突解决策略
         /// </summary>
         public ESyncConflictResolution? ConflictResolution { get; set; }
+
+        /// <summary>
+        /// 子操作（用于当前操作完成后的操作，用于双向同步业务）
+        /// </summary>
+        public List<SyncAction> SubActions { get; set; } = new List<SyncAction>();
     }
 
     /// <summary>

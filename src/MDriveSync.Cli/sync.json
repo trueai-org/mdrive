@@ -1,7 +1,7 @@
 ﻿{
-  "SourcePath": "E:\\_temp\\____synctest1",
-  "TargetPath": "E:\\_temp\\____synctest2",
-  "SyncMode": "OneWay",
+  "SourcePath": "E:\\_temp\\____synctest3",
+  "TargetPath": "E:\\_temp\\____synctest4",
+  "SyncMode": "TwoWay",
   "CompareMethod": "Hash",
   "HashAlgorithm": "SHA256",
   "SamplingRate": 0.1,
@@ -10,7 +10,7 @@
   "EnableParallelFileOperations": true,
   "DateTimeThresholdSeconds": 0,
   "PreserveFileTime": true,
-  "UseRecycleBin": true,
+  "UseRecycleBin": false,
   "ConflictResolution": "Newer",
   "FollowSymlinks": false,
   "PreviewOnly": false,
@@ -29,7 +29,8 @@
     "**/bin/*",
     "**/obj/*",
     "**/.git/*",
-    "**/.next/*"
+    "**/.next/*",
+    "**/.vs/*"
   ],
   "Interval": 0,
   "CronExpression": null,
