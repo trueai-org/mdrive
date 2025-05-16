@@ -37,7 +37,7 @@ namespace MDriveSync.Cli
                             continue;
 
                         // 解析输入的命令行
-                        args = input.Split(' ').ToArray(); // ParseCommandLine(input).ToArray();
+                        args = ParseCommandLine(input).ToArray();
                         if (args.Length == 0)
                             continue;
                     }
@@ -129,64 +129,88 @@ namespace MDriveSync.Cli
                 Log.CloseAndFlush();
             }
         }
-
         /// <summary>
         /// 解析命令行字符串为参数数组
         /// </summary>
         private static IEnumerable<string> ParseCommandLine(string commandLine)
         {
-            bool inQuotes = false;
-            bool isEscaping = false;
+            if (string.IsNullOrEmpty(commandLine))
+                return new List<string>();
+
             var arguments = new List<string>();
             var currentArgument = new StringBuilder();
+            bool inQuotes = false;
+            char quoteChar = '"'; // 默认使用双引号
+            bool isEscaping = false;
 
-            // 处理空字符串
-            if (string.IsNullOrEmpty(commandLine))
-                return arguments;
-
-            // 逐字符处理命令行
             for (int i = 0; i < commandLine.Length; i++)
             {
                 char c = commandLine[i];
 
                 if (isEscaping)
                 {
-                    // 转义字符后面的字符直接添加
+                    // 处理转义字符
                     currentArgument.Append(c);
                     isEscaping = false;
+                    continue;
                 }
-                else if (c == '\\')
+
+                // 处理转义符
+                if (c == '\\')
                 {
-                    // 检查是否是转义引号的情况
-                    if (i + 1 < commandLine.Length && commandLine[i + 1] == '"')
+                    // 处理转义下一个字符
+                    if (i + 1 < commandLine.Length)
                     {
-                        currentArgument.Append('"');
-                        i++; // 跳过下一个字符（引号）
+                        char nextChar = commandLine[i + 1];
+                        // 仅当下一个字符是引号或反斜杠时才视为转义
+                        if (nextChar == '"' || nextChar == '\'' || nextChar == '\\')
+                        {
+                            isEscaping = true;
+                            continue;
+                        }
+                    }
+
+                    // 普通反斜杠
+                    currentArgument.Append(c);
+                    continue;
+                }
+
+                // 处理引号（支持单引号和双引号）
+                if (c == '"' || c == '\'')
+                {
+                    if (!inQuotes)
+                    {
+                        // 开始引号
+                        inQuotes = true;
+                        quoteChar = c;
+                    }
+                    else if (c == quoteChar)
+                    {
+                        // 结束引号，必须匹配开始的引号类型
+                        inQuotes = false;
                     }
                     else
                     {
-                        isEscaping = true;
+                        // 在一种引号内出现另一种引号，当作普通字符处理
+                        currentArgument.Append(c);
                     }
+                    continue;
                 }
-                else if (c == '"')
+
+                // 处理空格
+                if (c == ' ' && !inQuotes)
                 {
-                    // 切换引号状态，但不将引号加入参数
-                    inQuotes = !inQuotes;
-                }
-                else if (c == ' ' && !inQuotes)
-                {
-                    // 空格且不在引号内，表示一个参数结束
+                    // 参数结束
                     if (currentArgument.Length > 0)
                     {
                         arguments.Add(currentArgument.ToString());
                         currentArgument.Clear();
                     }
+                    continue;
                 }
-                else
-                {
-                    // 普通字符，添加到当前参数
-                    currentArgument.Append(c);
-                }
+
+                // 处理普通字符
+                currentArgument.Append(c);
             }
 
             // 添加最后一个参数
@@ -195,10 +219,10 @@ namespace MDriveSync.Cli
                 arguments.Add(currentArgument.ToString());
             }
 
-            // 检查是否有未闭合的引号
+            // 检查未闭合的引号
             if (inQuotes)
             {
-                Log.Warning("命令行中存在未闭合的引号");
+                Log.Warning($"命令行中存在未闭合的{(quoteChar == '"' ? "双" : "单")}引号");
             }
 
             return arguments;
@@ -397,12 +421,42 @@ namespace MDriveSync.Cli
                     // 基本路径选项
                     case "--source":
                     case "-s":
-                        if (value != null) options.SourcePath = value;
+                        if (value != null)
+                        {
+                            // 处理兼容单引号与双引号
+                            if (value.StartsWith("'") && value.EndsWith("'"))
+                            {
+                                value = value[1..^1];
+                            }
+                            else if (value.StartsWith("\"") && value.EndsWith("\""))
+                            {
+                                value = value[1..^1];
+                            }
+                            else
+                            {
+                                options.SourcePath = value;
+                            }
+                        }
                         break;
 
                     case "--target":
                     case "-t":
-                        if (value != null) options.TargetPath = value;
+                        if (value != null)
+                        {
+                            // 处理兼容单引号与双引号
+                            if (value.StartsWith("'") && value.EndsWith("'"))
+                            {
+                                value = value[1..^1];
+                            }
+                            else if (value.StartsWith("\"") && value.EndsWith("\""))
+                            {
+                                value = value[1..^1];
+                            }
+                            else
+                            {
+                                options.TargetPath = value;
+                            }
+                        }
                         break;
 
                     // 同步模式和方法

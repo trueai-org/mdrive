@@ -1,5 +1,5 @@
 ﻿{
-  "SourcePath": "E:\\_temp\\____synctest3",
+  "SourcePath": "E:\\_temp\\____synctest3 1",
   "TargetPath": "E:\\_temp\\____synctest4",
   "SyncMode": "TwoWay",
   "CompareMethod": "Hash",
