@@ -20,10 +20,6 @@
 
 <http://g.googlec.cc:18080/>
 
-![作业](/docs/screenshots/job.gif)
-![挂载](/docs/screenshots/mount.png)
-![macOS](/docs/screenshots/macOS.png)
-
 ## 同步助手
 
 MDriveSync CLI 是一个功能强大的命令行工具，用于执行多平台文件同步操作。该工具提供了灵活的配置选项，支持多种同步模式、文件比较方法和哈希算法，适用于各种文件同步和备份场景。
@@ -45,6 +41,83 @@ mdrive sync -s /a -t /b
 # 帮助
 mdirve -h
 ```
+
+```bash
+mdrive - 多平台文件同步工具 v1.2.0
+
+用法:
+mdrive [命令] [选项]
+
+命令:
+  sync     执行文件同步操作
+  config   管理同步配置文件
+  version  显示程序版本信息
+  exit     退出程序 (仅在开发模式下有效)
+  quit     退出程序 (仅在开发模式下有效)
+
+选项:
+  --help, -h     显示帮助信息
+  --dev          开发模式，交互式运行程序
+
+使用 'mdrive [命令] --help' 查看特定命令的帮助信息
+
+执行文件同步操作
+
+用法:
+  mdrive sync [选项]
+
+选项:
+  --source, -s                源目录路径 (必需)
+  --target, -t                目标目录路径 (必需)
+  --mode, -m                  同步模式: OneWay(单向), Mirror(镜像), TwoWay(双向) (默认: OneWay)
+  --compare, -c               比较方法: Size(大小), DateTime(修改时间), DateTimeAndSize(时间和大小), Content(内容), Hash(哈希) (默认: DateTimeAndSize)
+  --hash, -h                  哈希算法: MD5, SHA1, SHA256(默认), SHA3, SHA384, SHA512, BLAKE3, XXH3, XXH128
+  --sampling-rate             哈希抽样率 (0.0-1.0之间的小数，默认: 0.1)
+  --sampling-min-size         参与抽样的最小文件大小 (字节，默认: 1MB)
+  --date-threshold            修改时间比较阈值 (秒，默认: 0)
+  --parallel                  是否启用并行文件操作 (默认: true)
+  --config, -f                配置文件路径, 示例: -f sync.json
+  --exclude, -e               排除的文件或目录模式 (支持通配符，可多次指定)
+  --preview, -p               预览模式，不实际执行操作 (默认: false)
+  --verbose, -v               显示详细日志信息 (默认: false)
+  --threads, -j               并行操作的最大线程数 (默认: CPU核心数)
+  --recycle-bin, -r           使用回收站代替直接删除文件 (默认: true)
+  --preserve-time             保留原始文件时间 (默认: true)
+  --continue-on-error         发生错误时是否继续执行 (默认: true)
+  --retry                     操作失败时的最大重试次数 (默认: 3)
+  --conflict                  冲突解决策略: SourceWins, TargetWins, KeepBoth, Skip, Newer(默认), Older, Larger
+  --follow-symlinks           是否跟踪符号链接 (默认: false)
+  --interval, -i              同步间隔, 单位秒
+  --cron                      Cron表达式，设置后将优先使用Cron表达式进行调度
+  --execute-immediately, -ei  配置定时执行时，是否立即执行一次同步 (默认: true)
+  --chunk-size, --chunk       文件同步分块大小（MB），大于0启用分块传输
+  --sync-last-modified-time   同步完成后是否同步文件的最后修改时间 (默认: true)
+  --temp-file-suffix          临时文件后缀 (默认: .mdrivetmp)
+  --verify-after-copy         文件传输完成后验证文件完整性 (默认: true)
+
+  --help                      显示帮助信息
+
+
+管理同步配置文件
+
+用法:
+  mdrive config [子命令] [选项]
+
+子命令:
+  create    创建新的配置文件
+  view      查看现有配置文件内容
+
+使用 'mdrive config [子命令] --help' 查看特定子命令的帮助信息
+
+示例:
+mdrive sync --source C:\Source --target D:\Targetd
+```
+
+## 截图
+
+![作业](/docs/screenshots/job.gif)
+![挂载](/docs/screenshots/mount.png)
+![macOS](/docs/screenshots/macOS.png)
 
 ## 安装与使用
 
