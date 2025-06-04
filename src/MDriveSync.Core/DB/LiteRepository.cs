@@ -4,11 +4,6 @@ using ServiceStack;
 
 namespace MDriveSync.Core.DB
 {
-    public interface IBaseId<T>
-    {
-        T Id { get; set; }
-    }
-
     /// <summary>
     /// LiteDB 数据库的泛型仓库类。
     /// 使用 LiteDB 作为数据库存储，并利用线程安全的字典来管理缓存。
@@ -52,6 +47,32 @@ namespace MDriveSync.Core.DB
                 }
                 return type.Name;
             };
+        }
+
+        /// <summary>
+        /// 创建 LiteDB 数据库的实例。
+        /// </summary>
+        /// <param name="dbName">数据库名称。</param>
+        /// <param name="password">数据库密码。</param>
+        public LiteRepository(string dbName, string password, string subPath = null)
+        {
+            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", subPath ?? "", dbName);
+
+            lock (_lock)
+            {
+                if (!Directory.Exists(Path.GetDirectoryName(dbPath)))
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(dbPath));
+                }
+            }
+
+            var connectionString = $"Filename={dbPath};Connection=shared;";
+            if (!string.IsNullOrEmpty(password))
+            {
+                connectionString += $"Password={password};";
+            }
+
+            _db = new LiteDatabase(connectionString);
         }
 
         // 增加

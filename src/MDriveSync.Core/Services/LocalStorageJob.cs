@@ -8,9 +8,9 @@ using ServiceStack;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Diagnostics;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
+
 using SearchOption = System.IO.SearchOption;
 
 namespace MDriveSync.Core

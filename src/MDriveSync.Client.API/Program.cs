@@ -3,6 +3,7 @@ using MDriveSync.Infrastructure;
 using Quartz.Logging;
 using Serilog;
 using Serilog.Debugging;
+using ServiceStack;
 using System.Diagnostics;
 
 namespace MDriveSync.Client.API
@@ -11,6 +12,9 @@ namespace MDriveSync.Client.API
     {
         public static void Main(string[] args)
         {
+            // ServiceStack Ðí¿ÉÖ¤
+            Licensing.RegisterLicense("OSS Apache-2.0 2025 https://github.com/trueai-org/mdrive V554sWbVI2vepwODmnOTHYlFXaL1B6CbaoIEtj0GmDq/VpqaeCI3iMmVTAo3GNn1yoDPMIEeBT2hEYZz2S58yILOabgJbfNWnBKwELuyo1gwRQtfaTEFHU0TVeTo0w9jneGYxo/90bQ01QDzXtdZoZhUZJDIln0Zn/2gU+h5780=");
+
             var builder = CreateHostBuilder(args).Build();
             var env = builder.Services.GetService<IWebHostEnvironment>();
 

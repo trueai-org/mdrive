@@ -21,8 +21,10 @@
 		</PackageReference>
 		<PackageReference Include="PropertyChanged.Fody" Version="4.1.0" />-->
 		
+		<PackageReference Include="sqlite-net-sqlcipher" Version="1.9.172" />
+		<PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="8.8.0" />
+
 		<PackageReference Include="System.IO.FileSystem.AccessControl" Version="5.0.0" />
-		<PackageReference Include="ServiceStack.OrmLite.Sqlite.Core" Version="8.0.0" />
 		<PackageReference Include="System.Runtime.Caching" Version="8.0.0" />
 	</ItemGroup>
 	

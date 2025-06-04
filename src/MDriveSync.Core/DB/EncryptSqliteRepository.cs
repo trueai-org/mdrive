@@ -1,25 +1,25 @@
 ﻿using FastMember;
-using ServiceStack.OrmLite;
+using SQLite;
 using System.Linq.Expressions;
 using System.Runtime.Caching;
 
 namespace MDriveSync.Core.DB
 {
-    public interface IBaseKey<T>
-    {
-        T Key { get; set; }
-    }
-
-    public class SqliteRepository<T> : SqliteRepository<T, int> where T : IBaseKey<int>, new()
+    public class EncryptSqliteRepository<T> : EncryptSqliteRepository<T, int> where T : IBaseKey<int>, new()
     {
         /// <inheritdoc />
-        public SqliteRepository(string dbName, bool? noCache) : base(dbName, null, noCache)
+        public EncryptSqliteRepository(string dbName, bool? noCache) : base(dbName, null, noCache)
         {
         }
 
         /// <inheritdoc />
-        public SqliteRepository(string dbName, string subPath = null, bool? noCache = null)
+        public EncryptSqliteRepository(string dbName, string subPath = null, bool? noCache = null)
             : base(dbName, subPath, noCache)
+        {
+        }
+
+        public EncryptSqliteRepository(string dbName, string password = null, string subPath = null, bool? noCache = null)
+            : base(dbName, password, subPath, noCache)
         {
         }
     }
@@ -30,11 +30,12 @@ namespace MDriveSync.Core.DB
     /// </summary>
     /// <typeparam name="T">数据实体类型。</typeparam>
     /// <typeparam name="TId">实体的标识类型。</typeparam>
-    public class SqliteRepository<T, TId> where T : IBaseKey<TId>, new()
+    public class EncryptSqliteRepository<T, TId> where T : IBaseKey<TId>, new()
     {
         private static readonly object _lock = new object();
 
-        private readonly OrmLiteConnectionFactory _dbFactory;
+        private readonly string _dbPath;
+        private readonly string _password;
         private readonly MemoryCache _cache = new(typeof(T).Name);
         private readonly string _cacheKey = typeof(T).Name;
         private readonly bool? _useCache;
@@ -46,30 +47,90 @@ namespace MDriveSync.Core.DB
         /// 创建 sqlite
         /// </summary>
         /// <param name="dbName">数据库名称，例如：log.db</param>
+        /// <param name="subPath">子路径</param>
         /// <param name="noCache">是否使用缓存</param>
-        public SqliteRepository(string dbName, string subPath = null, bool? noCache = null)
+        public EncryptSqliteRepository(string dbName, string subPath = null, bool? noCache = null)
+            : this(dbName, null, subPath, noCache)
+        {
+        }
+
+        /// <summary>
+        /// 创建加密的 SQLite 数据库
+        /// </summary>
+        /// <param name="dbName">数据库名称</param>
+        /// <param name="password">数据库密码</param>
+        /// <param name="subPath">子路径</param>
+        /// <param name="noCache">是否使用缓存</param>
+        public EncryptSqliteRepository(string dbName, string password = null, string subPath = null, bool? noCache = null)
         {
             _useCache = noCache;
             _members = _accessor.GetMembers();
+            _password = password;
 
-            var dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", subPath, dbName);
+            _dbPath = Path.Combine(Directory.GetCurrentDirectory(), "data", subPath ?? "", dbName);
+
             lock (_lock)
             {
-                if (!Directory.Exists(Path.GetDirectoryName(dbPath)))
+                var directory = Path.GetDirectoryName(_dbPath);
+                if (!Directory.Exists(directory))
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(dbPath));
+                    Directory.CreateDirectory(directory);
                 }
             }
 
-            _dbFactory = new OrmLiteConnectionFactory(dbPath, SqliteDialect.Provider);
-            using var db = _dbFactory.Open();
-            db.CreateTableIfNotExists<T>();
+            // 初始化数据库和表
+            InitializeDatabase();
+        }
+
+        /// <summary>
+        /// 初始化数据库连接和表结构
+        /// </summary>
+        private void InitializeDatabase()
+        {
+            try
+            {
+                using var db = GetConnection();
+                db.CreateTable<T>();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"初始化数据库失败: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// 获取数据库连接
+        /// </summary>
+        /// <returns></returns>
+        private SQLiteConnection GetConnection()
+        {
+            //var options = new SQLiteConnectionString(_dbPath, true, key: _password);
+            //var encryptedDb = new SQLiteAsyncConnection(options);
+            //return encryptedDb.GetConnection();
+
+            // 最简化的异步连接配置
+            var options = new SQLiteConnectionString(_dbPath, true, key: _password);
+            return new SQLiteConnection(options);
+
+
+
+            //var options = SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache;
+
+            //var connection = new SQLiteConnection(_dbPath, options, !string.IsNullOrEmpty(_password));
+
+            //if (!string.IsNullOrEmpty(_password))
+            //{
+            //    // 设置加密密码
+            //    connection.Execute("PRAGMA key = ?", _password);
+            //}
+
+            //return connection;
         }
 
         // 增加
         public void Add(T entity)
         {
-            using var db = _dbFactory.Open();
+            using var db = GetConnection();
             db.Insert(entity);
             AddToCache(entity);
         }
@@ -78,10 +139,11 @@ namespace MDriveSync.Core.DB
         public void AddRange(IEnumerable<T> entities)
         {
             const int batchSize = 10000;
-            using var db = _dbFactory.Open();
+            var entityList = entities.ToList();
+
+            using var db = GetConnection();
 
             // 分批处理实体
-            var entityList = entities.ToList();
             for (int i = 0; i < entityList.Count; i += batchSize)
             {
                 var batch = entityList.Skip(i).Take(batchSize);
@@ -104,10 +166,11 @@ namespace MDriveSync.Core.DB
         public void UpdateRange(IEnumerable<T> entities)
         {
             const int batchSize = 1000;
-            using var db = _dbFactory.Open();
+            var entityList = entities.ToList();
+
+            using var db = GetConnection();
 
             // 分批处理实体
-            var entityList = entities.ToList();
             for (int i = 0; i < entityList.Count; i += batchSize)
             {
                 var batch = entityList.Skip(i).Take(batchSize).ToList();
@@ -137,8 +200,8 @@ namespace MDriveSync.Core.DB
         // 删除
         public void Delete(TId id)
         {
-            using var db = _dbFactory.Open();
-            db.DeleteById<T>(id);
+            using var db = GetConnection();
+            db.Delete<T>(id);
             RemoveFromCache(id);
         }
 
@@ -146,13 +209,17 @@ namespace MDriveSync.Core.DB
         public void DeleteRange(IEnumerable<TId> ids)
         {
             const int batchSize = 1000;
-            using var db = _dbFactory.Open();
-
             var idList = ids.ToList();
+
+            using var db = GetConnection();
+
             for (int i = 0; i < idList.Count; i += batchSize)
             {
                 var batch = idList.Skip(i).Take(batchSize);
-                db.Delete<T>(x => Sql.In(x.Key, batch));
+                foreach (var id in batch)
+                {
+                    db.Delete<T>(id);
+                }
             }
 
             // 更新缓存
@@ -170,9 +237,8 @@ namespace MDriveSync.Core.DB
         // 修改
         public void Update(T entity)
         {
-            using var db = _dbFactory.Open();
+            using var db = GetConnection();
             db.Update(entity);
-
             UpdateCache(entity);
         }
 
@@ -188,25 +254,16 @@ namespace MDriveSync.Core.DB
             }
             else
             {
-                using var db = _dbFactory.Open();
-                return db.Select<T>();
+                using var db = GetConnection();
+                return db.Table<T>().ToList();
             }
         }
 
         // 查询
         public T Get(TId id)
         {
-            using var db = _dbFactory.Open();
-            return db.SingleById<T>(id);
-        }
-
-        private List<T> GetCachedDataOrNull()
-        {
-            if (_cache.Contains(_cacheKey))
-            {
-                return GetCachedData();
-            }
-            return null;
+            using var db = GetConnection();
+            return db.Get<T>(id);
         }
 
         /// <summary>
@@ -216,8 +273,60 @@ namespace MDriveSync.Core.DB
         /// <returns>满足条件的单个实体。</returns>
         public T Single(Expression<Func<T, bool>> predicate)
         {
-            using var db = _dbFactory.Open();
-            return db.Single(predicate);
+            using var db = GetConnection();
+            return db.Table<T>().Where(predicate).Single();
+        }
+
+        /// <summary>
+        /// 获取第一个满足条件的实体，如果没有找到则返回 null。
+        /// </summary>
+        /// <param name="predicate">查询条件表达式。</param>
+        /// <returns>满足条件的第一个实体或 null。</returns>
+        public T FirstOrDefault(Expression<Func<T, bool>> predicate)
+        {
+            using var db = GetConnection();
+            return db.Table<T>().Where(predicate).FirstOrDefault();
+        }
+
+        /// <summary>
+        /// 获取满足条件的所有实体。
+        /// </summary>
+        /// <param name="predicate">查询条件表达式。</param>
+        /// <returns>满足条件的实体列表。</returns>
+        public List<T> Where(Expression<Func<T, bool>> predicate)
+        {
+            using var db = GetConnection();
+            return db.Table<T>().Where(predicate).ToList();
+        }
+
+        /// <summary>
+        /// 获取实体数量。
+        /// </summary>
+        /// <returns>实体总数。</returns>
+        public int Count()
+        {
+            using var db = GetConnection();
+            return db.Table<T>().Count();
+        }
+
+        /// <summary>
+        /// 获取满足条件的实体数量。
+        /// </summary>
+        /// <param name="predicate">查询条件表达式。</param>
+        /// <returns>满足条件的实体数量。</returns>
+        public int Count(Expression<Func<T, bool>> predicate)
+        {
+            using var db = GetConnection();
+            return db.Table<T>().Count(predicate);
+        }
+
+        private List<T> GetCachedDataOrNull()
+        {
+            if (_cache.Contains(_cacheKey))
+            {
+                return GetCachedData();
+            }
+            return null;
         }
 
         private List<T> GetCachedData()
@@ -329,6 +438,14 @@ namespace MDriveSync.Core.DB
             }
 
             return true;
+        }
+
+        /// <summary>
+        /// 释放资源
+        /// </summary>
+        public void Dispose()
+        {
+            _cache?.Dispose();
         }
     }
 }

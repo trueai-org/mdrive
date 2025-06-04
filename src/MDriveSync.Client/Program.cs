@@ -1,6 +1,10 @@
 ﻿using MDriveSync.Core.Services;
 using MDriveSync.Infrastructure;
 using MDriveSync.Security;
+using ServiceStack;
+using ServiceStack.DataAnnotations;
+using ServiceStack.OrmLite;
+using System.Data;
 using System.Diagnostics;
 using System.Security.Cryptography;
 
@@ -10,6 +14,9 @@ namespace MDriveSync.Client
     {
         private static async Task Main(string[] args)
         {
+            // ServiceStack 许可证
+            Licensing.RegisterLicense("OSS Apache-2.0 2025 https://github.com/trueai-org/mdrive V554sWbVI2vepwODmnOTHYlFXaL1B6CbaoIEtj0GmDq/VpqaeCI3iMmVTAo3GNn1yoDPMIEeBT2hEYZz2S58yILOabgJbfNWnBKwELuyo1gwRQtfaTEFHU0TVeTo0w9jneGYxo/90bQ01QDzXtdZoZhUZJDIln0Zn/2gU+h5780=");
+
             await FastCDCTest1.Start();
 
             Console.ReadKey();
@@ -17,7 +24,6 @@ namespace MDriveSync.Client
             return;
 
             await FastCDCPlusTest1.Start();
-
 
             Console.ReadKey();
 
@@ -27,7 +33,6 @@ namespace MDriveSync.Client
             var rootPath = "E:\\program_files"; // args.Length > 0 ? args[0] : Environment.CurrentDirectory;
             var ignorePatterns = FileIgnoreHelper.BuildIgnorePatterns("**/node_modules/*", "**/bin/*", "**/obj/*", "**/.git/*");
             Console.WriteLine($"开始扫描目录: {rootPath}");
-
 
             var cts = new CancellationTokenSource();
 
@@ -57,7 +62,6 @@ namespace MDriveSync.Client
             sw.Stop();
             Console.WriteLine($"扫描完成! 耗时: {sw.Elapsed.TotalSeconds:F2} 秒, count: {fileRes.Files.Count}");
 
-
             try
             {
                 var scanner = new FileUltraScanner(
@@ -80,7 +84,6 @@ namespace MDriveSync.Client
                 Console.WriteLine($"总项目数: {result.FileCount + result.DirectoryCount:N0}");
                 Console.WriteLine($"扫描耗时: {result.ElapsedTime.TotalSeconds:F2} 秒");
                 Console.WriteLine($"处理速度: {result.ItemsPerSecond:N0} 项/秒");
-
 
                 if (result.Errors.Count > 0)
                 {
@@ -228,7 +231,91 @@ namespace MDriveSync.Client
 
             Console.WriteLine("Hello, World!");
         }
+
+        private static void TestInsertData(IDbConnection db, Type tableType, int tableNumber)
+        {
+            try
+            {
+                // 创建实例并设置数据
+                var instance = Activator.CreateInstance(tableType);
+                var nameProperty = tableType.GetProperty("Name");
+                if (nameProperty != null)
+                {
+                    nameProperty.SetValue(instance, $"测试数据 {tableNumber}");
+                }
+
+                //// 插入数据
+                //var insertMethod = typeof(IDbConnection).GetMethod("Insert", new[] { typeof(object), typeof(bool) });
+                //insertMethod.Invoke(db, new[] { instance, false });
+
+                var i = db.Insert(instance);
+
+                Console.WriteLine($"  📝 成功插入测试数据到表 {tableType.Name} {i}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"  ⚠️ 插入数据失败: {ex.Message}");
+            }
+        }
     }
+
+    // 定义一个测试实体类
+    [Alias("TestTable{0}")] // 这个别名会在运行时被替换
+    public class TestEntity
+    {
+        [AutoIncrement]
+        public int Id { get; set; }
+
+        public string Name { get; set; }
+
+        public DateTime CreatedDate { get; set; }
+    }
+
+    // 为了动态创建不同的表，我们需要为每个表定义不同的类
+    public class TestTable1
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable2
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable3
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable4
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable5
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable6
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable7
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable8
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable9
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable10
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable11
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable12
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable13
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable14
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
+
+    public class TestTable15
+    { [AutoIncrement] public int Id { get; set; } public string Name { get; set; } }
 
     /// <summary>
     /// FastCDC+ 控制台应用程序
@@ -341,7 +428,6 @@ namespace MDriveSync.Client
             }
         }
     }
-
 
     /// <summary>
     /// FastCDC 算法演示程序
