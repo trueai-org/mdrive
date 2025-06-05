@@ -42,6 +42,7 @@ namespace MDriveSync.Security
                 "LZMA" => LZMACompressor.Shared.Compress(buffer),
                 "Deflate" => DeflateCompressor.Shared.Compress(buffer),
                 "Brotli" => BrotliCompressor.Shared.Compress(buffer),
+                "Gzip" => GZipCompressor.Shared.Compress(buffer),
                 _ => buffer
             };
 
@@ -89,6 +90,7 @@ namespace MDriveSync.Security
                 "LZMA" => LZMACompressor.Shared.Decompress(buffer),
                 "Deflate" => DeflateCompressor.Shared.Decompress(buffer),
                 "Brotli" => BrotliCompressor.Shared.Decompress(buffer),
+                "Gzip" => GZipCompressor.Shared.Decompress(buffer),
                 _ => buffer
             };
 

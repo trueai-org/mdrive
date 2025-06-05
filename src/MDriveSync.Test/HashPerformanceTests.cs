@@ -242,6 +242,7 @@ namespace MDriveSync.Test
         [InlineData("LZMA")]
         [InlineData("Deflate")]
         [InlineData("Brotli")]
+        [InlineData("Gzip")]
         public void TestCompressDecompress(string algorithm)
         {
             var count = 3;
