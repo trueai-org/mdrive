@@ -86,9 +86,9 @@ namespace MDriveSync.Security
                 "LZ4" => LZ4Compressor.Shared.Decompress(buffer),
                 "Zstd" => ZstdSharpCompressor.Shared.Decompress(buffer),
                 "Snappy" => SnappierCompressor.Shared.Decompress(buffer),
-                "LZMA" => LZMACompressor.Shared.Compress(buffer),
-                "Deflate" => DeflateCompressor.Shared.Compress(buffer),
-                "Brotli" => BrotliCompressor.Shared.Compress(buffer),
+                "LZMA" => LZMACompressor.Shared.Decompress(buffer),
+                "Deflate" => DeflateCompressor.Shared.Decompress(buffer),
+                "Brotli" => BrotliCompressor.Shared.Decompress(buffer),
                 _ => buffer
             };
 

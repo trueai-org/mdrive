@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace MDriveSync.Test
 {
@@ -232,32 +233,85 @@ namespace MDriveSync.Test
     /// </summary>
     public class CompressionTests : BaseTests
     {
+        // 多次执行
+        // 测试不同压缩算法的压缩和解压缩功能
         [Theory]
         [InlineData("LZ4")]
         [InlineData("Zstd")]
         [InlineData("Snappy")]
+        [InlineData("LZMA")]
+        [InlineData("Deflate")]
+        [InlineData("Brotli")]
         public void TestCompressDecompress(string algorithm)
         {
-            // 测试数据
-            string originalText = "hello world repeated many times to ensure compression is effective. " +
-                                 string.Join(" ", Enumerable.Repeat("hello world", 100));
-            byte[] originalData = Encoding.UTF8.GetBytes(originalText);
+            var count = 3;
+            for (int j = 0; j < count; j++)
+            {
+                // 测试数据
+                //string originalText = "hello world repeated many times to ensure compression is effective. " +
+                //                     string.Join(" ", Enumerable.Repeat("hello world", 100));
+                //byte[] originalData = Encoding.UTF8.GetBytes(originalText);
 
-            // 压缩
-            byte[] compressedData = CompressionHelper.Compress(originalData, algorithm);
-            Assert.NotNull(compressedData);
-            Assert.NotEmpty(compressedData);
+                // 随机生成 1000 组 LocalFileInfo 对象
+                // 转换为字节数组
+                // 以 UTF-8 编码
+                var list = new List<LocalFileInfo>();
+                for (int i = 0; i < 1000; i++)
+                {
+                    string randomText = $"Random text {i}: ";
 
-            // 对于可压缩的数据，压缩后应该变小
-            Console.WriteLine($"原始大小: {originalData.Length}, 压缩后大小: {compressedData.Length}, 压缩率: {(double)compressedData.Length / originalData.Length:P2}");
+                    var obj = new LocalFileInfo
+                    {
+                        Key = $"file_{i}.txt",
+                        Length = randomText.Length,
+                        LastWriteTime = DateTime.Now.AddSeconds(-i),
+                        KeyPath = $"path/to/file_{i}.txt",
+                        AliyunContentHash = $"hash_{i}",
+                        AliyunFileId = $"fileid_{i}",
+                        LocalFileName = $"local_file_{i}.txt",
+                        EncryptFileName = $"encrypt_file_{i}.txt",
+                        IsEncrypt = i % 2 == 0,
+                        FullPath = $"/full/path/to/file_{i}.txt",
+                        AliyunName = $"aliyun_file_{i}.txt",
+                        CreationTime = DateTime.Now.AddDays(-i),
+                        Hash = $"hash_value_{i}",
+                        IsEncryptName = (i % 2 == 0),
+                        IsFile = true,
+                        IsHidden = (i % 2 == 0),
+                        IsReadOnly = (i % 2 == 0),
+                        IsSync = (i % 2 == 0),
+                        Sha1 = $"sha1_value_{i}"
+                    };
+                    list.Add(obj);
+                }
 
-            // 解压缩
-            byte[] decompressedData = CompressionHelper.Decompress(compressedData, algorithm);
-            Assert.NotNull(decompressedData);
-            Assert.Equal(originalData, decompressedData);
+                var originalText = JsonSerializer.Serialize(list, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+                });
+                byte[] originalData = Encoding.UTF8.GetBytes(originalText);
 
-            string decompressedText = Encoding.UTF8.GetString(decompressedData);
-            Assert.Equal(originalText, decompressedText);
+                // 压缩
+                var sw = new Stopwatch();
+                sw.Start();
+                byte[] compressedData = CompressionHelper.Compress(originalData, algorithm);
+                sw.Stop();
+
+                Assert.NotNull(compressedData);
+                Assert.NotEmpty(compressedData);
+
+                // 对于可压缩的数据，压缩后应该变小
+                Console.WriteLine($"{algorithm}, 原始大小: {originalData.Length}, 压缩后大小: {compressedData.Length}, 压缩率: {(double)compressedData.Length / originalData.Length:P2}, {sw.ElapsedMilliseconds}ms");
+
+                // 解压缩
+                byte[] decompressedData = CompressionHelper.Decompress(compressedData, algorithm);
+                Assert.NotNull(decompressedData);
+                Assert.Equal(originalData, decompressedData);
+
+                string decompressedText = Encoding.UTF8.GetString(decompressedData);
+                Assert.Equal(originalText, decompressedText);
+            }
         }
 
         [Fact]
