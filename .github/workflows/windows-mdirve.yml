@@ -20,8 +20,7 @@ jobs:
       run:  cd scripts && .\build.ps1
         
     - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: MDrive
-        path: 
-          .\scripts\MDrive.zip
+        path: .\scripts\MDrive.zip
