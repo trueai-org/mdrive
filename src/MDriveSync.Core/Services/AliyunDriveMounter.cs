@@ -1290,6 +1290,8 @@ namespace MDriveSync.Core.Services
                         options.Options |= DokanOptions.WriteProtection;
                     }
 
+                    //options.Options = DokanOptions.FixedDrive | DokanOptions.DebugMode | DokanOptions.StderrOutput;
+
                     options.MountPoint = _driveMountConfig.MountPoint;
                 });
 
@@ -1302,8 +1304,8 @@ namespace MDriveSync.Core.Services
                 AliyunDriveInitFiles();
 
                 // 创建轮询计划
-                // 每 15 分钟更新一次列表
-                var scheduler = new QuartzCronScheduler("0 0/15 * * * ?", () =>
+                // 每 30 分钟更新一次列表
+                var scheduler = new QuartzCronScheduler("0 0/30 * * * ?", () =>
                 {
                     try
                     {

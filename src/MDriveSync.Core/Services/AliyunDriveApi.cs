@@ -381,7 +381,7 @@ namespace MDriveSync.Core.Services
         /// <param name="type"></param>
         /// <param name="accessToken"></param>
         /// <returns></returns>
-        public bool TryFileList(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type, string accessToken, 
+        public bool TryFileList(string driveId, string parentFileId, int limit, string marker, string orderBy, string orderDirection, string category, string type, string accessToken,
             out AliyunFileList data, ref string code)
         {
             data = null;
@@ -601,7 +601,8 @@ namespace MDriveSync.Core.Services
                 {
                     return response;
                 }
-                else if (response.StatusCode == HttpStatusCode.TooManyRequests)
+                // = 0  时也重试
+                else if (response.StatusCode == 0 || response.StatusCode == HttpStatusCode.TooManyRequests)
                 {
                     retries++;
 

@@ -686,7 +686,8 @@ namespace MDriveSync.Core.Services
                 info.Context = null;
             }
 
-            if (info.DeleteOnClose)
+            // info.DeleteOnClose
+            if (info.DeletePending)
             {
                 if (fileName == "\\")
                 {

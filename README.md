@@ -754,6 +754,7 @@ docker run --name mdrive -d --restart=always \
 
 - [阿里云盘小白羊网盘](https://github.com/gaozhangmin/aliyunpan) https://github.com/gaozhangmin/aliyunpan
 - [阿里云盘命令行客户端](https://github.com/tickstep/aliyunpan) https://github.com/tickstep/aliyunpan
+- [磁盘挂载备选方案](https://github.com/winfsp/winfsp) https://github.com/winfsp/winfsp
 
 ## 鸣谢
 
