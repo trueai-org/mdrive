@@ -14,10 +14,10 @@ jobs:
 
     steps:
       - name: 检出仓库代码
-        uses: actions/checkout@v3  # 使用最新稳定版本
+        uses: actions/checkout@v4  # 升级到 v4
 
       - name: 设置 .NET 环境
-        uses: actions/setup-dotnet@v3  # 使用最新稳定版本
+        uses: actions/setup-dotnet@v4  # 升级到 v4
         with:
           dotnet-version: '8.0.x'  # 确保使用的 .NET 版本与你的项目版本匹配
 
@@ -36,11 +36,6 @@ jobs:
         run: |
           echo "发布目录内容："
           dir src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish
-
-      # - name: 删除 PDB 和部分 XML 文件
-      #   run: |
-      #     # 删除目录中的 .pdb 和部分 .xml 文件（如果存在）
-      #     Remove-Item src/MDriveSync.Client.API/bin/Release/net8.0/win-x64/publish/*.pdb -Force -ErrorAction SilentlyContinue
 
       - name: 条件性删除 PDB 文件
         run: |
@@ -63,11 +58,7 @@ jobs:
           dir MDrive-win-x64-${{ github.event.release.tag_name }}.zip
 
       - name: 上传 ZIP 文件到 release
-        uses: actions/upload-release-asset@v1  # 使用最新稳定版本
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        uses: softprops/action-gh-release@v2  # 使用推荐的替代方案
         with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: "MDrive-win-x64-${{ github.event.release.tag_name }}.zip"
-          asset_name: "MDrive-win-x64-${{ github.event.release.tag_name }}.zip"
-          asset_content_type: application/zip
+          files: "MDrive-win-x64-${{ github.event.release.tag_name }}.zip"
+          token: ${{ secrets.GITHUB_TOKEN }}
