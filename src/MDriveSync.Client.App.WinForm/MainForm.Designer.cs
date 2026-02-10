@@ -38,7 +38,7 @@
             ClientSize = new Size(1264, 681);
             Icon = (Icon)resources.GetObject("$this.Icon");
             Name = "MainForm";
-            Text = "MDriveUI v3.3.2";
+            Text = "MDriveUI v3.7.0";
             ResumeLayout(false);
         }
 

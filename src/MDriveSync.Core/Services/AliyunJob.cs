@@ -570,9 +570,9 @@ namespace MDriveSync.Core
             ProcessCount = 0;
             ProcessCurrent = 0;
 
-            // 通知前端 - 状态变更或最多每 200ms 通知一次
+            // 通知前端 - 状态变更或最多每 500ms 通知一次
             var now = DateTime.Now;
-            if (newState != _lastNotifyState || (now - _lastNotifyTime).TotalMilliseconds > 200)
+            if (newState != _lastNotifyState || (now - _lastNotifyTime).TotalMilliseconds > 500)
             {
                 _log.LogInformation("作业状态改变，通知前端，状态：{@0}", newState);
 
