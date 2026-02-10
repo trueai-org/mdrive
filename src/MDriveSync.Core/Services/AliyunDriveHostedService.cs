@@ -364,7 +364,7 @@ namespace MDriveSync.Core
             drive.MountConfig.MountReadOnly = request.MountReadOnly;
 
             // 保存配置
-            drive.Save();
+            drive.Save(isSaveToken: true);
         }
 
         /// <summary>

@@ -68,7 +68,8 @@ namespace MDriveSync.Core.Services
             var response = client.Execute<AliyunDriveOAuthAccessToken>(request);
 
             // 记录日志
-            Log.Information("刷新请求令牌，状态码：{@0}, 响应内容：{@1}", response.StatusCode, response.Content);
+            Log.Information("使用刷新令牌请求新令牌，刷新令牌：{@0}，状态码：{@1}, 响应内容：{@2}", refreshToken,
+                response.StatusCode, response.Content);
 
             if (response.StatusCode == HttpStatusCode.OK && response.Data != null)
             {

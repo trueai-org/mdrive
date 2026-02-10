@@ -48,7 +48,7 @@ namespace MDriveSync.Core.Services
                     config.AccessToken = data.AccessToken;
                     config.RefreshToken = data.RefreshToken;
                     config.ExpiresIn = data.ExpiresIn;
-                    config.Save();
+                    config.Save(isSaveToken: true);
 
                     // 提前 5 分钟过期
                     c.SetAbsoluteExpiration(TimeSpan.FromSeconds(config.ExpiresIn - 60 * 5));

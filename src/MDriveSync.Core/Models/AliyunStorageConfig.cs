@@ -60,7 +60,7 @@ namespace MDriveSync.Core.Options
         /// <summary>
         /// 保存
         /// </summary>
-        public void Save(bool isRemove = false)
+        public void Save(bool isRemove = false, bool isSaveToken = false)
         {
             if (isRemove)
             {
@@ -71,7 +71,22 @@ namespace MDriveSync.Core.Options
                 var current = AliyunStorageDb.Instance.DB.Get(Id);
                 if (current != null)
                 {
+                    var oldAccessToken = current.AccessToken;
+                    var oldRefreshToken = current.RefreshToken;
+                    var oldExpiresIn = current.ExpiresIn;
+                    var oldTokenType = current.TokenType;
+
                     current = this;
+
+                    if (!isSaveToken)
+                    {
+                        // 保留旧的令牌信息
+                        current.AccessToken = oldAccessToken;
+                        current.RefreshToken = oldRefreshToken;
+                        current.ExpiresIn = oldExpiresIn;
+                        current.TokenType = oldTokenType;
+                    }
+
                     AliyunStorageDb.Instance.DB.Update(current);
                 }
                 else
