@@ -8,6 +8,7 @@
 		<SatelliteResourceLanguages>zh</SatelliteResourceLanguages>
 		<InvariantGlobalization>true</InvariantGlobalization>
 		<IncludeAllContentForSelfExtract>true</IncludeAllContentForSelfExtract>
+		<EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
 	</PropertyGroup>
 
 	<ItemGroup>
