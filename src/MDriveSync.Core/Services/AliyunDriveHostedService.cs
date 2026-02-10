@@ -1,8 +1,10 @@
 ﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.Hubs;
 using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -33,12 +35,16 @@ namespace MDriveSync.Core
 
         private Timer _timer;
 
+        private readonly IHubContext<JobHub> _hubContext;
+
         public AliyunDriveHostedService(
             ILogger<AliyunDriveHostedService> logger,
-            IOptionsMonitor<ClientOptions> clientOptions)
+            IOptionsMonitor<ClientOptions> clientOptions,
+            IHubContext<JobHub> hubContext)
         {
             _logger = logger;
             _clientOptions = clientOptions?.CurrentValue;
+            _hubContext = hubContext;
         }
 
         protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -143,7 +149,7 @@ namespace MDriveSync.Core
                     {
                         if (!_jobs.TryGetValue(cf.Id, out var job) || job == null)
                         {
-                            job = new AliyunJob(ad, cf, _logger);
+                            job = new AliyunJob(ad, cf, _logger, _hubContext);
                             _jobs[cf.Id] = job;
                         }
 
@@ -253,7 +259,7 @@ namespace MDriveSync.Core
             // 添加到队列
             if (!_jobs.TryGetValue(cfg.Id, out var job) || job == null)
             {
-                job = new AliyunJob(drive, cfg, _logger);
+                job = new AliyunJob(drive, cfg, _logger, _hubContext);
                 _jobs[cfg.Id] = job;
             }
         }

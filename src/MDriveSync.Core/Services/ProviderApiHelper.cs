@@ -1,6 +1,7 @@
 ﻿using MDriveSync.Core.Models;
 using MDriveSync.Core.ViewModels;
 using RestSharp;
+using Serilog;
 using System.Net;
 
 namespace MDriveSync.Core.Services
@@ -65,6 +66,10 @@ namespace MDriveSync.Core.Services
             };
             request.AddBody(body);
             var response = client.Execute<AliyunDriveOAuthAccessToken>(request);
+
+            // 记录日志
+            Log.Information("刷新请求令牌，状态码：{@0}, 响应内容：{@1}", response.StatusCode, response.Content);
+
             if (response.StatusCode == HttpStatusCode.OK && response.Data != null)
             {
                 return response.Data;

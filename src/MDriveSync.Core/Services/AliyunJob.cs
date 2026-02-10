@@ -1,8 +1,10 @@
 ﻿using MDriveSync.Core.DB;
+using MDriveSync.Core.Hubs;
 using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
 using MDriveSync.Core.ViewModels;
 using MDriveSync.Security;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Polly;
@@ -185,6 +187,16 @@ namespace MDriveSync.Core
         public JobState CurrentState { get; private set; }
 
         /// <summary>
+        /// 记录上次通知时间
+        /// </summary>
+        private DateTime _lastNotifyTime = DateTime.MinValue;
+
+        /// <summary>
+        /// 记录上次通知状态
+        /// </summary>
+        private JobState _lastNotifyState = JobState.None;
+
+        /// <summary>
         /// 当前作业
         /// </summary>
         public AliyunJobConfig CurrrentJob => _jobConfig;
@@ -209,8 +221,11 @@ namespace MDriveSync.Core
         /// </summary>
         private AliyunDriveMounter _mountDrive;
 
-        public AliyunJob(AliyunStorageConfig driveConfig, AliyunJobConfig jobConfig, ILogger log)
+        private readonly IHubContext<JobHub> _hubContext;
+
+        public AliyunJob(AliyunStorageConfig driveConfig, AliyunJobConfig jobConfig, ILogger log, IHubContext<JobHub> hubContext)
         {
+            _hubContext = hubContext;
             _localFileCache = new($"{jobConfig.Id}.d", "cache", true);
             _driveApi = new AliyunDriveApi();
             _log = log;
@@ -554,6 +569,30 @@ namespace MDriveSync.Core
             ProcessMessage = string.Empty;
             ProcessCount = 0;
             ProcessCurrent = 0;
+
+            // 通知前端 - 状态变更或最多每 200ms 通知一次
+            var now = DateTime.Now;
+            if (newState != _lastNotifyState || (now - _lastNotifyTime).TotalMilliseconds > 200)
+            {
+                _log.LogInformation("作业状态改变，通知前端，状态：{@0}", newState);
+
+                _hubContext.Clients.All.SendAsync("JobStateChanged", new
+                {
+                    Id = _jobConfig.Id,
+                    State = CurrentState,
+                    Metadata = new
+                    {
+                        FileCount = _driveFiles.Count,
+                        FolderCount = _driveFolders.Count,
+                        TotalSize = _driveFiles.Values.Sum(f => f.Size),
+                        Message = ProcessMessage
+                    },
+                    IsMount = _mountDrive != null
+                });
+
+                _lastNotifyTime = now;
+                _lastNotifyState = newState;
+            }
         }
 
         /// <summary>
@@ -705,12 +744,11 @@ namespace MDriveSync.Core
 
                 sw.Stop();
                 _log.LogInformation($"同步作业校验完成，用时：{sw.ElapsedMilliseconds}ms");
-
             }
             catch (Exception ex)
             {
                 _log.LogError(ex, "同步作业完成执行异常");
-                throw ex;
+                throw;
             }
 
             swAll.Stop();
@@ -790,6 +828,9 @@ namespace MDriveSync.Core
                     ProcessMessage = $"同步文件夹中 {process}/{total}";
 
                     _log.LogInformation($"同步文件夹中 {process}/{total}，用时：{(DateTime.Now - now).TotalMilliseconds}ms，{item.Key}");
+
+                    // 通知
+                    ChangeState(CurrentState);
                 }
             });
             _log.LogInformation($"同步文件夹完成，总文件夹数：{_localFolders.Count}，用时：{(DateTime.Now - now).TotalMilliseconds}ms");
@@ -808,9 +849,12 @@ namespace MDriveSync.Core
                 {
                     // 在关键点添加暂停点
                     _pauseEvent.Wait();
+
                     token.ThrowIfCancellationRequested();
 
                     await AliyunDriveUploadFile(item.Value);
+
+                    ChangeState(CurrentState);
                 }
                 catch (OperationCanceledException)
                 {
@@ -1488,7 +1532,6 @@ namespace MDriveSync.Core
                                 }
                             }
 
-
                             // 计算加密文件名称
                             if (lf.IsEncrypt)
                             {
@@ -1520,7 +1563,6 @@ namespace MDriveSync.Core
                                     // 如果之前内存中有文件的 sha1
                                     lf.Sha1 = v.Sha1;
                                 }
-
 
                                 return lf;
                             });
@@ -1862,7 +1904,6 @@ namespace MDriveSync.Core
 
                     var sw = new Stopwatch();
                     sw.Start();
-
 
                     var isLinux = GlobalConfiguration.IsLinux();
                     var isMacOS = GlobalConfiguration.IsMacOS();
@@ -2396,7 +2437,6 @@ namespace MDriveSync.Core
             }
         }
 
-
         /// <summary>
         /// 阿里云盘 - 上传文件
         /// </summary>
@@ -2568,7 +2608,6 @@ namespace MDriveSync.Core
                 {
                     localFileInfo.Sha1 = ShaHashHelper.ComputeFileHash(fileFullPath, "sha1");
                 }
-
             }
             else
             {
@@ -2578,8 +2617,6 @@ namespace MDriveSync.Core
                     localFileInfo.Sha1 = ShaHashHelper.ComputeFileHash(localFileInfo.FullPath, "sha1");
                 }
             }
-
-
 
             // 如果文件已上传则跳过
             // 对比文件差异 sha1
@@ -2974,7 +3011,6 @@ namespace MDriveSync.Core
                 throw;
             }
         }
-
 
         /// <summary>
         /// 阿里云盘 - 获取文件列表（限流 4 QPS）
@@ -3776,7 +3812,6 @@ private async Task AliyunDriveUploadFile(LocalFileInfo localFileInfo, bool needP
     }
 }
  */
-
 
         #endregion 阿里云盘
 

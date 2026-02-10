@@ -1,5 +1,4 @@
 ﻿using MDriveSync.Core.DB;
-using MDriveSync.Core.IO;
 using MDriveSync.Core.Models;
 using MDriveSync.Core.Services;
 using MDriveSync.Security;
@@ -496,7 +495,7 @@ namespace MDriveSync.Core
                             }
 
                             // 计算下载速度
-                            if (stopwatch.Elapsed.TotalSeconds > 1)
+                            if (stopwatch.Elapsed.TotalSeconds >= 1)
                             {
                                 downloadTask.Speed = (downloadTask.DownloadedBytes - lastDownloadedBytes) / stopwatch.Elapsed.TotalSeconds;
                                 lastDownloadedBytes = downloadTask.DownloadedBytes;

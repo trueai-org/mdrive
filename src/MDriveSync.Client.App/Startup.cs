@@ -2,7 +2,9 @@
 using MDriveSync.Core.BaseAuth;
 using MDriveSync.Core.Dashboard;
 using MDriveSync.Core.Filters;
+using MDriveSync.Core.Hubs;
 using MDriveSync.Core.Middlewares;
+using MDriveSync.Core.Services;
 using MDriveSync.Infrastructure;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Mvc;
@@ -46,11 +48,21 @@ namespace MDriveSync.Client.App
                 };
             });
 
+            services.AddSignalR().AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.PropertyNamingPolicy =
+                    System.Text.Json.JsonNamingPolicy.CamelCase;
+            });
+
             services.AddSingleton<AliyunDriveHostedService>();
             services.AddHostedService(provider => provider.GetRequiredService<AliyunDriveHostedService>());
 
             services.AddSingleton<LocalStorageHostedService>();
             services.AddHostedService(provider => provider.GetRequiredService<LocalStorageHostedService>());
+
+
+            // 下载速度实时推送服务
+            services.AddHostedService<DownloadSpeedNotifierService>();
         }
 
         public void Configure(IApplicationBuilder app, IHostEnvironment env)
@@ -123,6 +135,7 @@ namespace MDriveSync.Client.App
             app.UseEndpoints(endpoints =>
             {
                 endpoints.MapControllers();
+                endpoints.MapHub<JobHub>("/hubs/job");
                 endpoints.MapFallbackToFile("index.html");
             });
         }
