@@ -1,4 +1,5 @@
 using MDriveSync.Core;
+using MDriveSync.Infrastructure;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Quartz.Logging;
@@ -47,6 +48,18 @@ namespace MDriveSync.Server.API
                 // 百度网盘服务商配置
                 builder.Services.Configure<BaiduNetDiskProviderOptions>(builder.Configuration.GetSection("BaiduNetDiskProvider"));
 
+                var consulOpt = builder.Configuration.GetSection(nameof(ConsulOptions));
+                builder.Services.Configure<ConsulOptions>(consulOpt);
+
+                var consulValue = new ConsulOptions();
+                consulOpt.Bind(consulValue);
+
+                // 注册 Consul
+                builder.Services.AddSingleton<ConsulService>();
+
+                // 添加健康检查
+                builder.Services.AddHealthChecks();
+
                 builder.Services.TryAddSingleton<IHttpContextAccessor, HttpContextAccessor>();
                 builder.Services.AddMemoryCache();
 
@@ -62,10 +75,46 @@ namespace MDriveSync.Server.API
                 app.UseForwardedHeaders(new ForwardedHeadersOptions { ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto });
 
                 app.MapControllers();
+                app.MapHealthChecks("/health");
 
                 app.MapGet("/", () =>
                 {
                     return "ok";
+                });
+
+                var applicationLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
+                applicationLifetime.ApplicationStarted.Register(async () =>
+                {
+                    Log.Information("应用程序已启动...");
+                    try
+                    {
+                        if (consulValue?.Enable == true && consulValue.IsValid)
+                        {
+                            var consulService = app.Services.GetRequiredService<ConsulService>();
+                            await consulService.RegisterServiceAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "注册服务到 Consul 失败");
+                    }
+                });
+                // 自动注销 Consul
+                applicationLifetime.ApplicationStopping.Register(async () =>
+                {
+                    Log.Information("应用程序正在停止...");
+                    try
+                    {
+                        if (consulValue?.Enable == true && consulValue.IsValid)
+                        {
+                            var consulService = app.Services.GetRequiredService<ConsulService>();
+                            await consulService.DeregisterServiceAsync();
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex, "从 Consul 注销服务失败");
+                    }
                 });
 
                 app.Run();
